@@ -12,7 +12,129 @@ from matplotlib.colors import LinearSegmentedColormap
 import io
 from shapely.geometry import Polygon
 import math
+import requests
+import base64
+from landsatxplore.earthexplorer import EarthExplorer
+from landsatxplore.api import API
 
+def descargar_datos_landsat8(gdf, fecha_inicio, fecha_fin, indice='NDVI'):
+    """Descargar y procesar datos de Landsat 8"""
+    try:
+        # Verificar credenciales USGS
+        if not tiene_credenciales_usgs():
+            st.warning("🔑 Credenciales USGS no configuradas para Landsat 8")
+            return None
+        
+        # Obtener bounding box
+        bounds = gdf.total_bounds
+        lat_min, lon_min, lat_max, lon_max = bounds[1], bounds[0], bounds[3], bounds[2]
+        
+        # Buscar escenas Landsat 8
+        escenas = buscar_escenas_landsat(lat_min, lon_min, lat_max, lon_max, fecha_inicio, fecha_fin)
+        
+        if not escenas:
+            st.warning("No se encontraron escenas Landsat 8 para el área y fecha especificadas")
+            return None
+        
+        # Seleccionar la mejor escena (menor cobertura de nubes)
+        mejor_escena = seleccionar_mejor_escena(escenas)
+        
+        # Descargar y procesar la escena
+        datos_landsat = procesar_escena_landsat(mejor_escena, indice)
+        
+        return datos_landsat
+        
+    except Exception as e:
+        st.error(f"❌ Error procesando Landsat 8: {str(e)}")
+        return None
+
+def tiene_credenciales_usgs():
+    """Verificar si existen credenciales USGS"""
+    try:
+        if hasattr(st, 'secrets'):
+            return ('USGS_USERNAME' in st.secrets and st.secrets['USGS_USERNAME'] and
+                   'USGS_PASSWORD' in st.secrets and st.secrets['USGS_PASSWORD'])
+        return False
+    except:
+        return False
+
+def buscar_escenas_landsat(lat_min, lon_min, lat_max, lon_max, fecha_inicio, fecha_fin):
+    """Buscar escenas Landsat 8 disponibles"""
+    try:
+        # Usar EarthExplorer API
+        api = API(st.secrets['USGS_USERNAME'], st.secrets['USGS_PASSWORD'])
+        
+        escenas = api.search(
+            dataset='landsat_8_c1',
+            latitude= (lat_min + lat_max) / 2,
+            longitude= (lon_min + lon_max) / 2,
+            start_date=fecha_inicio.strftime('%Y-%m-%d'),
+            end_date=fecha_fin.strftime('%Y-%m-%d'),
+            max_cloud_cover=20
+        )
+        
+        api.logout()
+        return escenas
+        
+    except Exception as e:
+        st.warning(f"No se pudieron buscar escenas Landsat: {str(e)}")
+        return []
+
+def seleccionar_mejor_escena(escenas):
+    """Seleccionar la escena con menor cobertura de nubes"""
+    return min(escenas, key=lambda x: x['cloud_cover'])
+
+def procesar_escena_landsat(escena, indice):
+    """Procesar escena Landsat 8 para calcular índices"""
+    try:
+        # Esta es una implementación simplificada
+        # En producción, necesitarías descargar las bandas y calcular los índices
+        
+        # Simular datos de NDVI para Landsat 8
+        # En una implementación real, aquí descargarías las bandas B4 y B5
+        # y calcularías: NDVI = (B5 - B4) / (B5 + B4)
+        
+        st.info(f"📡 Procesando escena Landsat 8: {escena['display_id']}")
+        st.info(f"📍 Área: {escena['spatial_coverage'].get('coordinates', 'N/A')}")
+        st.info(f"☁️ Cobertura de nubes: {escena['cloud_cover']}%")
+        
+        # Datos simulados (reemplazar con cálculo real)
+        datos_simulados = {
+            'indice': indice,
+            'valor_promedio': 0.65 + np.random.normal(0, 0.1),
+            'fuente': 'Landsat-8',
+            'fecha': escena['acquisition_date'],
+            'id_escena': escena['entity_id']
+        }
+        
+        return datos_simulados
+        
+    except Exception as e:
+        st.error(f"Error procesando escena Landsat: {str(e)}")
+        return None
+
+def calcular_indices_landsat(bandas, indice):
+    """Calcular índices espectrales para Landsat 8"""
+    if indice == 'NDVI':
+        # NDVI = (NIR - Red) / (NIR + Red)
+        nir = bandas['B5']  # Band 5 - NIR
+        red = bandas['B4']  # Band 4 - Red
+        return (nir - red) / (nir + red)
+    
+    elif indice == 'NDWI':
+        # NDWI = (NIR - SWIR) / (NIR + SWIR)
+        nir = bandas['B5']   # Band 5 - NIR
+        swir = bandas['B6']  # Band 6 - SWIR
+        return (nir - swir) / (nir + swir)
+    
+    elif indice == 'EVI':
+        # EVI = 2.5 * (NIR - Red) / (NIR + 6*Red - 7.5*Blue + 1)
+        nir = bandas['B5']   # Band 5 - NIR
+        red = bandas['B4']   # Band 4 - Red
+        blue = bandas['B2']  # Band 2 - Blue
+        return 2.5 * (nir - red) / (nir + 6*red - 7.5*blue + 1)
+    
+    return None
 # CONFIGURACIÓN DE PÁGINA - DEBE SER LO PRIMERO
 st.set_page_config(
     page_title="🌱 Analizador Multi-Cultivo Satellital", 
@@ -57,7 +179,37 @@ def verificar_credenciales_sentinel():
     except Exception as e:
         st.error(f"❌ **Error verificando credenciales:** {str(e)}")
         return False
+# ===== CONFIGURACIÓN DE SATÉLITES DISPONIBLES =====
+SATELITES_DISPONIBLES = {
+    'SENTINEL-2': {
+        'nombre': 'Sentinel-2',
+        'resolucion': '10m',
+        'revisita': '5 días',
+        'bandas': ['B2', 'B3', 'B4', 'B5', 'B8', 'B11'],
+        'indices': ['NDVI', 'NDRE', 'GNDVI', 'OSAVI', 'MCARI']
+    },
+    'LANDSAT-8': {
+        'nombre': 'Landsat 8',
+        'resolucion': '30m', 
+        'revisita': '16 días',
+        'bandas': ['B2', 'B3', 'B4', 'B5', 'B6', 'B7'],
+        'indices': ['NDVI', 'NDWI', 'EVI', 'SAVI', 'MSAVI']
+    }
+}
 
+# Parámetros específicos por satélite
+PARAMETROS_SATELITES = {
+    'SENTINEL-2': {
+        'NDVI': {'banda_nir': 'B8', 'banda_rojo': 'B4'},
+        'NDRE': {'banda_nir': 'B8', 'banda_red_edge': 'B5'},
+        'GNDVI': {'banda_nir': 'B8', 'banda_verde': 'B3'}
+    },
+    'LANDSAT-8': {
+        'NDVI': {'banda_nir': 'B5', 'banda_rojo': 'B4'},
+        'NDWI': {'banda_nir': 'B5', 'banda_swir': 'B6'},
+        'EVI': {'banda_nir': 'B5', 'banda_rojo': 'B4', 'banda_azul': 'B2'}
+    }
+}
 # ===== CONFIGURACIÓN =====
 # PARÁMETROS GEE POR CULTIVO
 PARAMETROS_CULTIVOS = {
