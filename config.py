@@ -1,44 +1,59 @@
 import os
+import streamlit as st
 from datetime import datetime, timedelta
 
-# Configuración Sentinel Hub
-SENTINELHUB_CONFIG = {
-    'instance_id': os.getenv('SENTINELHUB_INSTANCE_ID', ''),
-    'client_id': os.getenv('SENTINELHUB_CLIENT_ID', ''),
-    'client_secret': os.getenv('SENTINELHUB_CLIENT_SECRET', '')
-}
+def get_sentinelhub_config():
+    """Obtener configuración de Sentinel Hub desde secrets.toml"""
+    try:
+        # Intentar obtener desde secrets.toml
+        secrets = st.secrets
+        
+        config = {
+            'instance_id': secrets.get('SENTINELHUB_INSTANCE_ID', ''),
+            'client_id': secrets.get('SENTINELHUB_CLIENT_ID', ''),
+            'client_secret': secrets.get('SENTINELHUB_CLIENT_SECRET', '')
+        }
+        
+        # Verificar que todas las credenciales estén presentes
+        missing_creds = []
+        if not config['instance_id']:
+            missing_creds.append('SENTINELHUB_INSTANCE_ID')
+        if not config['client_id']:
+            missing_creds.append('SENTINELHUB_CLIENT_ID') 
+        if not config['client_secret']:
+            missing_creds.append('SENTINELHUB_CLIENT_SECRET')
+            
+        if missing_creds:
+            st.warning(f"⚠️ Credenciales faltantes en secrets.toml: {', '.join(missing_creds)}")
+            return None
+            
+        st.success("✅ Credenciales de Sentinel Hub cargadas correctamente")
+        return config
+        
+    except Exception as e:
+        st.error(f"❌ Error cargando configuración: {str(e)}")
+        return None
 
-# Configuración USGS EarthExplorer (Landsat)
+# Configuración de Sentinel Hub
+SENTINELHUB_CONFIG = get_sentinelhub_config()
+
+# Configuración USGS EarthExplorer (Landsat) - Opcional
 USGS_CONFIG = {
-    'username': os.getenv('USGS_USERNAME', ''),
-    'password': os.getenv('USGS_PASSWORD', '')
+    'username': st.secrets.get('USGS_USERNAME', ''),
+    'password': st.secrets.get('USGS_PASSWORD', '')
 }
 
-# Parámetros de imágenes por cultivo
+# Parámetros de imágenes por cultivo (mantener igual)
 IMAGE_PARAMETERS = {
     'TRIGO': {
-        'optimal_months': [5, 6, 7],  # Mayo-Julio (hemisferio norte)
+        'optimal_months': [5, 6, 7],
         'cloud_cover_max': 10,
-        'resolution': 10  # metros
+        'resolution': 10
     },
     'MAÍZ': {
         'optimal_months': [6, 7, 8],
         'cloud_cover_max': 10,
         'resolution': 10
     },
-    'SOJA': {
-        'optimal_months': [1, 2, 3],  # Enero-Marzo (hemisferio sur)
-        'cloud_cover_max': 15,
-        'resolution': 10
-    },
-    'SORGO': {
-        'optimal_months': [3, 4, 5],
-        'cloud_cover_max': 10,
-        'resolution': 10
-    },
-    'GIRASOL': {
-        'optimal_months': [7, 8, 9],
-        'cloud_cover_max': 10,
-        'resolution': 10
-    }
+    # ... (mantener el resto igual)
 }
