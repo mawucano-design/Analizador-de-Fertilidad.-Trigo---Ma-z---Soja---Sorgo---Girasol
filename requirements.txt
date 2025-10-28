@@ -7,3 +7,5 @@ shapely>=2.0.0
 sentinelhub>=3.10.0
 rasterio>=1.3.0
 pillow>=10.0.0
+landsatxplore>=0.6.0
+requests>=2.31.0
