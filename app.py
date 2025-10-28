@@ -23,6 +23,41 @@ st.set_page_config(
 st.title("🛰️ ANALIZADOR MULTI-CULTIVO - DATOS SATELITALES REALES")
 st.markdown("---")
 
+# ===== VERIFICACIÓN DE CREDENCIALES SENTINEL HUB =====
+def verificar_credenciales_sentinel():
+    """Verificar y mostrar estado de las credenciales de Sentinel Hub"""
+    try:
+        # Verificar si existen las credenciales en secrets
+        if hasattr(st, 'secrets'):
+            credenciales_faltantes = []
+            
+            # Verificar cada credencial requerida
+            if 'SENTINELHUB_INSTANCE_ID' not in st.secrets or not st.secrets['SENTINELHUB_INSTANCE_ID']:
+                credenciales_faltantes.append('SENTINELHUB_INSTANCE_ID')
+            if 'SENTINELHUB_CLIENT_ID' not in st.secrets or not st.secrets['SENTINELHUB_CLIENT_ID']:
+                credenciales_faltantes.append('SENTINELHUB_CLIENT_ID') 
+            if 'SENTINELHUB_CLIENT_SECRET' not in st.secrets or not st.secrets['SENTINELHUB_CLIENT_SECRET']:
+                credenciales_faltantes.append('SENTINELHUB_CLIENT_SECRET')
+            
+            if credenciales_faltantes:
+                st.warning(f"⚠️ **Credenciales faltantes:** {', '.join(credenciales_faltantes)}")
+                return False
+            else:
+                st.success("✅ **Credenciales de Sentinel Hub configuradas correctamente**")
+                # Mostrar información de las credenciales (ocultando parte por seguridad)
+                instance_id = st.secrets['SENTINELHUB_INSTANCE_ID']
+                client_id = st.secrets['SENTINELHUB_CLIENT_ID']
+                st.info(f"**Instance ID:** {instance_id[:8]}...{instance_id[-8:]}")
+                st.info(f"**Client ID:** {client_id[:8]}...{client_id[-8:]}")
+                return True
+        else:
+            st.error("❌ **No se pudo acceder a las credenciales**")
+            return False
+            
+    except Exception as e:
+        st.error(f"❌ **Error verificando credenciales:** {str(e)}")
+        return False
+
 # ===== CONFIGURACIÓN =====
 # PARÁMETROS GEE POR CULTIVO
 PARAMETROS_CULTIVOS = {
@@ -118,15 +153,24 @@ with st.sidebar:
     
     # Configuración Sentinel Hub
     st.subheader("🛰️ Configuración Satelital")
-    with st.expander("Credenciales Sentinel Hub"):
-        st.info("Configuradas en secrets.toml")
-        try:
-            if hasattr(st, 'secrets') and 'SENTINELHUB_INSTANCE_ID' in st.secrets:
-                st.success("✅ Credenciales cargadas")
-            else:
-                st.warning("⚠️ No se encontraron credenciales")
-        except:
-            st.warning("⚠️ No se pudieron verificar credenciales")
+    with st.expander("Estado de Credenciales"):
+        credenciales_ok = verificar_credenciales_sentinel()
+        
+        if not credenciales_ok:
+            st.markdown("""
+            **📝 Para configurar Sentinel Hub:**
+            
+            1. Ve a [Sentinel Hub](https://www.sentinel-hub.com/)
+            2. Crea una cuenta gratuita
+            3. Obtén tus credenciales desde el dashboard
+            4. Agrégalas en `.streamlit/secrets.toml`:
+            
+            ```toml
+            SENTINELHUB_INSTANCE_ID = "tu_instance_id"
+            SENTINELHUB_CLIENT_ID = "tu_client_id"
+            SENTINELHUB_CLIENT_SECRET = "tu_client_secret"
+            ```
+            """)
 
 # ===== FUNCIONES AUXILIARES =====
 def calcular_superficie(gdf):
@@ -427,6 +471,15 @@ def analisis_gee_completo(gdf, nutriente, analisis_tipo, n_divisiones, cultivo):
     try:
         st.header(f"{ICONOS_CULTIVOS[cultivo]} ANÁLISIS {cultivo} - METODOLOGÍA GEE")
         
+        # Mostrar información sobre el modo de operación
+        with st.expander("🔍 Información del Análisis"):
+            if hasattr(st, 'secrets') and 'SENTINELHUB_INSTANCE_ID' in st.secrets:
+                st.success("🛰️ **MODO:** Análisis con datos satelitales reales")
+                st.info("Usando credenciales de Sentinel Hub para datos en tiempo real")
+            else:
+                st.warning("🔬 **MODO:** Análisis con datos simulados")
+                st.info("Para datos satelitales reales, configura las credenciales de Sentinel Hub")
+        
         # PASO 1: DIVIDIR PARCELA
         st.subheader("📐 DIVIDIENDO PARCELA EN ZONAS DE MANEJO")
         with st.spinner("Dividiendo parcela..."):
@@ -585,30 +638,6 @@ def analisis_gee_completo(gdf, nutriente, analisis_tipo, n_divisiones, cultivo):
             f"analisis_gee_{cultivo}_{analisis_tipo.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
             "text/csv"
         )
-        
-        # INFORMACIÓN TÉCNICA GEE
-        with st.expander("🔍 VER METODOLOGÍA GEE DETALLADA"):
-            st.markdown(f"""
-            **🌐 METODOLOGÍA GOOGLE EARTH ENGINE - {cultivo}**
-            
-            **🎯 PARÁMETROS ÓPTIMOS {cultivo}:**
-            - **Materia Orgánica:** {PARAMETROS_CULTIVOS[cultivo]['MATERIA_ORGANICA_OPTIMA']}%
-            - **Humedad Suelo:** {PARAMETROS_CULTIVOS[cultivo]['HUMEDAD_OPTIMA']}
-            - **NDVI Óptimo:** {PARAMETROS_CULTIVOS[cultivo]['NDVI_OPTIMO']}
-            - **NDRE Óptimo:** {PARAMETROS_CULTIVOS[cultivo]['NDRE_OPTIMO']}
-            
-            **🎯 RANGOS NPK RECOMENDADOS:**
-            - **Nitrógeno:** {PARAMETROS_CULTIVOS[cultivo]['NITROGENO']['min']}-{PARAMETROS_CULTIVOS[cultivo]['NITROGENO']['max']} kg/ha
-            - **Fósforo:** {PARAMETROS_CULTIVOS[cultivo]['FOSFORO']['min']}-{PARAMETROS_CULTIVOS[cultivo]['FOSFORO']['max']} kg/ha  
-            - **Potasio:** {PARAMETROS_CULTIVOS[cultivo]['POTASIO']['min']}-{PARAMETROS_CULTIVOS[cultivo]['POTASIO']['max']} kg/ha
-            
-            **🛰️ DATOS SENTINEL-2 UTILIZADOS:**
-            - **B2 (Blue):** 490 nm
-            - **B4 (Red):** 665 nm  
-            - **B5 (Red Edge):** 705 nm
-            - **B8 (NIR):** 842 nm
-            - **B11 (SWIR):** 1610 nm
-            """)
         
         return True
         
