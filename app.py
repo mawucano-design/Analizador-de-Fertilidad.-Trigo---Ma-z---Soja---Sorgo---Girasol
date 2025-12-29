@@ -33,7 +33,11 @@ st.set_page_config(
 )
 st.title("🛰️ ANALIZADOR MULTI-CULTIVO - SENTINEL-2 & LANDSAT-8")
 st.markdown("---")
+# ===== INYECCIÓN DE CSS PERSONALIZADO =====
+with open("style.css", "r", encoding="utf-8") as f:
+    css = f.read()
 
+st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
 # ===== CONFIGURACIÓN DE SATÉLITES DISPONIBLES =====
 SATELITES_DISPONIBLES = {
     'SENTINEL-2': {
