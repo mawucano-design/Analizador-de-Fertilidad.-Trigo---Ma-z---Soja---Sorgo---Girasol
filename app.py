@@ -25,86 +25,6 @@ from docx.enum.table import WD_TABLE_ALIGNMENT
 import geojson
 warnings.filterwarnings('ignore')
 
-# ===== CARGAR CSS PERSONALIZADO =====
-def load_css():
-    try:
-        with open('style.css') as f:
-            st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
-    except FileNotFoundError:
-        st.warning("⚠️ Archivo style.css no encontrado. Usando estilos por defecto.")
-        # CSS básico como fallback
-        st.markdown("""
-        <style>
-        .stApp { background-color: #f0f7f0; }
-        h1, h2, h3 { color: #1e4d2b; }
-        .stButton > button { background-color: #28a745; color: white; }
-        </style>
-        """, unsafe_allow_html=True)
-
-# ===== FUNCIONES PARA MÉTRICAS CON ICONOS =====
-def create_metric_card(icon, title, value, subtitle="", color="#1e4d2b"):
-    """Crea una tarjeta métrica visual con icono"""
-    return f"""
-    <div style="
-        background: white;
-        padding: 1.5rem;
-        border-radius: 16px;
-        box-shadow: 0 6px 20px rgba(0,0,0,0.1);
-        border-left: 6px solid {color};
-        text-align: center;
-        transition: transform 0.2s ease;
-        height: 100%;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-    ">
-        <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">{icon}</div>
-        <div style="font-size: 0.9rem; color: #666; margin-bottom: 0.5rem; font-weight: 600;">{title}</div>
-        <div style="font-size: 1.8rem; font-weight: 700; color: {color}; margin-bottom: 0.25rem;">{value}</div>
-        <div style="font-size: 0.8rem; color: #888;">{subtitle}</div>
-    </div>
-    """
-
-def create_info_card(title, content, icon="ℹ️", color="#17a2b8"):
-    """Crea una tarjeta informativa estilizada"""
-    return f"""
-    <div style="
-        background: {color}10;
-        border-left: 5px solid {color};
-        padding: 1.2rem;
-        border-radius: 12px;
-        margin: 1rem 0;
-    ">
-        <div style="display: flex; align-items: flex-start; gap: 10px;">
-            <div style="font-size: 1.5rem;">{icon}</div>
-            <div style="flex: 1;">
-                <div style="font-weight: 600; color: {color}; margin-bottom: 0.5rem;">{title}</div>
-                <div style="color: #555; font-size: 0.95rem;">{content}</div>
-            </div>
-        </div>
-    </div>
-    """
-
-def create_step_indicator(step, total_steps=4):
-    """Crea un indicador visual de pasos"""
-    steps_html = ""
-    for i in range(1, total_steps + 1):
-        if i < step:
-            steps_html += f'<div style="width: 30px; height: 30px; border-radius: 50%; background: #28a745; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold;">✓</div>'
-        elif i == step:
-            steps_html += f'<div style="width: 30px; height: 30px; border-radius: 50%; background: #1e4d2b; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold;">{i}</div>'
-        else:
-            steps_html += f'<div style="width: 30px; height: 30px; border-radius: 50%; background: #e8f5e8; color: #666; display: flex; align-items: center; justify-content: center; font-weight: bold;">{i}</div>'
-        
-        if i < total_steps:
-            steps_html += '<div style="flex: 1; height: 3px; background: #e8f5e8; margin: 0 5px;"></div>'
-    
-    return f"""
-    <div style="display: flex; align-items: center; justify-content: center; margin: 2rem 0;">
-        {steps_html}
-    </div>
-    """
-
 # CONFIGURACIÓN DE PÁGINA - DEBE SER LO PRIMERO
 st.set_page_config(
     page_title="🌱 Analizador Multi-Cultivo Satellital",
@@ -112,62 +32,59 @@ st.set_page_config(
     page_icon="🛰️"
 )
 
-# Cargar estilos CSS
-load_css()
+# ===== CARGAR CSS DE MANERA SEGURA =====
+def load_css_safe():
+    """Cargar CSS de forma segura sin conflictos con el DOM de Streamlit"""
+    try:
+        # Intentar cargar desde archivo
+        with open('style.css') as f:
+            css_content = f.read()
+    except FileNotFoundError:
+        # CSS mínimo como fallback (evitando HTML personalizado complejo)
+        css_content = """
+        /* ESTILOS BÁSICOS SEGUROS */
+        .stApp {
+            background: linear-gradient(135deg, #f0f7f0 0%, #e8f5e8 100%) !important;
+            font-family: "Segoe UI", system-ui, sans-serif !important;
+        }
+        
+        h1, h2, h3 {
+            color: #1e4d2b !important;
+            font-weight: 600 !important;
+        }
+        
+        .stButton > button {
+            background: linear-gradient(90deg, #28a745, #34c759) !important;
+            color: white !important;
+            border-radius: 12px !important;
+            border: none !important;
+        }
+        
+        div[data-testid="stMetricValue"] {
+            font-weight: 700 !important;
+            color: #1e4d2b !important;
+        }
+        """
+    
+    # Usar markdown para aplicar estilos de manera segura
+    st.markdown(f"""
+    <style>
+    {css_content}
+    </style>
+    """, unsafe_allow_html=True)
 
-# ===== CABECERA MEJORADA =====
+# Cargar CSS
+load_css_safe()
+
+# ===== CABECERA SIMPLIFICADA (evitando HTML complejo) =====
 st.markdown("""
-<div style="
-    text-align: center; 
-    padding: 2rem 1.5rem; 
-    background: linear-gradient(135deg, rgba(30, 77, 43, 0.9) 0%, rgba(45, 106, 79, 0.9) 100%);
-    border-radius: 24px; 
-    margin-bottom: 2rem;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.15);
-    border: 1px solid rgba(255,255,255,0.1);
-    position: relative;
-    overflow: hidden;
-">
-    <div style="position: absolute; top: -50px; right: -50px; width: 200px; height: 200px; background: radial-gradient(circle, rgba(52,199,89,0.1) 0%, transparent 70%);"></div>
-    <div style="position: absolute; bottom: -50px; left: -50px; width: 200px; height: 200px; background: radial-gradient(circle, rgba(40,167,69,0.1) 0%, transparent 70%);"></div>
-    
-    <h1 style="
-        color: white; 
-        font-size: 2.8rem; 
-        margin-bottom: 0.5rem;
-        font-weight: 800;
-        background: linear-gradient(90deg, #ffffff, #d4edda);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-    ">
-        🛰️ ANALIZADOR MULTI-CULTIVO SATELITAL
-    </h1>
-    
-    <div style="
-        display: flex;
-        justify-content: center;
-        gap: 1rem;
-        margin: 1rem 0;
-        flex-wrap: wrap;
-    ">
-        <span style="background: rgba(255,255,255,0.15); padding: 0.5rem 1rem; border-radius: 20px; color: #d4edda; font-size: 0.9rem;">🌾 5 Cultivos</span>
-        <span style="background: rgba(255,255,255,0.15); padding: 0.5rem 1rem; border-radius: 20px; color: #d4edda; font-size: 0.9rem;">🛰️ 3 Satélites</span>
-        <span style="background: rgba(255,255,255,0.15); padding: 0.5rem 1rem; border-radius: 20px; color: #d4edda; font-size: 0.9rem;">📊 4 Análisis</span>
-        <span style="background: rgba(255,255,255,0.15); padding: 0.5rem 1rem; border-radius: 20px; color: #d4edda; font-size: 0.9rem;">💾 3 Exportaciones</span>
-    </div>
-    
-    <p style="
-        color: #d4edda; 
-        font-size: 1.1rem; 
-        max-width: 800px; 
-        margin: 0 auto;
-        line-height: 1.6;
-    ">
-        Análisis avanzado de cultivos mediante imágenes satelitales y modelos GEE - 
-        <span style="color: #34c759; font-weight: 600;"> Precisión agrícola basada en datos</span>
+<div style="text-align: center;">
+    <h1>🛰️ ANALIZADOR MULTI-CULTIVO SATELITAL</h1>
+    <p style="color: #2d6a4f; font-size: 1.1rem;">
+        Análisis avanzado de cultivos mediante imágenes satelitales y modelos GEE
     </p>
 </div>
+<hr style="border: none; height: 2px; background: linear-gradient(90deg, transparent, #28a745, transparent); margin: 1rem 0;">
 """, unsafe_allow_html=True)
 
 # ===== CONFIGURACIÓN DE SATÉLITES DISPONIBLES =====
@@ -178,8 +95,7 @@ SATELITES_DISPONIBLES = {
         'revisita': '5 días',
         'bandas': ['B2', 'B3', 'B4', 'B5', 'B8', 'B11'],
         'indices': ['NDVI', 'NDRE', 'GNDVI', 'OSAVI', 'MCARI'],
-        'icono': '🛰️',
-        'color': '#28a745'
+        'icono': '🛰️'
     },
     'LANDSAT-8': {
         'nombre': 'Landsat 8',
@@ -187,8 +103,7 @@ SATELITES_DISPONIBLES = {
         'revisita': '16 días',
         'bandas': ['B2', 'B3', 'B4', 'B5', 'B6', 'B7'],
         'indices': ['NDVI', 'NDWI', 'EVI', 'SAVI', 'MSAVI'],
-        'icono': '🛰️',
-        'color': '#007bff'
+        'icono': '🛰️'
     },
     'DATOS_SIMULADOS': {
         'nombre': 'Datos Simulados',
@@ -196,8 +111,7 @@ SATELITES_DISPONIBLES = {
         'revisita': '5 días',
         'bandas': ['B2', 'B3', 'B4', 'B5', 'B8'],
         'indices': ['NDVI', 'NDRE', 'GNDVI'],
-        'icono': '🔬',
-        'color': '#6f42c1'
+        'icono': '🔬'
     }
 }
 
@@ -433,153 +347,48 @@ fecha_fin = datetime.now()
 intervalo_curvas = 5.0
 resolucion_dem = 10.0
 
-# ===== SIDEBAR MEJORADA =====
+# ===== SIDEBAR SIMPLIFICADO =====
 with st.sidebar:
-    st.markdown("""
-    <div style="
-        background: linear-gradient(90deg, #1e4d2b, #2d6a4f);
-        color: white;
-        padding: 1rem;
-        border-radius: 12px;
-        margin-bottom: 1.5rem;
-        text-align: center;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-    ">
-        <h2 style="color: white; margin: 0;">⚙️ CONFIGURACIÓN</h2>
-        <p style="color: #d4edda; margin: 0.5rem 0 0 0; font-size: 0.9rem;">Personaliza tu análisis agrícola</p>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown("### ⚙️ CONFIGURACIÓN")
     
-    # Indicador de pasos
-    st.markdown(create_step_indicator(1, 4), unsafe_allow_html=True)
+    # Indicador de pasos simple
+    st.progress(0.25)
     
     # Sección de cultivo
-    st.markdown("""
-    <div style="
-        background: rgba(40, 167, 69, 0.1);
-        padding: 0.8rem;
-        border-radius: 10px;
-        margin-bottom: 1rem;
-        border-left: 4px solid #28a745;
-    ">
-        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 0.5rem;">
-            <div style="font-size: 1.2rem;">🌱</div>
-            <div style="font-weight: 600; color: #1e4d2b;">SELECCIÓN DE CULTIVO</div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown("#### 🌱 SELECCIÓN DE CULTIVO")
+    cultivo = st.selectbox("Cultivo:", ["TRIGO", "MAÍZ", "SOJA", "SORGO", "GIRASOL"])
     
-    cultivo = st.selectbox("Cultivo:", ["TRIGO", "MAÍZ", "SOJA", "SORGO", "GIRASOL"], 
-                          help="Selecciona el cultivo a analizar")
-    
-    # Mostrar información del cultivo seleccionado
+    # Mostrar información básica del cultivo
     if cultivo in PARAMETROS_CULTIVOS:
         cultivo_info = PARAMETROS_CULTIVOS[cultivo]
-        st.markdown(f"""
-        <div style="
-            background: rgba(40, 167, 69, 0.05);
-            padding: 0.8rem;
-            border-radius: 8px;
-            margin: 0.5rem 0;
-            border: 1px solid rgba(40, 167, 69, 0.2);
-        ">
-            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 0.25rem;">
-                <div style="font-size: 1.5rem;">{cultivo_info['icono']}</div>
-                <div style="font-weight: 600; color: {cultivo_info['color']};">{cultivo}</div>
-            </div>
-            <div style="font-size: 0.8rem; color: #666;">
-                NDVI óptimo: {cultivo_info['NDVI_OPTIMO']} | 
-                N: {cultivo_info['NITROGENO']['min']}-{cultivo_info['NITROGENO']['max']} kg/ha
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        st.info(f"{cultivo_info['icono']} **{cultivo}** - NDVI óptimo: {cultivo_info['NDVI_OPTIMO']}")
     
     # Tipo de análisis
-    st.markdown("""
-    <div style="
-        background: rgba(52, 199, 89, 0.1);
-        padding: 0.8rem;
-        border-radius: 10px;
-        margin: 1rem 0;
-        border-left: 4px solid #34c759;
-    ">
-        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 0.5rem;">
-            <div style="font-size: 1.2rem;">📊</div>
-            <div style="font-weight: 600; color: #1e4d2b;">TIPO DE ANÁLISIS</div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    analisis_tipo = st.selectbox("Tipo de Análisis:", 
-                                ["FERTILIDAD ACTUAL", "RECOMENDACIONES NPK", "ANÁLISIS DE TEXTURA", "ANÁLISIS DE CURVAS DE NIVEL"])
+    st.markdown("#### 📊 TIPO DE ANÁLISIS")
+    analisis_tipo = st.selectbox(
+        "Tipo de Análisis:", 
+        ["FERTILIDAD ACTUAL", "RECOMENDACIONES NPK", "ANÁLISIS DE TEXTURA", "ANÁLISIS DE CURVAS DE NIVEL"]
+    )
     
     if analisis_tipo == "RECOMENDACIONES NPK":
         nutriente = st.selectbox("Nutriente:", ["NITRÓGENO", "FÓSFORO", "POTASIO"])
     
-    # Indicador de pasos
-    st.markdown(create_step_indicator(2, 4), unsafe_allow_html=True)
+    st.progress(0.5)
     
     # Sección de satélite
-    st.markdown("""
-    <div style="
-        background: rgba(23, 162, 184, 0.1);
-        padding: 0.8rem;
-        border-radius: 10px;
-        margin: 1rem 0;
-        border-left: 4px solid #17a2b8;
-    ">
-        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 0.5rem;">
-            <div style="font-size: 1.2rem;">🛰️</div>
-            <div style="font-weight: 600; color: #1e4d2b;">FUENTE DE DATOS SATELITALES</div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-    
+    st.markdown("#### 🛰️ FUENTE DE DATOS SATELITALES")
     satelite_seleccionado = st.selectbox(
         "Satélite:",
-        ["SENTINEL-2", "LANDSAT-8", "DATOS_SIMULADOS"],
-        help="Selecciona la fuente de datos satelitales"
+        ["SENTINEL-2", "LANDSAT-8", "DATOS_SIMULADOS"]
     )
     
-    # Mostrar información del satélite seleccionado
+    # Mostrar información básica del satélite
     if satelite_seleccionado in SATELITES_DISPONIBLES:
         info_satelite = SATELITES_DISPONIBLES[satelite_seleccionado]
-        st.markdown(f"""
-        <div style="
-            background: {info_satelite['color']}15;
-            padding: 1rem;
-            border-radius: 10px;
-            margin: 0.5rem 0;
-            border: 1px solid {info_satelite['color']}30;
-        ">
-            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 0.5rem;">
-                <div style="font-size: 1.5rem;">{info_satelite['icono']}</div>
-                <div>
-                    <div style="font-weight: 600; color: {info_satelite['color']};">{info_satelite['nombre']}</div>
-                    <div style="font-size: 0.8rem; color: #666;">
-                        📏 {info_satelite['resolucion']} | 🔄 {info_satelite['revisita']}
-                    </div>
-                </div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        st.info(f"{info_satelite['icono']} **{info_satelite['nombre']}** - {info_satelite['resolucion']} | {info_satelite['revisita']}")
     
     if analisis_tipo in ["FERTILIDAD ACTUAL", "RECOMENDACIONES NPK"]:
-        st.markdown("""
-        <div style="
-            background: rgba(255, 193, 7, 0.1);
-            padding: 0.8rem;
-            border-radius: 10px;
-            margin: 1rem 0;
-            border-left: 4px solid #ffc107;
-        ">
-            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 0.5rem;">
-                <div style="font-size: 1.2rem;">📈</div>
-                <div style="font-weight: 600; color: #1e4d2b;">ÍNDICES DE VEGETACIÓN</div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-        
+        st.markdown("#### 📈 ÍNDICES DE VEGETACIÓN")
         if satelite_seleccionado == "SENTINEL-2":
             indice_seleccionado = st.selectbox("Índice:", SATELITES_DISPONIBLES['SENTINEL-2']['indices'])
         elif satelite_seleccionado == "LANDSAT-8":
@@ -588,88 +397,28 @@ with st.sidebar:
             indice_seleccionado = st.selectbox("Índice:", SATELITES_DISPONIBLES['DATOS_SIMULADOS']['indices'])
     
     if analisis_tipo in ["FERTILIDAD ACTUAL", "RECOMENDACIONES NPK"]:
-        st.markdown("""
-        <div style="
-            background: rgba(108, 117, 125, 0.1);
-            padding: 0.8rem;
-            border-radius: 10px;
-            margin: 1rem 0;
-            border-left: 4px solid #6c757d;
-        ">
-            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 0.5rem;">
-                <div style="font-size: 1.2rem;">📅</div>
-                <div style="font-weight: 600; color: #1e4d2b;">RANGO TEMPORAL</div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-        
+        st.markdown("#### 📅 RANGO TEMPORAL")
         fecha_fin = st.date_input("Fecha fin", datetime.now())
         fecha_inicio = st.date_input("Fecha inicio", datetime.now() - timedelta(days=30))
     
-    # Indicador de pasos
-    st.markdown(create_step_indicator(3, 4), unsafe_allow_html=True)
+    st.progress(0.75)
     
     # División de parcela
-    st.markdown("""
-    <div style="
-        background: rgba(111, 66, 193, 0.1);
-        padding: 0.8rem;
-        border-radius: 10px;
-        margin: 1rem 0;
-        border-left: 4px solid #6f42c1;
-    ">
-        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 0.5rem;">
-            <div style="font-size: 1.2rem;">🎯</div>
-            <div style="font-weight: 600; color: #1e4d2b;">DIVISIÓN DE PARCELA</div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    n_divisiones = st.slider("Número de zonas de manejo:", min_value=16, max_value=48, value=32, 
-                            help="Cantidad de zonas en las que se dividirá la parcela para análisis detallado")
+    st.markdown("#### 🎯 DIVISIÓN DE PARCELA")
+    n_divisiones = st.slider("Número de zonas de manejo:", min_value=16, max_value=48, value=32)
     
     if analisis_tipo == "ANÁLISIS DE CURVAS DE NIVEL":
-        st.markdown("""
-        <div style="
-            background: rgba(220, 53, 69, 0.1);
-            padding: 0.8rem;
-            border-radius: 10px;
-            margin: 1rem 0;
-            border-left: 4px solid #dc3545;
-        ">
-            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 0.5rem;">
-                <div style="font-size: 1.2rem;">🏔️</div>
-                <div style="font-weight: 600; color: #1e4d2b;">CONFIGURACIÓN CURVAS DE NIVEL</div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-        
+        st.markdown("#### 🏔️ CONFIGURACIÓN CURVAS DE NIVEL")
         intervalo_curvas = st.slider("Intervalo entre curvas (metros):", 1.0, 20.0, 5.0, 1.0)
         resolucion_dem = st.slider("Resolución DEM (metros):", 5.0, 50.0, 10.0, 5.0)
     
-    # Indicador de pasos
-    st.markdown(create_step_indicator(4, 4), unsafe_allow_html=True)
+    st.progress(1.0)
     
     # Subir archivo
-    st.markdown("""
-    <div style="
-        background: rgba(13, 202, 240, 0.1);
-        padding: 0.8rem;
-        border-radius: 10px;
-        margin: 1rem 0;
-        border-left: 4px solid #0dcaf0;
-    ">
-        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 0.5rem;">
-            <div style="font-size: 1.2rem;">📤</div>
-            <div style="font-weight: 600; color: #1e4d2b;">SUBIR PARCELA</div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    uploaded_file = st.file_uploader("Subir archivo de tu parcela", type=['zip', 'kml', 'kmz'],
-                                     help="Formatos aceptados: Shapefile (.zip), KML (.kml), KMZ (.kmz)")
+    st.markdown("#### 📤 SUBIR PARCELA")
+    uploaded_file = st.file_uploader("Subir archivo de parcela", type=['zip', 'kml', 'kmz'])
 
-# ===== FUNCIONES AUXILIARES - CORREGIDAS PARA EPSG:4326 =====
+# ===== FUNCIONES AUXILIARES (MANTENER IGUAL) =====
 def validar_y_corregir_crs(gdf):
     if gdf is None or len(gdf) == 0:
         return gdf
@@ -739,7 +488,7 @@ def dividir_parcela_en_zonas(gdf, n_zonas):
     else:
         return gdf
 
-# ===== FUNCIONES PARA CARGAR ARCHIVOS - CORREGIDAS PARA EPSG:4326 =====
+# ===== FUNCIONES PARA CARGAR ARCHIVOS (MANTENER IGUAL) =====
 def cargar_shapefile_desde_zip(zip_file):
     try:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -894,7 +643,7 @@ def cargar_archivo_parcela(uploaded_file):
         st.error(f"Detalle: {traceback.format_exc()}")
         return None
 
-# ===== FUNCIONES PARA DATOS SATELITALES =====
+# ===== FUNCIONES PARA DATOS SATELITALES (MANTENER IGUAL) =====
 def descargar_datos_landsat8(gdf, fecha_inicio, fecha_fin, indice='NDVI'):
     try:
         st.info(f"🔍 Buscando escenas Landsat 8...")
@@ -945,7 +694,7 @@ def generar_datos_simulados(gdf, cultivo, indice='NDVI'):
     st.success("✅ Datos simulados generados")
     return datos_simulados
 
-# ===== FUNCIONES DE ANÁLISIS GEE =====
+# ===== FUNCIONES DE ANÁLISIS GEE (MANTENER IGUAL) =====
 def calcular_indices_satelitales_gee(gdf, cultivo, datos_satelitales):
     n_poligonos = len(gdf)
     resultados = []
@@ -1023,7 +772,7 @@ def calcular_recomendaciones_npk_gee(indices, nutriente, cultivo):
             recomendaciones.append(round(k_recomendado, 1))
     return recomendaciones
 
-# ===== FUNCIONES DE TEXTURA DEL SUELO - CORREGIDAS =====
+# ===== FUNCIONES DE TEXTURA DEL SUELO (MANTENER IGUAL) =====
 def clasificar_textura_suelo(arena, limo, arcilla):
     try:
         total = arena + limo + arcilla
@@ -1127,7 +876,7 @@ def analizar_textura_suelo(gdf, cultivo):
     zonas_gdf['textura_suelo'] = textura_list
     return zonas_gdf
 
-# ===== FUNCIONES DE CURVAS DE NIVEL =====
+# ===== FUNCIONES DE CURVAS DE NIVEL (MANTENER IGUAL) =====
 def clasificar_pendiente(pendiente_porcentaje):
     for categoria, params in CLASIFICACION_PENDIENTES.items():
         if params['min'] <= pendiente_porcentaje < params['max']:
@@ -1277,7 +1026,7 @@ def generar_curvas_nivel_simple(X, Y, Z, intervalo=5.0, gdf_original=None):
                 elevaciones.append(100 + i * 50)
     return curvas, elevaciones
 
-# ===== FUNCIONES DE EXPORTACIÓN Y REPORTES - CORREGIDAS =====
+# ===== FUNCIONES DE EXPORTACIÓN Y REPORTES (MANTENER IGUAL) =====
 def exportar_a_geojson(gdf, nombre_base="parcela"):
     try:
         gdf = validar_y_corregir_crs(gdf)
@@ -1710,80 +1459,41 @@ def ejecutar_analisis(gdf, nutriente, analisis_tipo, n_divisiones, cultivo,
         st.error(f"Detalle: {traceback.format_exc()}")
         return resultados
 
-# ===== FUNCIONES DE VISUALIZACIÓN =====
+# ===== FUNCIONES DE VISUALIZACIÓN (SIMPLIFICADAS) =====
 def mostrar_resultados_textura(gdf_analizado, cultivo, area_total):
-    st.markdown("""
-    <div style="
-        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-        padding: 1.5rem;
-        border-radius: 16px;
-        margin: 1.5rem 0;
-        border-left: 6px solid #8c510a;
-    ">
-        <h2 style="color: #1e4d2b; margin: 0 0 1rem 0; display: flex; align-items: center; gap: 10px;">
-            <span style="font-size: 1.8rem;">📊</span> ESTADÍSTICAS DE TEXTURA DEL SUELO
-        </h2>
-    </div>
-    """, unsafe_allow_html=True)
-    
+    st.subheader("📊 ESTADÍSTICAS DE TEXTURA")
     col1, col2, col3, col4 = st.columns(4)
     with col1:
         textura_predominante = gdf_analizado['textura_suelo'].mode()[0] if len(gdf_analizado) > 0 else "NO_DETERMINADA"
-        st.markdown(create_metric_card("🏗️", "Textura Predominante", textura_predominante, "Clasificación"), unsafe_allow_html=True)
+        st.metric("Textura Predominante", textura_predominante)
     with col2:
         avg_arena = gdf_analizado['arena'].mean()
-        st.markdown(create_metric_card("🏖️", "Arena Promedio", f"{avg_arena:.1f}%", "Composición", "#d8b365"), unsafe_allow_html=True)
+        st.metric("Arena Promedio", f"{avg_arena:.1f}%")
     with col3:
         avg_limo = gdf_analizado['limo'].mean()
-        st.markdown(create_metric_card("🌫️", "Limo Promedio", f"{avg_limo:.1f}%", "Composición", "#f6e8c3"), unsafe_allow_html=True)
+        st.metric("Limo Promedio", f"{avg_limo:.1f}%")
     with col4:
         avg_arcilla = gdf_analizado['arcilla'].mean()
-        st.markdown(create_metric_card("🧱", "Arcilla Promedio", f"{avg_arcilla:.1f}%", "Composición", "#01665e"), unsafe_allow_html=True)
+        st.metric("Arcilla Promedio", f"{avg_arcilla:.1f}%")
 
-    st.markdown("""
-    <div style="
-        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-        padding: 1.5rem;
-        border-radius: 16px;
-        margin: 1.5rem 0;
-        border-left: 6px solid #5ab4ac;
-    ">
-        <h2 style="color: #1e4d2b; margin: 0 0 1rem 0; display: flex; align-items: center; gap: 10px;">
-            <span style="font-size: 1.8rem;">📈</span> COMPOSICIÓN GRANULOMÉTRICA
-        </h2>
-    </div>
-    """, unsafe_allow_html=True)
-    
+    st.subheader("📈 COMPOSICIÓN GRANULOMÉTRICA")
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
     composicion = [gdf_analizado['arena'].mean(), gdf_analizado['limo'].mean(), gdf_analizado['arcilla'].mean()]
     labels = ['Arena', 'Limo', 'Arcilla']
     colors_pie = ['#d8b365', '#f6e8c3', '#01665e']
     ax1.pie(composicion, labels=labels, colors=colors_pie, autopct='%1.1f%%', startangle=90)
-    ax1.set_title('Composición Promedio del Suelo', fontweight='bold')
+    ax1.set_title('Composición Promedio del Suelo')
     
     textura_dist = gdf_analizado['textura_suelo'].value_counts()
     ax2.bar(textura_dist.index, textura_dist.values, color=[PALETAS_GEE['TEXTURA'][i % len(PALETAS_GEE['TEXTURA'])] for i in range(len(textura_dist))])
-    ax2.set_title('Distribución de Texturas', fontweight='bold')
+    ax2.set_title('Distribución de Texturas')
     ax2.set_xlabel('Textura')
     ax2.set_ylabel('Número de Zonas')
     ax2.tick_params(axis='x', rotation=45)
     plt.tight_layout()
     st.pyplot(fig)
 
-    st.markdown("""
-    <div style="
-        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-        padding: 1.5rem;
-        border-radius: 16px;
-        margin: 1.5rem 0;
-        border-left: 6px solid #01665e;
-    ">
-        <h2 style="color: #1e4d2b; margin: 0 0 1rem 0; display: flex; align-items: center; gap: 10px;">
-            <span style="font-size: 1.8rem;">🗺️</span> MAPA DE TEXTURAS
-        </h2>
-    </div>
-    """, unsafe_allow_html=True)
-    
+    st.subheader("🗺️ MAPA DE TEXTURAS")
     try:
         fig, ax = plt.subplots(1, 1, figsize=(12, 8))
         colores_textura = {
@@ -1826,20 +1536,7 @@ def mostrar_resultados_textura(gdf_analizado, cultivo, area_total):
     except Exception as e:
         st.error(f"Error creando mapa: {str(e)}")
 
-    st.markdown("""
-    <div style="
-        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-        padding: 1.5rem;
-        border-radius: 16px;
-        margin: 1.5rem 0;
-        border-left: 6px solid #c7eae5;
-    ">
-        <h2 style="color: #1e4d2b; margin: 0 0 1rem 0; display: flex; align-items: center; gap: 10px;">
-            <span style="font-size: 1.8rem;">📋</span> TABLA DE RESULTADOS POR ZONA
-        </h2>
-    </div>
-    """, unsafe_allow_html=True)
-    
+    st.subheader("📋 TABLA DE RESULTADOS POR ZONA")
     columnas_textura = ['id_zona', 'area_ha', 'textura_suelo', 'arena', 'limo', 'arcilla']
     columnas_textura = [col for col in columnas_textura if col in gdf_analizado.columns]
     if columnas_textura:
@@ -1847,123 +1544,58 @@ def mostrar_resultados_textura(gdf_analizado, cultivo, area_total):
         tabla_textura.columns = ['Zona', 'Área (ha)', 'Textura', 'Arena (%)', 'Limo (%)', 'Arcilla (%)']
         st.dataframe(tabla_textura)
 
-    st.markdown("""
-    <div style="
-        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-        padding: 1.5rem;
-        border-radius: 16px;
-        margin: 1.5rem 0;
-        border-left: 6px solid #ffc107;
-    ">
-        <h2 style="color: #1e4d2b; margin: 0 0 1rem 0; display: flex; align-items: center; gap: 10px;">
-            <span style="font-size: 1.8rem;">💡</span> RECOMENDACIONES DE MANEJO POR TEXTURA
-        </h2>
-    </div>
-    """, unsafe_allow_html=True)
-    
+    st.subheader("💡 RECOMENDACIONES DE MANEJO POR TEXTURA")
     if 'textura_suelo' in gdf_analizado.columns:
         textura_predominante = gdf_analizado['textura_suelo'].mode()[0] if len(gdf_analizado) > 0 else "NO_DETERMINADA"
         if textura_predominante in RECOMENDACIONES_TEXTURA:
-            st.markdown(f"""
-            <div style="
-                background: white;
-                padding: 1.5rem;
-                border-radius: 12px;
-                box-shadow: 0 4px 15px rgba(0,0,0,0.08);
-                margin: 1rem 0;
-            ">
-                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 1rem;">
-                    <div style="font-size: 2rem;">🏗️</div>
-                    <div>
-                        <h3 style="color: #1e4d2b; margin: 0;">{textura_predominante.upper()}</h3>
-                        <p style="color: #666; margin: 0.25rem 0 0 0;">Características y recomendaciones de manejo</p>
-                    </div>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-            
+            st.markdown(f"#### 🏗️ **{textura_predominante.upper()}**")
             info_textura = RECOMENDACIONES_TEXTURA[textura_predominante]
             col1, col2, col3 = st.columns(3)
             with col1:
-                st.markdown("""
-                <div style="background: #d4edda; padding: 1rem; border-radius: 10px; height: 100%;">
-                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 0.5rem;">
-                        <div style="font-size: 1.5rem;">✅</div>
-                        <div style="font-weight: 600; color: #1e4d2b;">PROPIEDADES FÍSICAS</div>
-                    </div>
-                """, unsafe_allow_html=True)
+                st.markdown("**✅ PROPIEDADES FÍSICAS**")
                 for prop in info_textura['propiedades']:
                     st.markdown(f"• {prop}")
-                st.markdown("</div>", unsafe_allow_html=True)
             with col2:
-                st.markdown("""
-                <div style="background: #fff3cd; padding: 1rem; border-radius: 10px; height: 100%;">
-                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 0.5rem;">
-                        <div style="font-size: 1.5rem;">⚠️</div>
-                        <div style="font-weight: 600; color: #856404;">LIMITANTES</div>
-                    </div>
-                """, unsafe_allow_html=True)
+                st.markdown("**⚠️ LIMITANTES**")
                 for lim in info_textura['limitantes']:
                     st.markdown(f"• {lim}")
-                st.markdown("</div>", unsafe_allow_html=True)
             with col3:
-                st.markdown("""
-                <div style="background: #d1ecf1; padding: 1rem; border-radius: 10px; height: 100%;">
-                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 0.5rem;">
-                        <div style="font-size: 1.5rem;">🛠️</div>
-                        <div style="font-weight: 600; color: #0c5460;">MANEJO RECOMENDADO</div>
-                    </div>
-                """, unsafe_allow_html=True)
+                st.markdown("**🛠️ MANEJO RECOMENDADO**")
                 for man in info_textura['manejo']:
                     st.markdown(f"• {man}")
-                st.markdown("</div>", unsafe_allow_html=True)
+
+    st.subheader("💾 DESCARGAR RESULTADOS")
+    if 'columnas_textura' in locals() and columnas_textura:
+        tabla_textura = gdf_analizado[columnas_textura].copy()
+        tabla_textura.columns = ['Zona', 'Área (ha)', 'Textura', 'Arena (%)', 'Limo (%)', 'Arcilla (%)']
+        csv = tabla_textura.to_csv(index=False)
+        st.download_button(
+            "📥 Descargar CSV con Análisis de Textura",
+            csv,
+            f"textura_{cultivo}_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+            "text/csv"
+        )
 
 def mostrar_resultados_curvas_nivel(X, Y, Z, pendiente_grid, curvas, elevaciones, gdf_original, cultivo, area_total):
-    st.markdown("""
-    <div style="
-        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-        padding: 1.5rem;
-        border-radius: 16px;
-        margin: 1.5rem 0;
-        border-left: 6px solid #d73027;
-    ">
-        <h2 style="color: #1e4d2b; margin: 0 0 1rem 0; display: flex; align-items: center; gap: 10px;">
-            <span style="font-size: 1.8rem;">📊</span> ESTADÍSTICAS TOPOGRÁFICAS
-        </h2>
-    </div>
-    """, unsafe_allow_html=True)
-    
+    st.subheader("📊 ESTADÍSTICAS TOPOGRÁFICAS")
     elevaciones_flat = Z.flatten()
     elevaciones_flat = elevaciones_flat[~np.isnan(elevaciones_flat)]
     if len(elevaciones_flat) > 0:
         col1, col2, col3, col4 = st.columns(4)
         with col1:
             elevacion_promedio = np.mean(elevaciones_flat)
-            st.markdown(create_metric_card("🏔️", "Elevación Promedio", f"{elevacion_promedio:.1f} m", "Altitud media", "#d73027"), unsafe_allow_html=True)
+            st.metric("Elevación Promedio", f"{elevacion_promedio:.1f} m")
         with col2:
             rango_elevacion = np.max(elevaciones_flat) - np.min(elevaciones_flat)
-            st.markdown(create_metric_card("📏", "Rango de Elevación", f"{rango_elevacion:.1f} m", "Diferencia altitudinal", "#f46d43"), unsafe_allow_html=True)
+            st.metric("Rango de Elevación", f"{rango_elevacion:.1f} m")
         with col3:
             mapa_pendientes, stats_pendiente = crear_mapa_pendientes_simple(X, Y, pendiente_grid, gdf_original)
-            st.markdown(create_metric_card("📐", "Pendiente Promedio", f"{stats_pendiente['promedio']:.1f}%", "Inclinación media", "#fdae61"), unsafe_allow_html=True)
+            st.metric("Pendiente Promedio", f"{stats_pendiente['promedio']:.1f}%")
         with col4:
             num_curvas = len(curvas) if curvas else 0
-            st.markdown(create_metric_card("🔄", "Número de Curvas", f"{num_curvas}", "Curvas de nivel", "#fee08b"), unsafe_allow_html=True)
+            st.metric("Número de Curvas", f"{num_curvas}")
 
-        st.markdown("""
-        <div style="
-            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-            padding: 1.5rem;
-            border-radius: 16px;
-            margin: 1.5rem 0;
-            border-left: 6px solid #f46d43;
-        ">
-            <h2 style="color: #1e4d2b; margin: 0 0 1rem 0; display: flex; align-items: center; gap: 10px;">
-                <span style="font-size: 1.8rem;">🔥</span> MAPA DE CALOR DE PENDIENTES
-            </h2>
-        </div>
-        """, unsafe_allow_html=True)
-        
+        st.subheader("🔥 MAPA DE CALOR DE PENDIENTES")
         st.image(mapa_pendientes, use_container_width=True)
         st.download_button(
             "📥 Descargar Mapa de Pendientes",
@@ -1972,451 +1604,223 @@ def mostrar_resultados_curvas_nivel(X, Y, Z, pendiente_grid, curvas, elevaciones
             "image/png"
         )
 
-# ===== INTERFAZ PRINCIPAL MEJORADA =====
+# ===== INTERFAZ PRINCIPAL SIMPLIFICADA =====
 if uploaded_file:
-    with st.spinner("🔍 Cargando parcela..."):
+    with st.spinner("Cargando parcela..."):
         try:
             gdf = cargar_archivo_parcela(uploaded_file)
             if gdf is not None:
-                st.markdown("""
-                <div style="
-                    background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
-                    padding: 1.5rem;
-                    border-radius: 16px;
-                    margin: 1.5rem 0;
-                    border-left: 6px solid #28a745;
-                ">
-                    <div style="display: flex; align-items: center; justify-content: space-between;">
-                        <div>
-                            <h3 style="color: #1e4d2b; margin: 0 0 0.5rem 0;">✅ Parcela cargada exitosamente</h3>
-                            <p style="color: #2d6a4f; margin: 0;">Se detectaron {len(gdf)} polígono(s) en el archivo</p>
-                        </div>
-                        <div style="font-size: 2.5rem;">🗺️</div>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
-                
+                st.success(f"✅ **Parcela cargada exitosamente:** {len(gdf)} polígono(s)")
                 area_total = calcular_superficie(gdf)
                 
                 col1, col2 = st.columns(2)
                 with col1:
-                    st.markdown("""
-                    <div style="
-                        background: white;
-                        padding: 1.5rem;
-                        border-radius: 16px;
-                        box-shadow: 0 6px 20px rgba(0,0,0,0.08);
-                        height: 100%;
-                    ">
-                        <h4 style="color: #1e4d2b; margin: 0 0 1rem 0; display: flex; align-items: center; gap: 8px;">
-                            <span style="font-size: 1.5rem;">📊</span> INFORMACIÓN DE LA PARCELA
-                        </h4>
-                    """, unsafe_allow_html=True)
-                    st.markdown(f"""
-                    <div style="margin: 1rem 0;">
-                        <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
-                            <span style="color: #666;">Polígonos:</span>
-                            <span style="font-weight: 600; color: #1e4d2b;">{len(gdf)}</span>
-                        </div>
-                        <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
-                            <span style="color: #666;">Área total:</span>
-                            <span style="font-weight: 600; color: #1e4d2b;">{area_total:.1f} ha</span>
-                        </div>
-                        <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
-                            <span style="color: #666;">CRS:</span>
-                            <span style="font-weight: 600; color: #1e4d2b;">{gdf.crs}</span>
-                        </div>
-                        <div style="display: flex; justify-content: space-between;">
-                            <span style="color: #666;">Formato:</span>
-                            <span style="font-weight: 600; color: #1e4d2b;">{uploaded_file.name.split('.')[-1].upper()}</span>
-                        </div>
-                    </div>
-                    """, unsafe_allow_html=True)
-                    st.markdown("</div>", unsafe_allow_html=True)
+                    st.info("**📊 INFORMACIÓN DE LA PARCELA:**")
+                    st.write(f"- Polígonos: {len(gdf)}")
+                    st.write(f"- Área total: {area_total:.1f} ha")
+                    st.write(f"- CRS: {gdf.crs}")
                     
-                    st.markdown("""
-                    <div style="
-                        background: white;
-                        padding: 1.5rem;
-                        border-radius: 16px;
-                        box-shadow: 0 6px 20px rgba(0,0,0,0.08);
-                        margin-top: 1rem;
-                    ">
-                        <h4 style="color: #1e4d2b; margin: 0 0 1rem 0; display: flex; align-items: center; gap: 8px;">
-                            <span style="font-size: 1.5rem;">📍</span> VISTA PREVIA
-                        </h4>
-                    """, unsafe_allow_html=True)
+                    st.info("**📍 Vista Previa:**")
                     fig, ax = plt.subplots(figsize=(8, 6))
                     gdf.plot(ax=ax, color='lightgreen', edgecolor='darkgreen', alpha=0.7)
-                    ax.set_title(f"Parcela: {uploaded_file.name}", fontweight='bold')
+                    ax.set_title(f"Parcela: {uploaded_file.name}")
                     ax.set_xlabel("Longitud")
                     ax.set_ylabel("Latitud")
                     ax.grid(True, alpha=0.3)
                     st.pyplot(fig)
-                    st.markdown("</div>", unsafe_allow_html=True)
                     
                 with col2:
-                    st.markdown("""
-                    <div style="
-                        background: white;
-                        padding: 1.5rem;
-                        border-radius: 16px;
-                        box-shadow: 0 6px 20px rgba(0,0,0,0.08);
-                        height: 100%;
-                    ">
-                        <h4 style="color: #1e4d2b; margin: 0 0 1rem 0; display: flex; align-items: center; gap: 8px;">
-                            <span style="font-size: 1.5rem;">🎯</span> CONFIGURACIÓN GEE
-                        </h4>
-                    """, unsafe_allow_html=True)
-                    
-                    cultivo_info = PARAMETROS_CULTIVOS[cultivo]
-                    satelite_info = SATELITES_DISPONIBLES[satelite_seleccionado]
-                    
-                    st.markdown(f"""
-                    <div style="margin: 1rem 0;">
-                        <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
-                            <span style="color: #666;">Cultivo:</span>
-                            <span style="font-weight: 600; color: {cultivo_info['color']};">{cultivo_info['icono']} {cultivo}</span>
-                        </div>
-                        <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
-                            <span style="color: #666;">Análisis:</span>
-                            <span style="font-weight: 600; color: #1e4d2b;">{analisis_tipo}</span>
-                        </div>
-                        <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
-                            <span style="color: #666;">Zonas:</span>
-                            <span style="font-weight: 600; color: #1e4d2b;">{n_divisiones}</span>
-                        </div>
-                    """, unsafe_allow_html=True)
+                    st.info("**🎯 CONFIGURACIÓN GEE:**")
+                    st.write(f"- Cultivo: {PARAMETROS_CULTIVOS[cultivo]['icono']} {cultivo}")
+                    st.write(f"- Análisis: {analisis_tipo}")
+                    st.write(f"- Zonas: {n_divisiones}")
                     
                     if analisis_tipo in ["FERTILIDAD ACTUAL", "RECOMENDACIONES NPK"]:
-                        st.markdown(f"""
-                        <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
-                            <span style="color: #666;">Satélite:</span>
-                            <span style="font-weight: 600; color: {satelite_info['color']};">{satelite_info['icono']} {satelite_info['nombre']}</span>
-                        </div>
-                        <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
-                            <span style="color: #666;">Índice:</span>
-                            <span style="font-weight: 600; color: #1e4d2b;">{indice_seleccionado}</span>
-                        </div>
-                        <div style="display: flex; justify-content: space-between;">
-                            <span style="color: #666;">Período:</span>
-                            <span style="font-weight: 600; color: #1e4d2b;">{fecha_inicio} a {fecha_fin}</span>
-                        </div>
-                        """, unsafe_allow_html=True)
+                        st.write(f"- Satélite: {SATELITES_DISPONIBLES[satelite_seleccionado]['nombre']}")
+                        st.write(f"- Índice: {indice_seleccionado}")
+                        st.write(f"- Período: {fecha_inicio} a {fecha_fin}")
                     elif analisis_tipo == "ANÁLISIS DE CURVAS DE NIVEL":
-                        st.markdown(f"""
-                        <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
-                            <span style="color: #666;">Intervalo curvas:</span>
-                            <span style="font-weight: 600; color: #1e4d2b;">{intervalo_curvas} m</span>
-                        </div>
-                        <div style="display: flex; justify-content: space-between;">
-                            <span style="color: #666;">Resolución DEM:</span>
-                            <span style="font-weight: 600; color: #1e4d2b;">{resolucion_dem} m</span>
-                        </div>
-                        """, unsafe_allow_html=True)
-                    
-                    st.markdown("</div>", unsafe_allow_html=True)
-                    st.markdown("</div>", unsafe_allow_html=True)
-                
-                # Botón de ejecución mejorado
-                st.markdown("""
-                <div style="
-                    text-align: center;
-                    margin: 2rem 0;
-                    padding: 2rem;
-                    background: linear-gradient(135deg, rgba(40, 167, 69, 0.1) 0%, rgba(52, 199, 89, 0.1) 100%);
-                    border-radius: 20px;
-                    border: 2px dashed #28a745;
-                ">
-                    <div style="font-size: 3rem; margin-bottom: 1rem;">🚀</div>
-                    <h3 style="color: #1e4d2b; margin-bottom: 0.5rem;">¿Todo listo para comenzar?</h3>
-                    <p style="color: #2d6a4f; max-width: 600px; margin: 0 auto 1.5rem auto;">
-                        Configuración completada. Haz clic en el botón para ejecutar el análisis completo con los parámetros seleccionados.
-                    </p>
-                </div>
-                """, unsafe_allow_html=True)
-                
-                col_btn1, col_btn2, col_btn3 = st.columns([1, 2, 1])
-                with col_btn2:
-                    if st.button("🚀 EJECUTAR ANÁLISIS COMPLETO", type="primary", use_container_width=True):
-                        resultados = None
-                        if analisis_tipo in ["FERTILIDAD ACTUAL", "RECOMENDACIONES NPK"]:
-                            resultados = ejecutar_analisis(
-                                gdf, nutriente, analisis_tipo, n_divisiones,
-                                cultivo, satelite_seleccionado, indice_seleccionado,
-                                fecha_inicio, fecha_fin
-                            )
+                        st.write(f"- Intervalo curvas: {intervalo_curvas} m")
+                        st.write(f"- Resolución DEM: {resolucion_dem} m")
+
+                # Botón de ejecución simple
+                if st.button("🚀 EJECUTAR ANÁLISIS COMPLETO", type="primary", use_container_width=True):
+                    resultados = None
+                    if analisis_tipo in ["FERTILIDAD ACTUAL", "RECOMENDACIONES NPK"]:
+                        resultados = ejecutar_analisis(
+                            gdf, nutriente, analisis_tipo, n_divisiones,
+                            cultivo, satelite_seleccionado, indice_seleccionado,
+                            fecha_inicio, fecha_fin
+                        )
+                    elif analisis_tipo == "ANÁLISIS DE CURVAS DE NIVEL":
+                        resultados = ejecutar_analisis(
+                            gdf, None, analisis_tipo, n_divisiones,
+                            cultivo, None, None, None, None,
+                            intervalo_curvas, resolucion_dem
+                        )
+                    else:  # ANÁLISIS DE TEXTURA
+                        resultados = ejecutar_analisis(
+                            gdf, None, analisis_tipo, n_divisiones,
+                            cultivo, None, None, None, None
+                        )
+
+                    # GUARDAR RESULTADOS EN SESSION STATE
+                    if resultados and resultados['exitoso']:
+                        st.session_state['resultados_guardados'] = {
+                            'gdf_analizado': resultados['gdf_analizado'],
+                            'analisis_tipo': analisis_tipo,
+                            'cultivo': cultivo,
+                            'area_total': resultados['area_total'],
+                            'nutriente': nutriente,
+                            'satelite_seleccionado': satelite_seleccionado,
+                            'indice_seleccionado': indice_seleccionado,
+                            'mapa_buffer': resultados.get('mapa_buffer'),
+                            'X': None,
+                            'Y': None,
+                            'Z': None,
+                            'pendiente_grid': None,
+                            'gdf_original': gdf if analisis_tipo == "ANÁLISIS DE CURVAS DE NIVEL" else None
+                        }
+                        
+                        st.success("✅ Análisis completado exitosamente")
+                        
+                        if analisis_tipo == "ANÁLISIS DE TEXTURA":
+                            mostrar_resultados_textura(resultados['gdf_analizado'], cultivo, resultados['area_total'])
                         elif analisis_tipo == "ANÁLISIS DE CURVAS DE NIVEL":
-                            resultados = ejecutar_analisis(
-                                gdf, None, analisis_tipo, n_divisiones,
-                                cultivo, None, None, None, None,
-                                intervalo_curvas, resolucion_dem
-                            )
-                        else:  # ANÁLISIS DE TEXTURA
-                            resultados = ejecutar_analisis(
-                                gdf, None, analisis_tipo, n_divisiones,
-                                cultivo, None, None, None, None
-                            )
+                            X, Y, Z, _ = generar_dem_sintetico(gdf, resolucion_dem)
+                            pendiente_grid = calcular_pendiente_simple(X, Y, Z, resolucion_dem)
+                            curvas, elevaciones = generar_curvas_nivel_simple(X, Y, Z, intervalo_curvas, gdf)
+                            st.session_state['resultados_guardados'].update({
+                                'X': X, 'Y': Y, 'Z': Z, 'pendiente_grid': pendiente_grid
+                            })
+                            mostrar_resultados_curvas_nivel(X, Y, Z, pendiente_grid, curvas, elevaciones, gdf, cultivo, resultados['area_total'])
+                        else:
+                            # Mostrar resultados GEE
+                            gdf_analizado = resultados['gdf_analizado']
+                            col1, col2, col3, col4 = st.columns(4)
+                            with col1:
+                                st.metric("Zonas Analizadas", len(gdf_analizado))
+                            with col2:
+                                st.metric("Área Total", f"{resultados['area_total']:.1f} ha")
+                            with col3:
+                                if analisis_tipo == "FERTILIDAD ACTUAL":
+                                    valor_prom = gdf_analizado['npk_actual'].mean()
+                                    st.metric("Índice NPK Promedio", f"{valor_prom:.3f}")
+                                else:
+                                    valor_prom = gdf_analizado['valor_recomendado'].mean()
+                                    st.metric(f"{nutriente} Promedio", f"{valor_prom:.1f} kg/ha")
+                            with col4:
+                                if analisis_tipo == "FERTILIDAD ACTUAL" and gdf_analizado['npk_actual'].mean() > 0:
+                                    coef_var = (gdf_analizado['npk_actual'].std() / gdf_analizado['npk_actual'].mean() * 100)
+                                    st.metric("Coef. Variación", f"{coef_var:.1f}%")
+                                elif analisis_tipo == "RECOMENDACIONES NPK" and gdf_analizado['valor_recomendado'].mean() > 0:
+                                    coef_var = (gdf_analizado['valor_recomendado'].std() / gdf_analizado['valor_recomendado'].mean() * 100)
+                                    st.metric("Coef. Variación", f"{coef_var:.1f}%")
 
-                        # GUARDAR RESULTADOS EN SESSION STATE
-                        if resultados and resultados['exitoso']:
-                            st.session_state['resultados_guardados'] = {
-                                'gdf_analizado': resultados['gdf_analizado'],
-                                'analisis_tipo': analisis_tipo,
-                                'cultivo': cultivo,
-                                'area_total': resultados['area_total'],
-                                'nutriente': nutriente,
-                                'satelite_seleccionado': satelite_seleccionado,
-                                'indice_seleccionado': indice_seleccionado,
-                                'mapa_buffer': resultados.get('mapa_buffer'),
-                                'X': None,
-                                'Y': None,
-                                'Z': None,
-                                'pendiente_grid': None,
-                                'gdf_original': gdf if analisis_tipo == "ANÁLISIS DE CURVAS DE NIVEL" else None
-                            }
-                            
-                            st.markdown("""
-                            <div style="
-                                background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
-                                padding: 1.5rem;
-                                border-radius: 16px;
-                                margin: 1.5rem 0;
-                                border-left: 6px solid #28a745;
-                            ">
-                                <div style="display: flex; align-items: center; gap: 15px;">
-                                    <div style="font-size: 2.5rem;">✅</div>
-                                    <div>
-                                        <h3 style="color: #1e4d2b; margin: 0 0 0.5rem 0;">Análisis completado exitosamente</h3>
-                                        <p style="color: #2d6a4f; margin: 0;">Los resultados están listos para visualización y exportación.</p>
-                                    </div>
-                                </div>
-                            </div>
-                            """, unsafe_allow_html=True)
-                            
-                            if analisis_tipo == "ANÁLISIS DE TEXTURA":
-                                mostrar_resultados_textura(resultados['gdf_analizado'], cultivo, resultados['area_total'])
-                            elif analisis_tipo == "ANÁLISIS DE CURVAS DE NIVEL":
-                                X, Y, Z, _ = generar_dem_sintetico(gdf, resolucion_dem)
-                                pendiente_grid = calcular_pendiente_simple(X, Y, Z, resolucion_dem)
-                                curvas, elevaciones = generar_curvas_nivel_simple(X, Y, Z, intervalo_curvas, gdf)
-                                st.session_state['resultados_guardados'].update({
-                                    'X': X, 'Y': Y, 'Z': Z, 'pendiente_grid': pendiente_grid
-                                })
-                                mostrar_resultados_curvas_nivel(X, Y, Z, pendiente_grid, curvas, elevaciones, gdf, cultivo, resultados['area_total'])
-                            else:
-                                # Mostrar resultados GEE
-                                gdf_analizado = resultados['gdf_analizado']
-                                
-                                # Métricas con iconos
-                                col1, col2, col3, col4 = st.columns(4)
-                                with col1:
-                                    st.markdown(create_metric_card("📊", "Zonas Analizadas", len(gdf_analizado), "División parcelaria", "#28a745"), unsafe_allow_html=True)
-                                with col2:
-                                    st.markdown(create_metric_card("🌾", "Área Total", f"{resultados['area_total']:.1f} ha", "Superficie total", "#2d6a4f"), unsafe_allow_html=True)
-                                with col3:
+                            # Función para crear mapa estático
+                            def crear_mapa_estatico(gdf, titulo, columna_valor, analisis_tipo, nutriente, cultivo, satelite):
+                                try:
+                                    fig, ax = plt.subplots(1, 1, figsize=(12, 8))
                                     if analisis_tipo == "FERTILIDAD ACTUAL":
-                                        valor_prom = gdf_analizado['npk_actual'].mean()
-                                        st.markdown(create_metric_card("📈", "Índice NPK Promedio", f"{valor_prom:.3f}", "Fertilidad media", "#007bff"), unsafe_allow_html=True)
+                                        cmap = LinearSegmentedColormap.from_list('fertilidad_gee', PALETAS_GEE['FERTILIDAD'])
+                                        vmin, vmax = 0, 1
                                     else:
-                                        valor_prom = gdf_analizado['valor_recomendado'].mean()
-                                        st.markdown(create_metric_card("💊", f"{nutriente} Promedio", f"{valor_prom:.1f} kg/ha", "Recomendación media", "#dc3545"), unsafe_allow_html=True)
-                                with col4:
-                                    if analisis_tipo == "FERTILIDAD ACTUAL" and gdf_analizado['npk_actual'].mean() > 0:
-                                        coef_var = (gdf_analizado['npk_actual'].std() / gdf_analizado['npk_actual'].mean() * 100)
-                                        st.markdown(create_metric_card("📊", "Coef. Variación", f"{coef_var:.1f}%", "Variabilidad espacial", "#ffc107"), unsafe_allow_html=True)
-                                    elif analisis_tipo == "RECOMENDACIONES NPK" and gdf_analizado['valor_recomendado'].mean() > 0:
-                                        coef_var = (gdf_analizado['valor_recomendado'].std() / gdf_analizado['valor_recomendado'].mean() * 100)
-                                        st.markdown(create_metric_card("📊", "Coef. Variación", f"{coef_var:.1f}%", "Variabilidad espacial", "#ffc107"), unsafe_allow_html=True)
-                                
-                                # Función para crear mapa estático (mantenida del código original)
-                                def crear_mapa_estatico(gdf, titulo, columna_valor, analisis_tipo, nutriente, cultivo, satelite):
-                                    try:
-                                        fig, ax = plt.subplots(1, 1, figsize=(12, 8))
-                                        if analisis_tipo == "FERTILIDAD ACTUAL":
-                                            cmap = LinearSegmentedColormap.from_list('fertilidad_gee', PALETAS_GEE['FERTILIDAD'])
-                                            vmin, vmax = 0, 1
+                                        if nutriente == "NITRÓGENO":
+                                            cmap = LinearSegmentedColormap.from_list('nitrogeno_gee', PALETAS_GEE['NITROGENO'])
+                                            vmin, vmax = (PARAMETROS_CULTIVOS[cultivo]['NITROGENO']['min'] * 0.8,
+                                                          PARAMETROS_CULTIVOS[cultivo]['NITROGENO']['max'] * 1.2)
+                                        elif nutriente == "FÓSFORO":
+                                            cmap = LinearSegmentedColormap.from_list('fosforo_gee', PALETAS_GEE['FOSFORO'])
+                                            vmin, vmax = (PARAMETROS_CULTIVOS[cultivo]['FOSFORO']['min'] * 0.8,
+                                                          PARAMETROS_CULTIVOS[cultivo]['FOSFORO']['max'] * 1.2)
                                         else:
-                                            if nutriente == "NITRÓGENO":
-                                                cmap = LinearSegmentedColormap.from_list('nitrogeno_gee', PALETAS_GEE['NITROGENO'])
-                                                vmin, vmax = (PARAMETROS_CULTIVOS[cultivo]['NITROGENO']['min'] * 0.8,
-                                                              PARAMETROS_CULTIVOS[cultivo]['NITROGENO']['max'] * 1.2)
-                                            elif nutriente == "FÓSFORO":
-                                                cmap = LinearSegmentedColormap.from_list('fosforo_gee', PALETAS_GEE['FOSFORO'])
-                                                vmin, vmax = (PARAMETROS_CULTIVOS[cultivo]['FOSFORO']['min'] * 0.8,
-                                                              PARAMETROS_CULTIVOS[cultivo]['FOSFORO']['max'] * 1.2)
-                                            else:
-                                                cmap = LinearSegmentedColormap.from_list('potasio_gee', PALETAS_GEE['POTASIO'])
-                                                vmin, vmax = (PARAMETROS_CULTIVOS[cultivo]['POTASIO']['min'] * 0.8,
-                                                              PARAMETROS_CULTIVOS[cultivo]['POTASIO']['max'] * 1.2)
+                                            cmap = LinearSegmentedColormap.from_list('potasio_gee', PALETAS_GEE['POTASIO'])
+                                            vmin, vmax = (PARAMETROS_CULTIVOS[cultivo]['POTASIO']['min'] * 0.8,
+                                                          PARAMETROS_CULTivos[cultivo]['POTASIO']['max'] * 1.2)
 
-                                        for idx, row in gdf.iterrows():
-                                            valor = row[columna_valor]
-                                            valor_norm = (valor - vmin) / (vmax - vmin)
-                                            valor_norm = max(0, min(1, valor_norm))
-                                            color = cmap(valor_norm)
-                                            gdf.iloc[[idx]].plot(ax=ax, color=color, edgecolor='black', linewidth=1.5)
-                                            centroid = row.geometry.centroid
-                                            ax.annotate(f"Z{row['id_zona']}\n{valor:.1f}", (centroid.x, centroid.y),
-                                                        xytext=(5, 5), textcoords="offset points",
-                                                        fontsize=8, color='black', weight='bold',
-                                                        bbox=dict(boxstyle="round,pad=0.3", facecolor='white', alpha=0.9))
-                                        info_satelite = SATELITES_DISPONIBLES.get(satelite, SATELITES_DISPONIBLES['DATOS_SIMULADOS'])
-                                        ax.set_title(f'{PARAMETROS_CULTIVOS[cultivo]["icono"]} ANÁLISIS GEE - {cultivo}\n'
-                                                     f'{info_satelite["icono"]} {info_satelite["nombre"]} - {analisis_tipo}\n'
-                                                     f'{columna_valor}',
-                                                     fontsize=16, fontweight='bold', pad=20)
-                                        ax.set_xlabel('Longitud')
-                                        ax.set_ylabel('Latitud')
-                                        ax.grid(True, alpha=0.3)
-                                        sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=vmin, vmax=vmax))
-                                        sm.set_array([])
-                                        cbar = plt.colorbar(sm, ax=ax, shrink=0.8)
-                                        cbar.set_label(columna_valor, fontsize=12, fontweight='bold')
-                                        plt.tight_layout()
-                                        buf = io.BytesIO()
-                                        plt.savefig(buf, format='png', dpi=150, bbox_inches='tight')
-                                        buf.seek(0)
-                                        plt.close()
-                                        return buf
-                                    except Exception as e:
-                                        st.error(f"❌ Error creando mapa: {str(e)}")
-                                        return None
+                                    for idx, row in gdf.iterrows():
+                                        valor = row[columna_valor]
+                                        valor_norm = (valor - vmin) / (vmax - vmin)
+                                        valor_norm = max(0, min(1, valor_norm))
+                                        color = cmap(valor_norm)
+                                        gdf.iloc[[idx]].plot(ax=ax, color=color, edgecolor='black', linewidth=1.5)
+                                        centroid = row.geometry.centroid
+                                        ax.annotate(f"Z{row['id_zona']}\n{valor:.1f}", (centroid.x, centroid.y),
+                                                    xytext=(5, 5), textcoords="offset points",
+                                                    fontsize=8, color='black', weight='bold',
+                                                    bbox=dict(boxstyle="round,pad=0.3", facecolor='white', alpha=0.9))
+                                    info_satelite = SATELITES_DISPONIBLES.get(satelite, SATELITES_DISPONIBLES['DATOS_SIMULADOS'])
+                                    ax.set_title(f'{PARAMETROS_CULTIVOS[cultivo]["icono"]} ANÁLISIS GEE - {cultivo}\n'
+                                                 f'{info_satelite["icono"]} {info_satelite["nombre"]} - {analisis_tipo}\n'
+                                                 f'{columna_valor}',
+                                                 fontsize=16, fontweight='bold', pad=20)
+                                    ax.set_xlabel('Longitud')
+                                    ax.set_ylabel('Latitud')
+                                    ax.grid(True, alpha=0.3)
+                                    sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=vmin, vmax=vmax))
+                                    sm.set_array([])
+                                    cbar = plt.colorbar(sm, ax=ax, shrink=0.8)
+                                    cbar.set_label(columna_valor, fontsize=12, fontweight='bold')
+                                    plt.tight_layout()
+                                    buf = io.BytesIO()
+                                    plt.savefig(buf, format='png', dpi=150, bbox_inches='tight')
+                                    buf.seek(0)
+                                    plt.close()
+                                    return buf
+                                except Exception as e:
+                                    st.error(f"❌ Error creando mapa: {str(e)}")
+                                    return None
 
-                                if analisis_tipo in ["FERTILIDAD ACTUAL", "RECOMENDACIONES NPK"]:
-                                    columna_valor = 'valor_recomendado' if analisis_tipo == "RECOMENDACIONES NPK" else 'npk_actual'
-                                    mapa_buffer = crear_mapa_estatico(gdf_analizado, f"ANÁLISIS {analisis_tipo}", columna_valor, analisis_tipo, nutriente, cultivo, satelite_seleccionado)
-                                    if mapa_buffer:
-                                        st.markdown("""
-                                        <div style="
-                                            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-                                            padding: 1.5rem;
-                                            border-radius: 16px;
-                                            margin: 1.5rem 0;
-                                            border-left: 6px solid #28a745;
-                                        ">
-                                            <h2 style="color: #1e4d2b; margin: 0 0 1rem 0; display: flex; align-items: center; gap: 10px;">
-                                                <span style="font-size: 1.8rem;">🗺️</span> MAPA DE RESULTADOS GEE
-                                            </h2>
-                                        </div>
-                                        """, unsafe_allow_html=True)
-                                        
-                                        st.image(mapa_buffer, use_container_width=True)
-                                        st.session_state['resultados_guardados']['mapa_buffer'] = mapa_buffer
-                                        st.download_button(
-                                            "📥 Descargar Mapa GEE",
-                                            mapa_buffer,
-                                            f"mapa_gee_{cultivo}_{satelite_seleccionado}_{analisis_tipo.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M')}.png",
-                                            "image/png"
-                                        )
-                                    
-                                    st.markdown("""
-                                    <div style="
-                                        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-                                        padding: 1.5rem;
-                                        border-radius: 16px;
-                                        margin: 1.5rem 0;
-                                        border-left: 6px solid #17a2b8;
-                                    ">
-                                        <h2 style="color: #1e4d2b; margin: 0 0 1rem 0; display: flex; align-items: center; gap: 10px;">
-                                            <span style="font-size: 1.8rem;">🔬</span> ÍNDICES SATELITALES GEE POR ZONA
-                                        </h2>
-                                    </div>
-                                    """, unsafe_allow_html=True)
-                                    
-                                    columnas_indices = ['id_zona', 'npk_actual', 'materia_organica', 'ndvi', 'ndre', 'humedad_suelo']
-                                    if analisis_tipo == "RECOMENDACIONES NPK":
-                                        columnas_indices = ['id_zona', 'valor_recomendado', 'npk_actual', 'materia_organica', 'ndvi', 'ndre', 'humedad_suelo']
-                                    columnas_indices = [col for col in columnas_indices if col in gdf_analizado.columns]
-                                    tabla_indices = gdf_analizado[columnas_indices].copy()
-                                    rename_dict = {
-                                        'id_zona': 'Zona',
-                                        'npk_actual': 'NPK Actual',
-                                        'valor_recomendado': 'Recomendación',
-                                        'materia_organica': 'Materia Org (%)',
-                                        'ndvi': 'NDVI',
-                                        'ndre': 'NDRE',
-                                        'humedad_suelo': 'Humedad'
-                                    }
-                                    tabla_indices = tabla_indices.rename(columns={k: v for k, v in rename_dict.items() if k in tabla_indices.columns})
-                                    st.dataframe(tabla_indices)
+                            if analisis_tipo in ["FERTILIDAD ACTUAL", "RECOMENDACIONES NPK"]:
+                                columna_valor = 'valor_recomendado' if analisis_tipo == "RECOMENDACIONES NPK" else 'npk_actual'
+                                mapa_buffer = crear_mapa_estatico(gdf_analizado, f"ANÁLISIS {analisis_tipo}", columna_valor, analisis_tipo, nutriente, cultivo, satelite_seleccionado)
+                                if mapa_buffer:
+                                    st.image(mapa_buffer, use_container_width=True)
+                                    st.session_state['resultados_guardados']['mapa_buffer'] = mapa_buffer
+                                    st.download_button(
+                                        "📥 Descargar Mapa GEE",
+                                        mapa_buffer,
+                                        f"mapa_gee_{cultivo}_{satelite_seleccionado}_{analisis_tipo.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M')}.png",
+                                        "image/png"
+                                    )
+                                st.subheader("🔬 ÍNDICES SATELITALES GEE POR ZONA")
+                                columnas_indices = ['id_zona', 'npk_actual', 'materia_organica', 'ndvi', 'ndre', 'humedad_suelo']
+                                if analisis_tipo == "RECOMENDACIONES NPK":
+                                    columnas_indices = ['id_zona', 'valor_recomendado', 'npk_actual', 'materia_organica', 'ndvi', 'ndre', 'humedad_suelo']
+                                columnas_indices = [col for col in columnas_indices if col in gdf_analizado.columns]
+                                tabla_indices = gdf_analizado[columnas_indices].copy()
+                                rename_dict = {
+                                    'id_zona': 'Zona',
+                                    'npk_actual': 'NPK Actual',
+                                    'valor_recomendado': 'Recomendación',
+                                    'materia_organica': 'Materia Org (%)',
+                                    'ndvi': 'NDVI',
+                                    'ndre': 'NDRE',
+                                    'humedad_suelo': 'Humedad'
+                                }
+                                tabla_indices = tabla_indices.rename(columns={k: v for k, v in rename_dict.items() if k in tabla_indices.columns})
+                                st.dataframe(tabla_indices)
 
         except Exception as e:
             st.error(f"❌ Error procesando archivo: {str(e)}")
             import traceback
             st.error(f"Detalle: {traceback.format_exc()}")
 else:
-    st.markdown("""
-    <div style="
-        text-align: center;
-        padding: 3rem 2rem;
-        background: linear-gradient(135deg, rgba(248, 249, 250, 0.8) 0%, rgba(233, 236, 239, 0.8) 100%);
-        border-radius: 20px;
-        margin: 2rem 0;
-        border: 2px dashed #28a745;
-    ">
-        <div style="font-size: 4rem; margin-bottom: 1rem;">📁</div>
-        <h3 style="color: #1e4d2b; margin-bottom: 1rem;">¡Comienza subiendo tu parcela!</h3>
-        <p style="color: #2d6a4f; max-width: 600px; margin: 0 auto 1.5rem auto;">
-            Para iniciar el análisis, sube un archivo de tu parcela en formato Shapefile (.zip), KML (.kml) o KMZ (.kmz)
-        </p>
-        <div style="
-            display: inline-block;
-            background: linear-gradient(90deg, #28a745, #34c759);
-            color: white;
-            padding: 0.8rem 1.5rem;
-            border-radius: 12px;
-            font-weight: 600;
-            box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3);
-        ">
-            Usa el panel lateral para subir tu archivo
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    st.info("📁 Sube un archivo de tu parcela para comenzar el análisis")
 
-# ===== EXPORTACIÓN PERSISTENTE MEJORADA =====
+# ===== EXPORTACIÓN SIMPLIFICADA =====
 if 'resultados_guardados' in st.session_state:
     res = st.session_state['resultados_guardados']
     st.markdown("---")
-    
-    st.markdown("""
-    <div style="
-        background: linear-gradient(135deg, #1e4d2b 0%, #2d6a4f 100%);
-        color: white;
-        padding: 1.5rem;
-        border-radius: 16px;
-        margin: 2rem 0 1.5rem 0;
-        text-align: center;
-    ">
-        <h2 style="color: white; margin: 0 0 0.5rem 0; display: flex; align-items: center; justify-content: center; gap: 10px;">
-            <span style="font-size: 1.8rem;">📤</span> EXPORTAR RESULTADOS
-        </h2>
-        <p style="color: #d4edda; margin: 0;">Descarga tus análisis en múltiples formatos</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
+    st.subheader("📤 EXPORTAR RESULTADOS")
     col_exp1, col_exp2, col_exp3, col_exp4 = st.columns(4)
 
     with col_exp1:
-        st.markdown("""
-        <div style="
-            background: white;
-            padding: 1.5rem;
-            border-radius: 12px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
-            text-align: center;
-            height: 100%;
-        ">
-            <div style="font-size: 2.5rem; color: #28a745; margin-bottom: 0.5rem;">🗺️</div>
-            <h4 style="color: #1e4d2b; margin: 0 0 0.5rem 0;">GeoJSON</h4>
-            <p style="color: #666; font-size: 0.9rem; margin: 0 0 1rem 0;">Formato estándar GIS</p>
-        </div>
-        """, unsafe_allow_html=True)
-        if st.button("Exportar GeoJSON", key="export_geojson", use_container_width=True):
+        if st.button("🗺️ GeoJSON", key="export_geojson", use_container_width=True):
             geojson_data, nombre_archivo = exportar_a_geojson(res['gdf_analizado'], f"parcela_{res['cultivo']}")
             if geojson_data:
                 st.download_button(
-                    label="📥 Descargar GeoJSON",
+                    label="📥 Descargar",
                     data=geojson_data,
                     file_name=nombre_archivo,
                     mime="application/json",
@@ -2425,21 +1829,7 @@ if 'resultados_guardados' in st.session_state:
                 )
 
     with col_exp2:
-        st.markdown("""
-        <div style="
-            background: white;
-            padding: 1.5rem;
-            border-radius: 12px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
-            text-align: center;
-            height: 100%;
-        ">
-            <div style="font-size: 2.5rem; color: #dc3545; margin-bottom: 0.5rem;">📄</div>
-            <h4 style="color: #1e4d2b; margin: 0 0 0.5rem 0;">Reporte PDF</h4>
-            <p style="color: #666; font-size: 0.9rem; margin: 0 0 1rem 0;">Documento formal</p>
-        </div>
-        """, unsafe_allow_html=True)
-        if st.button("Generar PDF", key="export_pdf", use_container_width=True):
+        if st.button("📄 PDF", key="export_pdf", use_container_width=True):
             with st.spinner("Generando PDF..."):
                 estadisticas = generar_resumen_estadisticas(res['gdf_analizado'], res['analisis_tipo'], res['cultivo'])
                 recomendaciones = generar_recomendaciones_generales(res['gdf_analizado'], res['analisis_tipo'], res['cultivo'])
@@ -2451,32 +1841,16 @@ if 'resultados_guardados' in st.session_state:
                 )
                 if pdf_buffer:
                     st.download_button(
-                        label="📥 Descargar PDF",
+                        label="📥 Descargar",
                         data=pdf_buffer,
                         file_name=f"reporte_{res['cultivo']}_{res['analisis_tipo'].replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf",
                         mime="application/pdf",
                         key="pdf_download",
                         use_container_width=True
                     )
-                else:
-                    st.error("❌ No se pudo generar el reporte PDF")
 
     with col_exp3:
-        st.markdown("""
-        <div style="
-            background: white;
-            padding: 1.5rem;
-            border-radius: 12px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
-            text-align: center;
-            height: 100%;
-        ">
-            <div style="font-size: 2.5rem; color: #007bff; margin-bottom: 0.5rem;">📝</div>
-            <h4 style="color: #1e4d2b; margin: 0 0 0.5rem 0;">Reporte DOCX</h4>
-            <p style="color: #666; font-size: 0.9rem; margin: 0 0 1rem 0;">Editable en Word</p>
-        </div>
-        """, unsafe_allow_html=True)
-        if st.button("Generar DOCX", key="export_docx", use_container_width=True):
+        if st.button("📝 DOCX", key="export_docx", use_container_width=True):
             with st.spinner("Generando DOCX..."):
                 estadisticas = generar_resumen_estadisticas(res['gdf_analizado'], res['analisis_tipo'], res['cultivo'])
                 recomendaciones = generar_recomendaciones_generales(res['gdf_analizado'], res['analisis_tipo'], res['cultivo'])
@@ -2488,32 +1862,16 @@ if 'resultados_guardados' in st.session_state:
                 )
                 if docx_buffer:
                     st.download_button(
-                        label="📥 Descargar DOCX",
+                        label="📥 Descargar",
                         data=docx_buffer,
                         file_name=f"reporte_{res['cultivo']}_{res['analisis_tipo'].replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M')}.docx",
                         mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                         key="docx_download",
                         use_container_width=True
                     )
-                else:
-                    st.error("❌ No se pudo generar el reporte DOCX")
 
     with col_exp4:
-        st.markdown("""
-        <div style="
-            background: white;
-            padding: 1.5rem;
-            border-radius: 12px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
-            text-align: center;
-            height: 100%;
-        ">
-            <div style="font-size: 2.5rem; color: #6c757d; margin-bottom: 0.5rem;">📊</div>
-            <h4 style="color: #1e4d2b; margin: 0 0 0.5rem 0;">Datos CSV</h4>
-            <p style="color: #666; font-size: 0.9rem; margin: 0 0 1rem 0;">Tabla estructurada</p>
-        </div>
-        """, unsafe_allow_html=True)
-        if st.button("Exportar CSV", key="export_csv", use_container_width=True):
+        if st.button("📊 CSV", key="export_csv", use_container_width=True):
             if res['gdf_analizado'] is not None:
                 if 'geometry' in res['gdf_analizado'].columns:
                     df_export = res['gdf_analizado'].drop(columns=['geometry']).copy()
@@ -2521,7 +1879,7 @@ if 'resultados_guardados' in st.session_state:
                     df_export = res['gdf_analizado'].copy()
                 csv = df_export.to_csv(index=False)
                 st.download_button(
-                    label="📥 Descargar CSV",
+                    label="📥 Descargar",
                     data=csv,
                     file_name=f"datos_{res['cultivo']}_{res['analisis_tipo'].replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
                     mime="text/csv",
@@ -2529,131 +1887,72 @@ if 'resultados_guardados' in st.session_state:
                     use_container_width=True
                 )
 
-# FORMATOS ACEPTADOS Y METODOLOGÍA MEJORADOS
-with st.expander("📋 FORMATOS DE ARCHIVO ACEPTADOS", expanded=False):
-    st.markdown("""
-    <div style="
-        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-        padding: 1.5rem;
-        border-radius: 12px;
-        margin: 1rem 0;
-    ">
-    """, unsafe_allow_html=True)
-    
+# FORMATOS ACEPTADOS Y METODOLOGÍA
+with st.expander("📋 FORMATOS DE ARCHIVO ACEPTADOS"):
     col1, col2, col3 = st.columns(3)
     with col1:
+        st.markdown("**🗺️ Shapefile (.zip)**")
         st.markdown("""
-        <div style="background: white; padding: 1rem; border-radius: 10px; height: 100%; border-left: 4px solid #28a745;">
-            <h4 style="color: #1e4d2b; margin: 0 0 0.5rem 0;">🗺️ Shapefile (.zip)</h4>
-            <ul style="color: #666; font-size: 0.9rem; padding-left: 1.2rem;">
-                <li>Archivo ZIP con .shp, .shx, .dbf</li>
-                <li>.prj opcional (se recomienda)</li>
-                <li>EPSG:4326 recomendado</li>
-                <li>Formato estándar GIS</li>
-            </ul>
-        </div>
-        """, unsafe_allow_html=True)
+        - Archivo ZIP que contiene:
+        - .shp (geometrías)
+        - .shx (índice)
+        - .dbf (atributos)
+        - .prj (proyección, opcional)
+        - Se recomienda usar EPSG:4326 (WGS84)
+        """)
     with col2:
+        st.markdown("**🌐 KML (.kml)**")
         st.markdown("""
-        <div style="background: white; padding: 1rem; border-radius: 10px; height: 100%; border-left: 4px solid #007bff;">
-            <h4 style="color: #1e4d2b; margin: 0 0 0.5rem 0;">🌐 KML (.kml)</h4>
-            <ul style="color: #666; font-size: 0.9rem; padding-left: 1.2rem;">
-                <li>Formato Keyhole Markup</li>
-                <li>Usado por Google Earth</li>
-                <li>Geometrías y atributos</li>
-                <li>Siempre en EPSG:4326</li>
-            </ul>
-        </div>
-        """, unsafe_allow_html=True)
+        - Formato Keyhole Markup Language
+        - Usado por Google Earth
+        - Contiene geometrías y atributos
+        - Siempre en EPSG:4326
+        """)
     with col3:
+        st.markdown("**📦 KMZ (.kmz)**")
         st.markdown("""
-        <div style="background: white; padding: 1rem; border-radius: 10px; height: 100%; border-left: 4px solid #6f42c1;">
-            <h4 style="color: #1e4d2b; margin: 0 0 0.5rem 0;">📦 KMZ (.kmz)</h4>
-            <ul style="color: #666; font-size: 0.9rem; padding-left: 1.2rem;">
-                <li>Versión comprimida de KML</li>
-                <li>Archivo ZIP con .kmz</li>
-                <li>Puede incluir recursos</li>
-                <li>Compatible Google Earth</li>
-            </ul>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    st.markdown("</div>", unsafe_allow_html=True)
+        - Versión comprimida de KML
+        - Archivo ZIP con extensión .kmz
+        - Puede incluir recursos (imágenes, etc.)
+        - Siempre en EPSG:4326
+        """)
 
-with st.expander("ℹ️ INFORMACIÓN SOBRE LA METODOLOGÍA GEE", expanded=False):
+with st.expander("ℹ️ INFORMACIÓN SOBRE LA METODOLOGÍA GEE"):
     st.markdown("""
-    <div style="
-        background: linear-gradient(135deg, rgba(23, 162, 184, 0.1) 0%, rgba(13, 202, 240, 0.1) 100%);
-        padding: 1.5rem;
-        border-radius: 12px;
-        margin: 1rem 0;
-    ">
-        <h3 style="color: #1e4d2b; margin-top: 0;">🌱 SISTEMA DE ANÁLISIS MULTI-CULTIVO CON DATOS SATELITALES</h3>
-        
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem; margin: 1.5rem 0;">
-            <div style="background: white; padding: 1rem; border-radius: 8px; border-left: 4px solid #28a745;">
-                <h4 style="color: #1e4d2b; margin: 0 0 0.5rem 0;">🛰️ SATÉLITES SOPORTADOS</h4>
-                <ul style="margin: 0; padding-left: 1.2rem;">
-                    <li><strong>Sentinel-2:</strong> Resolución 10m, revisita 5 días</li>
-                    <li><strong>Landsat-8:</strong> Resolución 30m, datos históricos</li>
-                    <li><strong>Datos Simulados:</strong> Para pruebas y demostraciones</li>
-                </ul>
-            </div>
-            
-            <div style="background: white; padding: 1rem; border-radius: 8px; border-left: 4px solid #ffc107;">
-                <h4 style="color: #1e4d2b; margin: 0 0 0.5rem 0;">📊 CULTIVOS SOPORTADOS</h4>
-                <ul style="margin: 0; padding-left: 1.2rem;">
-                    <li><strong>🌾 TRIGO:</strong> Cereal de clima templado</li>
-                    <li><strong>🌽 MAÍZ:</strong> Alta demanda nutricional</li>
-                    <li><strong>🫘 SOJA:</strong> Fijadora de nitrógeno</li>
-                    <li><strong>🌾 SORGO:</strong> Resistente a sequía</li>
-                    <li><strong>🌻 GIRASOL:</strong> Raíces profundas</li>
-                </ul>
-            </div>
-            
-            <div style="background: white; padding: 1rem; border-radius: 8px; border-left: 4px solid #dc3545;">
-                <h4 style="color: #1e4d2b; margin: 0 0 0.5rem 0;">🚀 FUNCIONALIDADES</h4>
-                <ul style="margin: 0; padding-left: 1.2rem;">
-                    <li><strong>🌱 Fertilidad Actual:</strong> Estado NPK del suelo</li>
-                    <li><strong>💊 Recomendaciones NPK:</strong> Dosis específicas</li>
-                    <li><strong>🏗️ Textura:</strong> Composición del suelo</li>
-                    <li><strong>🏔️ Curvas de Nivel:</strong> Análisis topográfico</li>
-                </ul>
-            </div>
-        </div>
-        
-        <div style="background: white; padding: 1rem; border-radius: 8px; margin-top: 1rem;">
-            <h4 style="color: #1e4d2b; margin: 0 0 0.5rem 0;">🔬 METODOLOGÍA CIENTÍFICA</h4>
-            <p style="color: #666; margin: 0;">
-                Análisis basado en imágenes satelitales con parámetros específicos para cada cultivo, 
-                cálculo de índices de vegetación y suelo, modelos digitales de elevación (DEM) sintéticos, 
-                y recomendaciones validadas científicamente.
-            </p>
-        </div>
-        
-        <div style="background: #d4edda; padding: 1rem; border-radius: 8px; margin-top: 1rem; border-left: 4px solid #28a745;">
-            <h4 style="color: #1e4d2b; margin: 0 0 0.5rem 0;">💡 CONSEJOS PRÁCTICOS</h4>
-            <ul style="margin: 0; padding-left: 1.2rem; color: #2d6a4f;">
-                <li>Usa archivos en coordenadas EPSG:4326 (WGS84)</li>
-                <li>Los archivos KML deben contener polígonos</li>
-                <li>Área recomendada: 1-1000 hectáreas</li>
-                <li>Todos los cálculos en EPSG:4326</li>
-            </ul>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    **🌱 SISTEMA DE ANÁLISIS MULTI-CULTIVO CON DATOS SATELITALES**
+    **🛰️ SATÉLITES SOPORTADOS:**
+    - **Sentinel-2:** Alta resolución (10m), revisita 5 días
+    - **Landsat-8:** Resolución media (30m), datos históricos
+    - **Datos Simulados:** Para pruebas y demostraciones
+    **📊 CULTIVOS SOPORTADOS:**
+    - **🌾 TRIGO:** Cereal de clima templado
+    - **🌽 MAÍZ:** Cereal de alta demanda nutricional
+    - **🫘 SOJA:** Leguminosa fijadora de nitrógeno
+    - **🌾 SORGO:** Cereal resistente a sequía
+    - **🌻 GIRASOL:** Oleaginosa de profundas raíces
+    **🚀 FUNCIONALIDADES:**
+    - **🌱 Fertilidad Actual:** Estado NPK del suelo usando índices satelitales
+    - **💊 Recomendaciones NPK:** Dosis específicas por cultivo
+    - **🏗️ Análisis de Textura:** Composición del suelo (arena, limo, arcilla)
+    - **🏔️ Curvas de Nivel:** Análisis topográfico con mapa de calor de pendientes
+    **🔬 METODOLOGÍA CIENTÍFICA:**
+    - Análisis basado en imágenes satelitales
+    - Parámetros específicos para cada cultivo
+    - Cálculo de índices de vegetación y suelo
+    - Modelos digitales de elevación (DEM) sintéticos
+    - Recomendaciones validadas científicamente
+    **💡 CONSEJOS:**
+    - Para mejores resultados, usa archivos en coordenadas EPSG:4326 (WGS84)
+    - Los archivos KML deben contener polígonos (no puntos o líneas)
+    - El área recomendada es entre 1 y 1000 hectáreas
+    - Todos los cálculos se realizan en EPSG:4326
+    """)
 
-# Pie de página
+# Pie de página simple
 st.markdown("---")
 st.markdown("""
-<div style="
-    text-align: center;
-    color: #6c757d;
-    font-size: 0.9rem;
-    padding: 1rem;
-">
-    <p style="margin: 0.25rem 0;">🌱 <strong>Analizador Multi-Cultivo Satellital</strong> - Versión 2.0</p>
-    <p style="margin: 0.25rem 0;">🛰️ Análisis avanzado de cultivos mediante imágenes satelitales</p>
-    <p style="margin: 0.25rem 0;">📅 Generado el """ + datetime.now().strftime("%d/%m/%Y %H:%M") + """</p>
+<div style="text-align: center; color: #6c757d; font-size: 0.9rem;">
+    <p>🌱 <strong>Analizador Multi-Cultivo Satellital</strong> - Versión 2.0</p>
+    <p>📅 Generado el """ + datetime.now().strftime("%d/%m/%Y %H:%M") + """</p>
 </div>
 """, unsafe_allow_html=True)
