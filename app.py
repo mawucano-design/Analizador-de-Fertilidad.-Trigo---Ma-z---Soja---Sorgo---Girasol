@@ -32,6 +32,16 @@ st.set_page_config(
     page_icon="🛰️"
 )
 
+# ===== INICIALIZACIÓN DE VARIABLES GLOBALES =====
+# IMPORTANTE: Definir todas las variables aquí para evitar errores
+nutriente = None
+satelite_seleccionado = "SENTINEL-2"
+indice_seleccionado = "NDVI"  # Valor por defecto para evitar errores
+fecha_inicio = datetime.now() - timedelta(days=30)
+fecha_fin = datetime.now()
+intervalo_curvas = 5.0
+resolucion_dem = 10.0
+
 # ===== CSS PERSONALIZADO PARA INTERFAZ PROFESIONAL =====
 st.markdown("""
 <style>
@@ -308,7 +318,7 @@ PARAMETROS_CULTIVOS = {
         'NITROGENO': {'min': 90, 'max': 130},
         'FOSFORO': {'min': 25, 'max': 40},
         'POTASIO': {'min': 80, 'max': 110},
-        'MATERIA_ORGANICA_OPTIMA': 3.2,
+        'MATERIA_ORGANica_OPTIMA': 3.2,
         'HUMEDAD_OPTIMA': 0.26,
         'NDVI_OPTIMO': 0.55,
         'NDRE_OPTIMO': 0.25
@@ -507,8 +517,11 @@ with st.sidebar:
     cultivo = st.selectbox("**Cultivo:**", ["TRIGO", "MAÍZ", "SOJA", "SORGO", "GIRASOL"])
     analisis_tipo = st.selectbox("**Tipo de Análisis:**", ["FERTILIDAD ACTUAL", "RECOMENDACIONES NPK", "ANÁLISIS DE TEXTURA", "ANÁLISIS DE CURVAS DE NIVEL"])
     
+    # Reinicializar nutriente según el tipo de análisis
     if analisis_tipo == "RECOMENDACIONES NPK":
         nutriente = st.selectbox("**Nutriente:**", ["NITRÓGENO", "FÓSFORO", "POTASIO"])
+    else:
+        nutriente = None
 
     st.markdown("---")
     st.markdown("### 🛰️ FUENTE DE DATOS")
@@ -547,6 +560,7 @@ with st.sidebar:
         </div>
         """, unsafe_allow_html=True)
 
+    # Solo mostrar configuración de índices para análisis que lo requieren
     if analisis_tipo in ["FERTILIDAD ACTUAL", "RECOMENDACIONES NPK"]:
         st.markdown("### 📊 ÍNDICES DE VEGETACIÓN")
         if satelite_seleccionado == "SENTINEL-2":
@@ -555,6 +569,9 @@ with st.sidebar:
             indice_seleccionado = st.selectbox("**Índice:**", SATELITES_DISPONIBLES['LANDSAT-8']['indices'])
         else:
             indice_seleccionado = st.selectbox("**Índice:**", SATELITES_DISPONIBLES['DATOS_SIMULADOS']['indices'])
+    else:
+        # Para otros tipos de análisis, usar valor por defecto
+        indice_seleccionado = "NDVI"
 
     if analisis_tipo in ["FERTILIDAD ACTUAL", "RECOMENDACIONES NPK"]:
         st.markdown("### 📅 RANGO TEMPORAL")
@@ -581,7 +598,7 @@ with st.sidebar:
     </div>
     """, unsafe_allow_html=True)
 
-# ===== FUNCIONES AUXILIARES (MANTENIDAS) =====
+# ===== FUNCIONES AUXILIARES =====
 def validar_y_corregir_crs(gdf):
     if gdf is None or len(gdf) == 0:
         return gdf
@@ -1845,31 +1862,35 @@ if uploaded_file:
                 with col_btn2:
                     if st.button("🚀 EJECUTAR ANÁLISIS COMPLETO", type="primary", use_container_width=True):
                         resultados = None
+                        
+                        # Determinar qué parámetros pasar según el tipo de análisis
                         if analisis_tipo in ["FERTILIDAD ACTUAL", "RECOMENDACIONES NPK"]:
                             resultados = ejecutar_analisis(
-                                gdf, nutriente if 'nutriente' in locals() else None, 
-                                analisis_tipo, n_divisiones, cultivo, satelite_seleccionado, 
-                                indice_seleccionado, fecha_inicio, fecha_fin
+                                gdf, nutriente, analisis_tipo, n_divisiones, 
+                                cultivo, satelite_seleccionado, indice_seleccionado,
+                                fecha_inicio, fecha_fin
                             )
                         elif analisis_tipo == "ANÁLISIS DE CURVAS DE NIVEL":
                             resultados = ejecutar_analisis(
-                                gdf, None, analisis_tipo, n_divisiones, cultivo, 
-                                None, None, None, None, intervalo_curvas, resolucion_dem
+                                gdf, None, analisis_tipo, n_divisiones, 
+                                cultivo, None, None, None, None, 
+                                intervalo_curvas, resolucion_dem
                             )
                         else:  # ANÁLISIS DE TEXTURA
                             resultados = ejecutar_analisis(
-                                gdf, None, analisis_tipo, n_divisiones, cultivo, 
-                                None, None, None, None
+                                gdf, None, analisis_tipo, n_divisiones, 
+                                cultivo, None, None, None, None
                             )
 
                         # GUARDAR RESULTADOS EN SESSION STATE
                         if resultados and resultados['exitoso']:
-                            st.session_state['resultados_guardados'] = {
+                            # Crear diccionario de resultados con todas las variables definidas
+                            resultados_dict = {
                                 'gdf_analizado': resultados['gdf_analizado'],
                                 'analisis_tipo': analisis_tipo,
                                 'cultivo': cultivo,
                                 'area_total': resultados['area_total'],
-                                'nutriente': nutriente if 'nutriente' in locals() else None,
+                                'nutriente': nutriente,
                                 'satelite_seleccionado': satelite_seleccionado,
                                 'indice_seleccionado': indice_seleccionado,
                                 'mapa_buffer': resultados.get('mapa_buffer'),
@@ -1880,20 +1901,152 @@ if uploaded_file:
                                 'gdf_original': gdf if analisis_tipo == "ANÁLISIS DE CURVAS DE NIVEL" else None
                             }
                             
-                            # Mostrar resultados según tipo de análisis
-                            if analisis_tipo == "ANÁLISIS DE TEXTURA":
-                                st.success("✅ Análisis de textura completado")
-                                # (Funciones específicas para textura se mantienen igual)
-                                
-                            elif analisis_tipo == "ANÁLISIS DE CURVAS DE NIVEL":
-                                st.success("✅ Análisis de curvas de nivel completado")
+                            # Para análisis de curvas de nivel, generar DEM adicional
+                            if analisis_tipo == "ANÁLISIS DE CURVAS DE NIVEL":
                                 X, Y, Z, _ = generar_dem_sintetico(gdf, resolucion_dem)
                                 pendiente_grid = calcular_pendiente_simple(X, Y, Z, resolucion_dem)
-                                curvas, elevaciones = generar_curvas_nivel_simple(X, Y, Z, intervalo_curvas, gdf)
-                                st.session_state['resultados_guardados'].update({
+                                resultados_dict.update({
                                     'X': X, 'Y': Y, 'Z': Z, 'pendiente_grid': pendiente_grid
                                 })
-                                # (Funciones específicas para curvas se mantienen igual)
+                            
+                            st.session_state['resultados_guardados'] = resultados_dict
+                            
+                            # Mostrar mensaje de éxito
+                            st.success("✅ Análisis completado exitosamente!")
+                            
+                            # Mostrar resultados según tipo de análisis
+                            if analisis_tipo == "ANÁLISIS DE TEXTURA":
+                                st.subheader("📊 RESULTADOS DE ANÁLISIS DE TEXTURA")
+                                
+                                # Mostrar estadísticas básicas
+                                col_text1, col_text2, col_text3, col_text4 = st.columns(4)
+                                with col_text1:
+                                    avg_arena = resultados['gdf_analizado']['arena'].mean()
+                                    st.markdown(f"""
+                                    <div class="metric-card">
+                                        <div style="text-align: center;">
+                                            <div style="font-size: 2em; color: #d8b365;">🏖️</div>
+                                            <h3 style="color: #333; margin: 10px 0;">{avg_arena:.1f}%</h3>
+                                            <p style="color: #666; margin: 0;">Arena</p>
+                                        </div>
+                                    </div>
+                                    """, unsafe_allow_html=True)
+                                
+                                with col_text2:
+                                    avg_limo = resultados['gdf_analizado']['limo'].mean()
+                                    st.markdown(f"""
+                                    <div class="metric-card">
+                                        <div style="text-align: center;">
+                                            <div style="font-size: 2em; color: #f6e8c3;">🌫️</div>
+                                            <h3 style="color: #333; margin: 10px 0;">{avg_limo:.1f}%</h3>
+                                            <p style="color: #666; margin: 0;">Limo</p>
+                                        </div>
+                                    </div>
+                                    """, unsafe_allow_html=True)
+                                
+                                with col_text3:
+                                    avg_arcilla = resultados['gdf_analizado']['arcilla'].mean()
+                                    st.markdown(f"""
+                                    <div class="metric-card">
+                                        <div style="text-align: center;">
+                                            <div style="font-size: 2em; color: #01665e;">🧱</div>
+                                            <h3 style="color: #333; margin: 10px 0;">{avg_arcilla:.1f}%</h3>
+                                            <p style="color: #666; margin: 0;">Arcilla</p>
+                                        </div>
+                                    </div>
+                                    """, unsafe_allow_html=True)
+                                
+                                with col_text4:
+                                    textura_predominante = resultados['gdf_analizado']['textura_suelo'].mode()[0] if len(resultados['gdf_analizado']) > 0 else "NO_DETERMINADA"
+                                    st.markdown(f"""
+                                    <div class="metric-card">
+                                        <div style="text-align: center;">
+                                            <div style="font-size: 2em; color: #5ab4ac;">🏗️</div>
+                                            <h3 style="color: #333; margin: 10px 0;">{textura_predominante[:15]}</h3>
+                                            <p style="color: #666; margin: 0;">Textura</p>
+                                        </div>
+                                    </div>
+                                    """, unsafe_allow_html=True)
+                                
+                                # Mostrar tabla de resultados
+                                st.markdown("### 📋 RESULTADOS POR ZONA")
+                                columnas_textura = ['id_zona', 'area_ha', 'textura_suelo', 'arena', 'limo', 'arcilla']
+                                columnas_textura = [col for col in columnas_textura if col in resultados['gdf_analizado'].columns]
+                                if columnas_textura:
+                                    tabla_textura = resultados['gdf_analizado'][columnas_textura].copy()
+                                    tabla_textura.columns = ['Zona', 'Área (ha)', 'Textura', 'Arena (%)', 'Limo (%)', 'Arcilla (%)']
+                                    st.dataframe(tabla_textura, use_container_width=True)
+                                
+                            elif analisis_tipo == "ANÁLISIS DE CURVAS DE NIVEL":
+                                st.subheader("🏔️ RESULTADOS DE ANÁLISIS DE CURVAS DE NIVEL")
+                                
+                                # Mostrar estadísticas básicas
+                                if 'Z' in resultados_dict and resultados_dict['Z'] is not None:
+                                    Z_flat = resultados_dict['Z'].flatten()
+                                    Z_flat = Z_flat[~np.isnan(Z_flat)]
+                                    
+                                    if len(Z_flat) > 0:
+                                        col_curv1, col_curv2, col_curv3, col_curv4 = st.columns(4)
+                                        
+                                        with col_curv1:
+                                            elevacion_promedio = np.mean(Z_flat)
+                                            st.markdown(f"""
+                                            <div class="metric-card">
+                                                <div style="text-align: center;">
+                                                    <div style="font-size: 2em; color: #2196F3;">🏔️</div>
+                                                    <h3 style="color: #333; margin: 10px 0;">{elevacion_promedio:.1f} m</h3>
+                                                    <p style="color: #666; margin: 0;">Elevación Prom.</p>
+                                                </div>
+                                            </div>
+                                            """, unsafe_allow_html=True)
+                                        
+                                        with col_curv2:
+                                            rango_elevacion = np.max(Z_flat) - np.min(Z_flat)
+                                            st.markdown(f"""
+                                            <div class="metric-card">
+                                                <div style="text-align: center;">
+                                                    <div style="font-size: 2em; color: #4CAF50;">📏</div>
+                                                    <h3 style="color: #333; margin: 10px 0;">{rango_elevacion:.1f} m</h3>
+                                                    <p style="color: #666; margin: 0;">Rango Elevación</p>
+                                                </div>
+                                            </div>
+                                            """, unsafe_allow_html=True)
+                                        
+                                        with col_curv3:
+                                            if resultados_dict['pendiente_grid'] is not None:
+                                                pendiente_flat = resultados_dict['pendiente_grid'].flatten()
+                                                pendiente_flat = pendiente_flat[~np.isnan(pendiente_flat)]
+                                                if len(pendiente_flat) > 0:
+                                                    pendiente_prom = np.mean(pendiente_flat)
+                                                    st.markdown(f"""
+                                                    <div class="metric-card">
+                                                        <div style="text-align: center;">
+                                                            <div style="font-size: 2em; color: #FF9800;">📐</div>
+                                                            <h3 style="color: #333; margin: 10px 0;">{pendiente_prom:.1f}%</h3>
+                                                            <p style="color: #666; margin: 0;">Pendiente Prom.</p>
+                                                        </div>
+                                                    </div>
+                                                    """, unsafe_allow_html=True)
+                                        
+                                        with col_curv4:
+                                            if 'pendiente_grid' in resultados_dict and resultados_dict['pendiente_grid'] is not None:
+                                                mapa_pendientes, stats_pendiente = crear_mapa_pendientes_simple(
+                                                    resultados_dict['X'], resultados_dict['Y'], 
+                                                    resultados_dict['pendiente_grid'], gdf
+                                                )
+                                                st.markdown(f"""
+                                                <div class="metric-card">
+                                                    <div style="text-align: center;">
+                                                        <div style="font-size: 2em; color: #9C27B0;">🔄</div>
+                                                        <h3 style="color: #333; margin: 10px 0;">{stats_pendiente.get('promedio', 0):.1f}%</h3>
+                                                        <p style="color: #666; margin: 0;">Pendiente Promedio</p>
+                                                    </div>
+                                                </div>
+                                                """, unsafe_allow_html=True)
+                                        
+                                        # Mostrar mapa de pendientes
+                                        st.markdown("### 🗺️ MAPA DE CALOR DE PENDIENTES")
+                                        st.image(mapa_pendientes, use_container_width=True)
                                 
                             else:
                                 # Resultados para análisis satelital
@@ -1944,7 +2097,7 @@ if uploaded_file:
                                             <div style="text-align: center;">
                                                 <div style="font-size: 2em; color: #FF9800;">💊</div>
                                                 <h3 style="color: #333; margin: 10px 0;">{valor_prom:.1f}</h3>
-                                                <p style="color: #666; margin: 0;">{nutriente if 'nutriente' in locals() else ''} Promedio</p>
+                                                <p style="color: #666; margin: 0;">{nutriente} Promedio</p>
                                                 <small style="color: #999;">kg/ha</small>
                                             </div>
                                         </div>
@@ -1984,8 +2137,7 @@ if uploaded_file:
                                     columna_valor = 'valor_recomendado' if analisis_tipo == "RECOMENDACIONES NPK" else 'npk_actual'
                                     mapa_buffer = crear_mapa_estatico(gdf_analizado, f"ANÁLISIS {analisis_tipo}", 
                                                                      columna_valor, analisis_tipo, 
-                                                                     nutriente if 'nutriente' in locals() else None, 
-                                                                     cultivo, satelite_seleccionado)
+                                                                     nutriente, cultivo, satelite_seleccionado)
                                     if mapa_buffer:
                                         st.image(mapa_buffer, use_container_width=True)
                                         st.session_state['resultados_guardados']['mapa_buffer'] = mapa_buffer
@@ -2015,7 +2167,7 @@ if uploaded_file:
                                     rename_dict = {
                                         'id_zona': 'Zona',
                                         'area_ha': 'Área (ha)',
-                                        'valor_recomendado': f'Recomendación {nutriente if "nutriente" in locals() else ""}',
+                                        'valor_recomendado': f'Recomendación {nutriente}',
                                         'npk_actual': 'NPK Actual',
                                         'materia_organica': 'Materia Org (%)',
                                         'ndvi': 'NDVI',
@@ -2177,59 +2329,4 @@ st.markdown("""
                 📅 """ + datetime.now().strftime("%d/%m/%Y") + """<br>
                 🛰️ Datos Satelitales<br>
                 🌍 EPSG:4326
-            </p>
-        </div>
-    </div>
-</div>
-""", unsafe_allow_html=True)
-
-# ===== INFORMACIÓN ADICIONAL =====
-with st.expander("📋 FORMATOS DE ARCHIVO ACEPTADOS"):
-    col_info1, col_info2, col_info3 = st.columns(3)
-    with col_info1:
-        st.markdown("""
-        <div style="background: white; padding: 20px; border-radius: 10px; height: 100%;">
-            <h4 style="color: #28a745;">🗺️ Shapefile (.zip)</h4>
-            <ul style="color: #666;">
-                <li>.shp (geometrías)</li>
-                <li>.shx (índice)</li>
-                <li>.dbf (atributos)</li>
-                <li>.prj (opcional)</li>
-            </ul>
-            <p style="color: #999; font-size: 0.9em;">Se recomienda EPSG:4326</p>
-        </div>
-        """, unsafe_allow_html=True)
-    with col_info2:
-        st.markdown("""
-        <div style="background: white; padding: 20px; border-radius: 10px; height: 100%;">
-            <h4 style="color: #2196F3;">🌐 KML (.kml)</h4>
-            <ul style="color: #666;">
-                <li>Formato Google Earth</li>
-                <li>Geometrías y atributos</li>
-                <li>Puede incluir estilos</li>
-                <li>Siempre EPSG:4326</li>
-            </ul>
-            <p style="color: #999; font-size: 0.9em;">Ideal para Google Earth</p>
-        </div>
-        """, unsafe_allow_html=True)
-    with col_info3:
-        st.markdown("""
-        <div style="background: white; padding: 20px; border-radius: 10px; height: 100%;">
-            <h4 style="color: #FF9800;">📦 KMZ (.kmz)</h4>
-            <ul style="color: #666;">
-                <li>KML comprimido</li>
-                <li>Incluye recursos</li>
-                <li>Compatible con Google Earth</li>
-                <li>Siempre EPSG:4326</li>
-            </ul>
-            <p style="color: #999; font-size: 0.9em;">Versión comprimida</p>
-        </div>
-        """, unsafe_allow_html=True)
-
-# Nota final
-st.markdown("""
-<div style="text-align: center; color: #666; margin-top: 20px; font-size: 0.9em;">
-    <p>🌱 <strong>Analizador Multi-Cultivo Satellital</strong> - Herramienta para agricultura de precisión</p>
-    <p>Desarrollado con ❤️ para agricultores y profesionales del agro</p>
-</div>
-""", unsafe_allow_html=True)
+           
