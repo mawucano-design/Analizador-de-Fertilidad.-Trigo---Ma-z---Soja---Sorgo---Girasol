@@ -1,0 +1,10 @@
+[theme]
+base = "light"
+
+[server]
+enableCORS = false
+enableXsrfProtection = false
+
+[global]
+# Esto es opcional, pero ayuda a evitar problemas de caché
+developmentMode = false
