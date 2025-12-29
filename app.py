@@ -2314,7 +2314,7 @@ if 'resultados_guardados' in st.session_state:
                     use_container_width=True
                 )
 
-# ===== FOOTER PROFESIONAL =====
+# ===== FOOTER PROFESIONAL (CORREGIDO) =====
 st.markdown("""
 <div class="custom-footer">
     <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -2329,4 +2329,59 @@ st.markdown("""
                 📅 """ + datetime.now().strftime("%d/%m/%Y") + """<br>
                 🛰️ Datos Satelitales<br>
                 🌍 EPSG:4326
-           
+            </p>
+        </div>
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+# ===== INFORMACIÓN ADICIONAL =====
+with st.expander("📋 FORMATOS DE ARCHIVO ACEPTADOS"):
+    col_info1, col_info2, col_info3 = st.columns(3)
+    with col_info1:
+        st.markdown("""
+        <div style="background: white; padding: 20px; border-radius: 10px; height: 100%;">
+            <h4 style="color: #28a745;">🗺️ Shapefile (.zip)</h4>
+            <ul style="color: #666;">
+                <li>.shp (geometrías)</li>
+                <li>.shx (índice)</li>
+                <li>.dbf (atributos)</li>
+                <li>.prj (opcional)</li>
+            </ul>
+            <p style="color: #999; font-size: 0.9em;">Se recomienda EPSG:4326</p>
+        </div>
+        """, unsafe_allow_html=True)
+    with col_info2:
+        st.markdown("""
+        <div style="background: white; padding: 20px; border-radius: 10px; height: 100%;">
+            <h4 style="color: #2196F3;">🌐 KML (.kml)</h4>
+            <ul style="color: #666;">
+                <li>Formato Google Earth</li>
+                <li>Geometrías y atributos</li>
+                <li>Puede incluir estilos</li>
+                <li>Siempre EPSG:4326</li>
+            </ul>
+            <p style="color: #999; font-size: 0.9em;">Ideal para Google Earth</p>
+        </div>
+        """, unsafe_allow_html=True)
+    with col_info3:
+        st.markdown("""
+        <div style="background: white; padding: 20px; border-radius: 10px; height: 100%;">
+            <h4 style="color: #FF9800;">📦 KMZ (.kmz)</h4>
+            <ul style="color: #666;">
+                <li>KML comprimido</li>
+                <li>Incluye recursos</li>
+                <li>Compatible con Google Earth</li>
+                <li>Siempre EPSG:4326</li>
+            </ul>
+            <p style="color: #999; font-size: 0.9em;">Versión comprimida</p>
+        </div>
+        """, unsafe_allow_html=True)
+
+# Nota final
+st.markdown("""
+<div style="text-align: center; color: #666; margin-top: 20px; font-size: 0.9em;">
+    <p>🌱 <strong>Analizador Multi-Cultivo Satellital</strong> - Herramienta para agricultura de precisión</p>
+    <p>Desarrollado por Raices Verdes. Consultora Agropecuaria, para agricultores y profesionales del agro</p>
+</div>
+""", unsafe_allow_html=True)
