@@ -6,7 +6,8 @@
     font-family: "Segoe UI", system-ui, sans-serif;
 }
 
-/* Fondo sutil con textura agrícola opcional (puedes comentar si no te gusta) */
+/* Comentada la parte problemática */
+/*
 .stApp::before {
     content: "";
     position: fixed;
@@ -17,6 +18,7 @@
     z-index: -1;
     pointer-events: none;
 }
+*/
 
 /* ========================
    CABECERA Y TÍTULOS
@@ -63,7 +65,6 @@ section[data-testid="stSidebar"] label {
     color: white !important;
 }
 
-/* Botones en sidebar más visibles */
 section[data-testid="stSidebar"] .stButton > button {
     background-color: #34c759;
     color: white;
@@ -121,11 +122,6 @@ div[data-testid="metric-container"] div[data-testid="stMetricValue"] {
     box-shadow: 0 8px 20px rgba(40, 167, 69, 0.4);
 }
 
-.stButton > button:active {
-    transform: translateY(0);
-}
-
-/* Botón primario más destacado */
 button[kind="primary"] {
     background: linear-gradient(90deg, #1e4d2b, #2d6a4f) !important;
     font-size: 1.3rem !important;
@@ -139,11 +135,6 @@ button[kind="primary"] {
     border-radius: 12px;
     overflow: hidden;
     box-shadow: 0 4px 15px rgba(0,0,0,0.08);
-}
-
-.stDataFrame table {
-    border-collapse: separate;
-    border-spacing: 0;
 }
 
 .stDataFrame thead th {
@@ -161,36 +152,28 @@ button[kind="primary"] {
     box-shadow: 0 4px 12px rgba(0,0,0,0.08);
 }
 
-div[data-testid="stAlert"] > div > div {
-    font-weight: 500;
-}
-
-/* Success */
 .stSuccess {
     background-color: #d4edda;
     border-left: 5px solid #28a745;
 }
 
-/* Warning */
 .stWarning {
     background-color: #fff3cd;
     border-left: 5px solid #ffc107;
 }
 
-/* Error */
 .stError {
     background-color: #f8d7da;
     border-left: 5px solid #dc3545;
 }
 
-/* Info */
 .stInfo {
     background-color: #d1ecf1;
     border-left: 5px solid #17a2b8;
 }
 
 /* ========================
-   EXPANDERS
+   EXPANDERS E IMÁGENES
    ======================== */
 .streamlit-expanderHeader {
     background-color: #e8f5e8;
@@ -199,28 +182,8 @@ div[data-testid="stAlert"] > div > div {
     color: #1e4d2b;
 }
 
-.streamlit-expanderContent {
-    background-color: #f8fff8;
-    border-radius: 0 0 10px 10px;
-}
-
-/* ========================
-   IMÁGENES Y MAPAS
-   ======================== */
 img {
     border-radius: 12px;
     box-shadow: 0 6px 20px rgba(0,0,0,0.12);
     margin: 1rem 0;
-}
-
-/* ========================
-   FOOTER / TEXTO PEQUEÑO
-   ======================== */
-footer {
-    color: #6c757d !important;
-    font-size: 0.9rem;
-}
-
-small {
-    color: #495057;
 }
