@@ -7,3 +7,4 @@ shapely
 fpdf
 python-docx
 geojson
+requests
