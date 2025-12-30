@@ -8,3 +8,4 @@ fpdf
 python-docx
 geojson
 requests
+contextily 
