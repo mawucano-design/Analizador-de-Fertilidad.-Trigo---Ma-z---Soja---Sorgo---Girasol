@@ -24,107 +24,129 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.table import WD_TABLE_ALIGNMENT
 import geojson
 import requests
-import traceback
+import contextily as ctx
 warnings.filterwarnings('ignore')
 
 # === ESTILOS PERSONALIZADOS CON ALTO CONTRASTE ===
+# ========================================
+# ✨ ESTILOS MODERNOS CON ALTO CONTRASTE (DARK MODE + LIGHT TABS)
+# ========================================
 st.markdown("""
 <style>
-/* Fondo general de la app */
+/* === FONDO GENERAL OSCURO === */
 .stApp {
-background: linear-gradient(135deg, #f0f8f5 0%, #e6f2ed 100%);
+    background-color: #0e1117;
+    color: #e0e0e0;
 }
-/* === SIDEBAR: Fondo verde oscuro y texto verde agua claro === */
+/* === SIDEBAR: FONDO OSCURO → TEXTO BLANCO === */
 [data-testid="stSidebar"] {
-background: linear-gradient(180deg, #0a3d2e 0%, #0d513d 100%) !important;
+    background: linear-gradient(180deg, #0a3d2e 0%, #0d513d 100%) !important;
+    box-shadow: 2px 0 10px rgba(0, 0, 0, 0.3);
 }
-/* Todo el texto dentro del sidebar es BLANCO o verde agua claro */
-[data-testid="stSidebar"] * {
-color: #a8e6cf !important;
-text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4) !important;
-}
-.sidebar-title {
-font-size: 1.4em;
-font-weight: bold;
-margin-bottom: 1.2em;
-text-align: center;
-padding: 0.8em;
-background: rgba(168, 230, 207, 0.2);
-border-radius: 12px;
-box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
-color: #ffffff !important; /* Título del sidebar: blanco */
-}
-/* Inputs y selects en sidebar */
-[data-testid="stSidebar"] .stSelectbox div,
-[data-testid="stSidebar"] .stDateInput div,
-[data-testid="stSidebar"] .stSlider label,
+[data-testid="stSidebar"] *,
 [data-testid="stSidebar"] .stMarkdown,
 [data-testid="stSidebar"] p,
-[data-testid="stSidebar"] label {
-color: #c1f0e0 !important;
+[data-testid="stSidebar"] label,
+[data-testid="stSidebar"] .stText,
+[data-testid="stSidebar"] .stTitle,
+[data-testid="stSidebar"] .stSubheader {
+    color: #ffffff !important;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4) !important;
 }
-/* Botones del sidebar */
+/* Título del sidebar */
+.sidebar-title {
+    font-size: 1.5em;
+    font-weight: bold;
+    margin: 1.5em 0 1em 0;
+    text-align: center;
+    padding: 12px;
+    background: rgba(168, 230, 207, 0.2);
+    border-radius: 12px;
+    color: #ffffff !important;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+/* Inputs y selects en sidebar → blanco suave */
+[data-testid="stSidebar"] .stSelectbox div,
+[data-testid="stSidebar"] .stDateInput div,
+[data-testid="stSidebar"] .stSlider label {
+    color: #e0f2e9 !important;
+}
+/* Botones del sidebar → blanco sobre fondo oscuro */
 .stButton > button {
-background: linear-gradient(120deg, #1e7a5d, #0d513d);
-color: white !important;
-border: none;
-padding: 0.6em 1.2em;
-border-radius: 8px;
-font-weight: bold;
-transition: all 0.3s ease;
-box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+    background: linear-gradient(120deg, #1e7a5d, #0d513d);
+    color: white !important;
+    border: none;
+    padding: 0.6em 1.2em;
+    border-radius: 8px;
+    font-weight: bold;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
 }
 .stButton > button:hover {
-transform: translateY(-2px);
-box-shadow: 0 4px 12px rgba(26, 118, 93, 0.6);
-background: linear-gradient(120deg, #2a9d8f, #1e7a5d);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(26, 118, 93, 0.6);
+    background: linear-gradient(120deg, #2a9d8f, #1e7a5d);
 }
-/* === TÍTULO PRINCIPAL (BANNER): fondo verde oscuro + texto BLANCO === */
-.main-title-banner {
-background: linear-gradient(135deg, #0a3d2e 0%, #0d513d 100%) !important;
-padding: 1.5em;
-border-radius: 16px;
-margin-bottom: 1.5em;
-box-shadow: 0 4px 20px rgba(10, 61, 46, 0.4);
+/* === TÍTULO PRINCIPAL === */
+h1, h2, h3, h4 {
+    color: #ffffff !important;
+    font-weight: 700 !important;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
-.main-title-banner h1 {
-color: white !important;
-text-align: center;
-margin: 0;
-font-size: 2.4em;
-font-weight: 700 !important;
-text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-}
-/* === PESTAÑAS (tabs): fondo blanco, texto negro === */
+/* === PESTAÑAS (tabs): fondo blanco → texto negro === */
 .stTabs [data-baseweb="tab-list"] {
-background-color: white !important;
-padding: 8px 16px;
-border-radius: 8px;
-box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-margin-top: 1em;
+    background-color: white !important;
+    padding: 8px 16px;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    margin-top: 1em;
 }
 .stTabs [data-baseweb="tab"] {
-color: #333333 !important;
-font-weight: 600;
-padding: 8px 20px;
-border-radius: 6px;
-margin-right: 6px;
+    color: #333333 !important;
+    font-weight: 600;
+    padding: 8px 20px;
+    border-radius: 6px;
+    margin-right: 6px;
+    background: #f8f9fa;
 }
 .stTabs [data-baseweb="tab"]:hover {
-color: #0d513d !important;
-background-color: #f0f8f5 !important;
+    color: #0d513d !important;
+    background-color: #e8f5f0 !important;
 }
 .stTabs [aria-selected="true"] {
-background-color: #ffffff !important;
-color: #0d513d !important;
-font-weight: 700;
-border-bottom: 3px solid #2a9d8f;
+    background-color: #ffffff !important;
+    color: #0d513d !important;
+    font-weight: 700;
+    border-bottom: 3px solid #2a9d8f;
 }
-/* Evitar que los títulos del cuerpo principal tomen el color del sidebar */
-.stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp h5, .stApp h6 {
-color: #0d513d !important;
-font-weight: 700 !important;
-text-shadow: none !important;
+/* === MÉTRICAS (tarjetas): fondo oscuro, texto blanco === */
+div[data-testid="metric-container"] {
+    background: #1a1f25;
+    border-radius: 12px;
+    padding: 16px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(100, 149, 237, 0.3);
+}
+div[data-testid="metric-container"] label,
+div[data-testid="metric-container"] div {
+    color: #ffffff !important;
+}
+/* === GRÁFICOS: fondo oscuro, ejes y etiquetas blancas === */
+.stPlotlyChart, .stPyplot {
+    background: #161c25 !important;
+    border-radius: 12px;
+    padding: 12px;
+    box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.3);
+}
+/* === EXPANDERS === */
+.streamlit-expanderHeader {
+    color: #ffffff !important;
+    background: #1a1f25 !important;
+    border-radius: 10px !important;
+    font-weight: 600;
+}
+/* === TEXTOS GENERALES === */
+p, div, span, label {
+    color: #e0e0e0 !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -139,10 +161,10 @@ st.set_page_config(
 # Título principal con banner
 st.markdown("""
 <div style="background: linear-gradient(135deg, #1a2a6c 0%, #2a4d69 100%);
-padding: 1.5em; border-radius: 16px; margin-bottom: 1.5em; box-shadow: 0 4px 20px rgba(26, 42, 108, 0.3);">
-<h1 style="color: white; text-align: center; margin: 0; font-size: 2.4em;">
-🛰️ ANALIZADOR MULTI-CULTIVO TEMPLADO - TRIGO, SOJA, MAÍZ, SORGO, GIRASOL
-</h1>
+            padding: 1.5em; border-radius: 16px; margin-bottom: 1.5em; box-shadow: 0 4px 20px rgba(26, 42, 108, 0.3);">
+    <h1 style="color: white; text-align: center; margin: 0; font-size: 2.4em;">
+        🛰️ ANALIZADOR MULTI-CULTIVO TEMPLADO - MAÍZ, TRIGO, SORGO, GIRASOL, SOJA
+    </h1>
 </div>
 """, unsafe_allow_html=True)
 
@@ -175,86 +197,78 @@ SATELITES_DISPONIBLES = {
 }
 
 # ===== CONFIGURACIÓN =====
-# PARÁMETROS GEE POR CULTIVO
+# PARÁMETROS GEE POR CULTIVO (AHORA CULTIVOS TEMPLADOS)
 PARAMETROS_CULTIVOS = {
-    'TRIGO': {
-        'NITROGENO': {'min': 120, 'max': 180},
-        'FOSFORO': {'min': 25, 'max': 40},
-        'POTASIO': {'min': 150, 'max': 250},
+    'MAÍZ': {
+        'NITROGENO': {'min': 180, 'max': 220},
+        'FOSFORO': {'min': 30, 'max': 50},
+        'POTASIO': {'min': 200, 'max': 280},
         'MATERIA_ORGANICA_OPTIMA': 3.0,
-        'HUMEDAD_OPTIMA': 0.25,
+        'HUMEDAD_OPTIMA': 0.3,
         'NDVI_OPTIMO': 0.85,
         'NDRE_OPTIMO': 0.45
     },
-    'SOJA': {
-        'NITROGENO': {'min': 80, 'max': 120},
-        'FOSFORO': {'min': 30, 'max': 50},
-        'POTASIO': {'min': 180, 'max': 280},
-        'MATERIA_ORGANICA_OPTIMA': 3.5,
-        'HUMEDAD_OPTIMA': 0.30,
-        'NDVI_OPTIMO': 0.80,
-        'NDRE_OPTIMO': 0.40
-    },
-    'MAÍZ': {
-        'NITROGENO': {'min': 150, 'max': 250},
-        'FOSFORO': {'min': 40, 'max': 60},
-        'POTASIO': {'min': 200, 'max': 350},
-        'MATERIA_ORGANICA_OPTIMA': 4.0,
-        'HUMEDAD_OPTIMA': 0.35,
-        'NDVI_OPTIMO': 0.90,
-        'NDRE_OPTIMO': 0.50
+    'TRIGO': {
+        'NITROGENO': {'min': 120, 'max': 160},
+        'FOSFORO': {'min': 25, 'max': 40},
+        'POTASIO': {'min': 150, 'max': 200},
+        'MATERIA_ORGANICA_OPTIMA': 2.5,
+        'HUMEDAD_OPTIMA': 0.25,
+        'NDVI_OPTIMO': 0.8,
+        'NDRE_OPTIMO': 0.4
     },
     'SORGO': {
-        'NITROGENO': {'min': 100, 'max': 150},
-        'FOSFORO': {'min': 25, 'max': 35},
-        'POTASIO': {'min': 120, 'max': 200},
-        'MATERIA_ORGANICA_OPTIMA': 2.5,
-        'HUMEDAD_OPTIMA': 0.20,
+        'NITROGENO': {'min': 100, 'max': 140},
+        'FOSFORO': {'min': 20, 'max': 35},
+        'POTASIO': {'min': 120, 'max': 180},
+        'MATERIA_ORGANICA_OPTIMA': 2.0,
+        'HUMEDAD_OPTIMA': 0.22,
         'NDVI_OPTIMO': 0.75,
         'NDRE_OPTIMO': 0.35
     },
     'GIRASOL': {
-        'NITROGENO': {'min': 80, 'max': 120},
-        'FOSFORO': {'min': 20, 'max': 30},
-        'POTASIO': {'min': 100, 'max': 180},
+        'NITROGENO': {'min': 100, 'max': 130},
+        'FOSFORO': {'min': 30, 'max': 45},
+        'POTASIO': {'min': 180, 'max': 250},
         'MATERIA_ORGANICA_OPTIMA': 2.8,
-        'HUMEDAD_OPTIMA': 0.22,
-        'NDVI_OPTIMO': 0.70,
-        'NDRE_OPTIMO': 0.30
+        'HUMEDAD_OPTIMA': 0.26,
+        'NDVI_OPTIMO': 0.78,
+        'NDRE_OPTIMO': 0.38
+    },
+    'SOJA': {
+        'NITROGENO': {'min': 80, 'max': 110},  # menor por fijación biológica
+        'FOSFORO': {'min': 25, 'max': 45},
+        'POTASIO': {'min': 160, 'max': 220},
+        'MATERIA_ORGANICA_OPTIMA': 3.2,
+        'HUMEDAD_OPTIMA': 0.28,
+        'NDVI_OPTIMO': 0.82,
+        'NDRE_OPTIMO': 0.42
     }
 }
 
-# PARÁMETROS DE TEXTURA DEL SUELO POR CULTIVO
+# PARÁMETROS DE TEXTURA DEL SUELO POR CULTIVO TEMPLADO
 TEXTURA_SUELO_OPTIMA = {
-    'TRIGO': {
-        'textura_optima': 'Franco',
-        'arena_optima': 40,
-        'limo_optima': 40,
-        'arcilla_optima': 20,
-        'densidad_aparente_optima': 1.3,
-        'porosidad_optima': 0.50
-    },
-    'SOJA': {
-        'textura_optima': 'Franco Arcilloso',
-        'arena_optima': 35,
-        'limo_optima': 30,
-        'arcilla_optima': 35,
-        'densidad_aparente_optima': 1.2,
-        'porosidad_optima': 0.55
-    },
     'MAÍZ': {
         'textura_optima': 'Franco',
         'arena_optima': 45,
         'limo_optima': 35,
         'arcilla_optima': 20,
+        'densidad_aparente_optima': 1.3,
+        'porosidad_optima': 0.5
+    },
+    'TRIGO': {
+        'textura_optima': 'Franco',
+        'arena_optima': 40,
+        'limo_optima': 40,
+        'arcilla_optima': 20,
         'densidad_aparente_optima': 1.25,
         'porosidad_optima': 0.52
     },
     'SORGO': {
-        'textura_optima': 'Franco Arenoso',
+        'textura_optima': 'Franco arenoso',
         'arena_optima': 55,
-        'limo_optima': 30,
-        'arcilla_optima': 15,
+        'limo_optima': 25,
+        'arcilla_optima': 20,
         'densidad_aparente_optima': 1.35,
         'porosidad_optima': 0.48
     },
@@ -263,8 +277,16 @@ TEXTURA_SUELO_OPTIMA = {
         'arena_optima': 50,
         'limo_optima': 30,
         'arcilla_optima': 20,
-        'densidad_aparente_optima': 1.3,
-        'porosidad_optima': 0.50
+        'densidad_aparente_optima': 1.28,
+        'porosidad_optima': 0.5
+    },
+    'SOJA': {
+        'textura_optima': 'Franco',
+        'arena_optima': 40,
+        'limo_optima': 35,
+        'arcilla_optima': 25,
+        'densidad_aparente_optima': 1.2,
+        'porosidad_optima': 0.55
     }
 }
 
@@ -278,13 +300,13 @@ CLASIFICACION_PENDIENTES = {
     'EXTREMA (>25%)': {'min': 25, 'max': 100, 'color': '#d73027', 'factor_erosivo': 1.0}
 }
 
-# RECOMENDACIONES POR TIPO DE TEXTURA
+# RECOMENDACIONES POR TIPO DE TEXTURA - ACTUALIZADO A NOMENCLATURA VENEZUELA/COLOMBIA
 RECOMENDACIONES_TEXTURA = {
     'Franco': {
         'propiedades': [
             "Equilibrio arena-limo-arcilla",
             "Buena aireación y drenaje",
-            "CIC Intermedia-alta",
+            "CIC intermedia-alta",
             "Retención de agua adecuada"
         ],
         'limitantes': [
@@ -295,10 +317,10 @@ RECOMENDACIONES_TEXTURA = {
             "Mantener coberturas vivas o muertas",
             "Evitar tránsito excesivo de maquinaria",
             "Fertilización eficiente, sin muchas pérdidas",
-            "Ideal para siembra directa"
+            "Ideal para cultivos de raíz profunda"
         ]
     },
-    'Franco Arcilloso': {
+    'Franco arcilloso': {
         'propiedades': [
             "Mayor proporción de arcilla (25–35%)",
             "Alta retención de agua y nutrientes",
@@ -313,83 +335,45 @@ RECOMENDACIONES_TEXTURA = {
         'manejo': [
             "Implementar drenajes (canales y subdrenes)",
             "Subsolado previo a siembra",
-            "Incorporar materia orgánica (rastrojos, compost)",
-            "Fertilización fraccionada en lluvias intensas"
+            "Incorporar materia orgánica (compost, rastrojos)",
+            "Fertilización fraccionada"
         ]
     },
-    'Franco Arenoso': {
+    'Franco arenoso-arcilloso': {
         'propiedades': [
-            "Arena 50–70%, arcilla 5-20%",
+            "Arena 40–50%, arcilla 20–30%",
             "Buen desarrollo radicular",
-            "Excelente drenaje",
-            "Calentamiento rápido en primavera"
+            "Drenaje moderado",
+            "Retención de agua moderada-baja"
         ],
         'limitantes': [
             "Riesgo de lixiviación de nutrientes",
             "Estrés hídrico en veranos",
-            "Fertilidad baja-moderada"
+            "Fertilidad moderada"
         ],
         'manejo': [
             "Uso de coberturas leguminosas",
-            "Aplicar mulching (rastrojos, paja)",
+            "Aplicar mulching (rastrojos)",
             "Riego suplementario en sequía",
-            "Fertilización fraccionada y frecuente"
-        ]
-    },
-    'Arenoso': {
-        'propiedades': [
-            "Alto contenido de arena (>85%)",
-            "Excelente drenaje",
-            "Baja retención de agua",
-            "Fácil laboreo"
-        ],
-        'limitantes': [
-            "Baja retención de nutrientes",
-            "Riesgo alto de erosión",
-            "Requiere riego frecuente"
-        ],
-        'manejo': [
-            "Aplicaciones frecuentes de materia orgánica",
-            "Riego por goteo para eficiencia hídrica",
-            "Fertilización fraccionada en pequeñas dosis",
-            "Barreras vivas contra erosión"
-        ]
-    },
-    'Arcilloso': {
-        'propiedades': [
-            "Alto contenido de arcilla (>35%)",
-            "Alta retención de agua y nutrientes",
-            "Estructura densa",
-            "Alta fertilidad potencial"
-        ],
-        'limitantes': [
-            "Drenaje muy lento",
-            "Alta compactación",
-            "Difícil laboreo cuando está húmedo"
-        ],
-        'manejo': [
-            "Añadir materia orgánica para mejorar estructura",
-            "Evitar laboreo en condiciones húmedas",
-            "Implementar sistemas de drenaje profundo",
-            "Cultivos de cobertura para romper compactación"
+            "Fertilización fraccionada con énfasis en K y Mg"
         ]
     }
 }
 
-# ICONOS Y COLORES POR CULTIVO
+# ICONOS Y COLORES POR CULTIVO TEMPLADO
 ICONOS_CULTIVOS = {
-    'TRIGO': '🌾',
-    'SOJA': '🫘',
     'MAÍZ': '🌽',
-    'SORGO': '🌾',
-    'GIRASOL': '🌻'
+    'TRIGO': '🌾',
+    'SORGO': '🫘',
+    'GIRASOL': '🌻',
+    'SOJA': '🌱'
 }
 COLORES_CULTIVOS = {
-    'TRIGO': '#FFD700',
-    'SOJA': '#8B4513',
-    'MAÍZ': '#FFA500',
-    'SORGO': '#A0522D',
-    'GIRASOL': '#FFD700'
+    'MAÍZ': '#FFD700',
+    'TRIGO': '#F4A460',
+    'SORGO': '#8B4513',
+    'GIRASOL': '#FFA500',
+    'SOJA': '#228B22'
 }
 
 # PALETAS GEE MEJORADAS
@@ -403,13 +387,13 @@ PALETAS_GEE = {
     'PENDIENTE': ['#4daf4a', '#a6d96a', '#ffffbf', '#fdae61', '#f46d43', '#d73027']
 }
 
-# URLs de imágenes para sidebar
+# URLs de imágenes para sidebar (cultivos templados)
 IMAGENES_CULTIVOS = {
-    'TRIGO': 'https://images.unsplash.com/photo-1586201375761-83865001e331?auto=format&fit=crop&w=200&h=150&q=80',
-    'SOJA': 'https://images.unsplash.com/photo-1592924357228-91a4daadcfea?auto=format&fit=crop&w=200&h=150&q=80',
-    'MAÍZ': 'https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6?auto=format&fit=crop&w=200&h=150&q=80',
-    'SORGO': 'https://images.unsplash.com/photo-1592924357228-91a4daadcfea?auto=format&fit=crop&w=200&h=150&q=80',
-    'GIRASOL': 'https://images.unsplash.com/photo-1595658658481-d53d3f99988f?auto=format&fit=crop&w=200&h=150&q=80'
+    'MAÍZ': 'https://images.unsplash.com/photo-1597235236500-3ac8d9c8f080?auto=format&fit=crop&w=200&h=150&q=80',
+    'TRIGO': 'https://images.unsplash.com/photo-1599996151050-f15c1d5b5b3a?auto=format&fit=crop&w=200&h=150&q=80',
+    'SORGO': 'https://images.unsplash.com/photo-1600083492585-d3e1c1f3f9a0?auto=format&fit=crop&w=200&h=150&q=80',
+    'GIRASOL': 'https://images.unsplash.com/photo-1505238681765-b6ed35990e23?auto=format&fit=crop&w=200&h=150&q=80',
+    'SOJA': 'https://images.unsplash.com/photo-1600083180755-3e4e8d8e7e12?auto=format&fit=crop&w=200&h=150&q=80'
 }
 
 # ===== INICIALIZACIÓN SEGURA DE VARIABLES DE CONFIGURACIÓN =====
@@ -424,11 +408,12 @@ resolucion_dem = 10.0
 # ===== SIDEBAR MEJORADO (INTERFAZ VISUAL) =====
 with st.sidebar:
     st.markdown('<div class="sidebar-title">⚙️ CONFIGURACIÓN</div>', unsafe_allow_html=True)
-    cultivo = st.selectbox("Cultivo:", ["TRIGO", "SOJA", "MAÍZ", "SORGO", "GIRASOL"])
+    cultivo = st.selectbox("Cultivo:", ["MAÍZ", "TRIGO", "SORGO", "GIRASOL", "SOJA"])
     st.image(IMAGENES_CULTIVOS[cultivo], use_container_width=True)
     analisis_tipo = st.selectbox("Tipo de Análisis:", ["FERTILIDAD ACTUAL", "RECOMENDACIONES NPK", "ANÁLISIS DE TEXTURA", "ANÁLISIS DE CURVAS DE NIVEL"])
     if analisis_tipo == "RECOMENDACIONES NPK":
         nutriente = st.selectbox("Nutriente:", ["NITRÓGENO", "FÓSFORO", "POTASIO"])
+    
     st.subheader("🛰️ Fuente de Datos Satelitales")
     satelite_seleccionado = st.selectbox(
         "Satélite:",
@@ -443,6 +428,7 @@ with st.sidebar:
         - Revisita: {info_satelite['revisita']}
         - Índices: {', '.join(info_satelite['indices'][:3])}
         """)
+    
     if analisis_tipo in ["FERTILIDAD ACTUAL", "RECOMENDACIONES NPK"]:
         st.subheader("📊 Índices de Vegetación")
         if satelite_seleccionado == "SENTINEL-2":
@@ -451,16 +437,20 @@ with st.sidebar:
             indice_seleccionado = st.selectbox("Índice:", SATELITES_DISPONIBLES['LANDSAT-8']['indices'])
         else:
             indice_seleccionado = st.selectbox("Índice:", SATELITES_DISPONIBLES['DATOS_SIMULADOS']['indices'])
+    
     if analisis_tipo in ["FERTILIDAD ACTUAL", "RECOMENDACIONES NPK"]:
         st.subheader("📅 Rango Temporal")
         fecha_fin = st.date_input("Fecha fin", datetime.now())
         fecha_inicio = st.date_input("Fecha inicio", datetime.now() - timedelta(days=30))
+    
     st.subheader("🎯 División de Parcela")
     n_divisiones = st.slider("Número de zonas de manejo:", min_value=16, max_value=48, value=32)
+    
     if analisis_tipo == "ANÁLISIS DE CURVAS DE NIVEL":
         st.subheader("🏔️ Configuración Curvas de Nivel")
         intervalo_curvas = st.slider("Intervalo entre curvas (metros):", 1.0, 20.0, 5.0, 1.0)
         resolucion_dem = st.slider("Resolución DEM (metros):", 5.0, 50.0, 10.0, 5.0)
+    
     st.subheader("📤 Subir Parcela")
     uploaded_file = st.file_uploader("Subir archivo de tu parcela", type=['zip', 'kml', 'kmz'],
                                      help="Formatos aceptados: Shapefile (.zip), KML (.kml), KMZ (.kmz)")
@@ -605,9 +595,9 @@ def parsear_kml_manual(contenido_kml):
                             if len(coord_list) >= 3:
                                 polygons.append(Polygon(coord_list))
                             break
-        if polygons:
-            gdf = gpd.GeoDataFrame({'geometry': polygons}, crs='EPSG:4326')
-            return gdf
+            if polygons:
+                gdf = gpd.GeoDataFrame({'geometry': polygons}, crs='EPSG:4326')
+                return gdf
         return None
     except Exception as e:
         st.error(f"❌ Error parseando KML manualmente: {str(e)}")
@@ -679,6 +669,7 @@ def cargar_archivo_parcela(uploaded_file):
         return gdf
     except Exception as e:
         st.error(f"❌ Error cargando archivo: {str(e)}")
+        import traceback
         st.error(f"Detalle: {traceback.format_exc()}")
         return None
 
@@ -852,7 +843,7 @@ def calcular_recomendaciones_npk_gee(indices, nutriente, cultivo):
             recomendaciones.append(round(k_recomendado, 1))
     return recomendaciones
 
-# ===== FUNCIONES DE TEXTURA DEL SUELO - CORREGIDAS =====
+# ===== FUNCIONES DE TEXTURA DEL SUELO - ACTUALIZADAS CON NUEVA NOMENCLATURA =====
 def clasificar_textura_suelo(arena, limo, arcilla):
     try:
         total = arena + limo + arcilla
@@ -861,16 +852,19 @@ def clasificar_textura_suelo(arena, limo, arcilla):
         arena_norm = (arena / total) * 100
         limo_norm = (limo / total) * 100
         arcilla_norm = (arcilla / total) * 100
+        # Nomenclatura actualizada Venezuela/Colombia
         if arcilla_norm >= 35:
-            return "Arcilloso"
+            return "Franco arcilloso"
         elif arcilla_norm >= 25 and arcilla_norm <= 35 and arena_norm >= 20 and arena_norm <= 45:
-            return "Franco Arcilloso"
+            return "Franco arcilloso"
+        elif arena_norm >= 40 and arena_norm <= 50 and arcilla_norm >= 20 and arcilla_norm <= 30:
+            return "Franco arenoso-arcilloso"
         elif arena_norm >= 50 and arena_norm <= 70 and arcilla_norm >= 5 and arcilla_norm <= 20:
-            return "Franco Arenoso"
+            return "Franco arenoso-arcilloso"
         elif arcilla_norm >= 7 and arcilla_norm <= 27 and arena_norm >= 43 and arena_norm <= 52:
             return "Franco"
         elif arena_norm >= 85:
-            return "Arenoso"
+            return "Franco arenoso-arcilloso"
         else:
             return "Franco"
     except Exception as e:
@@ -1015,7 +1009,8 @@ def crear_mapa_pendientes_simple(X, Y, pendiente_grid, gdf_original):
             if np.sum(mask_cat) > 0:
                 x_center = np.mean(X_flat[valid_mask][mask_cat])
                 y_center = np.mean(Y_flat[valid_mask][mask_cat])
-                ax1.text(x_center, y_center, f'{porcentaje}%', fontsize=8, fontweight='bold', ha='center', va='center', bbox=dict(boxstyle="round,pad=0.3", facecolor='white', alpha=0.8))
+                ax1.text(x_center, y_center, f'{porcentaje}%', fontsize=8, fontweight='bold', ha='center', va='center',
+                         bbox=dict(boxstyle="round,pad=0.3", facecolor='white', alpha=0.8))
     else:
         ax1.text(0.5, 0.5, 'Datos insuficientes\npara mapa de calor', transform=ax1.transAxes, ha='center', va='center', fontsize=12)
     gdf_original.plot(ax=ax1, color='none', edgecolor='black', linewidth=2)
@@ -1037,7 +1032,8 @@ Estadísticas:
 • Promedio: {stats_pendiente['promedio']:.1f}%
 • Desviación: {stats_pendiente['std']:.1f}%
 """
-        ax2.text(0.02, 0.98, stats_text, transform=ax2.transAxes, fontsize=9, verticalalignment='top', bbox=dict(boxstyle="round,pad=0.3", facecolor='white', alpha=0.8))
+        ax2.text(0.02, 0.98, stats_text, transform=ax2.transAxes, fontsize=9, verticalalignment='top',
+                 bbox=dict(boxstyle="round,pad=0.3", facecolor='white', alpha=0.8))
         ax2.set_xlabel('Pendiente (%)')
         ax2.set_ylabel('Frecuencia')
         ax2.set_title('Distribución de Pendientes', fontsize=12, fontweight='bold')
@@ -1148,28 +1144,28 @@ def generar_recomendaciones_generales(gdf_analizado, analisis_tipo, cultivo):
         elif analisis_tipo == "ANÁLISIS DE TEXTURA":
             if 'textura_suelo' in gdf_analizado.columns:
                 textura_predominante = gdf_analizado['textura_suelo'].mode()[0] if len(gdf_analizado) > 0 else "N/D"
-                if textura_predominante == "Arcilloso":
-                    recomendaciones.append("Suelo arcilloso: Mejorar drenaje y evitar laboreo en condiciones húmedas")
-                elif textura_predominante == "Arenoso":
-                    recomendaciones.append("Suelo arenoso: Aumentar materia orgánica y considerar riego frecuente")
+                if textura_predominante == "Franco arcilloso":
+                    recomendaciones.append("Suelo franco arcilloso: Mejorar drenaje y evitar laboreo en condiciones húmedas")
+                elif textura_predominante == "Franco arenoso-arcilloso":
+                    recomendaciones.append("Suelo franco arenoso-arcilloso: Aumentar materia orgánica y considerar riego frecuente")
                 elif textura_predominante == "Franco":
                     recomendaciones.append("Textura franca: Condiciones óptimas, mantener prácticas de conservación")
         # === RECOMENDACIONES POR CULTIVO ===
-        if cultivo == "TRIGO":
-            recomendaciones.append("Para trigo: Monitorear nitrógeno en etapas de macollaje y encañado.")
-            recomendaciones.append("Evitar exceso de humedad en etapas finales para prevenir enfermedades fúngicas.")
-        elif cultivo == "SOJA":
-            recomendaciones.append("Para soja: Inocular con rizobios para fijación biológica de nitrógeno.")
-            recomendaciones.append("Asegurar buen drenaje y evitar compactación del suelo.")
-        elif cultivo == "MAÍZ":
-            recomendaciones.append("Para maíz: Alta demanda de nitrógeno, fraccionar aplicaciones.")
-            recomendaciones.append("Mantener humedad adecuada durante floración y llenado de grano.")
+        if cultivo == "MAÍZ":
+            recomendaciones.append("Para maíz: Aplicar nitrógeno en bandas y en etapas fenológicas clave (V6, V12).")
+            recomendaciones.append("Evitar déficit hídrico en floración y llenado de grano.")
+        elif cultivo == "TRIGO":
+            recomendaciones.append("Para trigo: Fertilización nitrogenada en macollaje y espigamiento según disponibilidad hídrica.")
+            recomendaciones.append("Control de malezas en primeros estadios para evitar competencia.")
         elif cultivo == "SORGO":
-            recomendaciones.append("Para sorgo: Tolerante a sequía, pero sensible a frío en etapas tempranas.")
-            recomendaciones.append("Manejar densidad de siembra según disponibilidad hídrica.")
+            recomendaciones.append("Para sorgo: Cultivo tolerante a sequía; ajustar densidad según disponibilidad de agua.")
+            recomendaciones.append("Evitar exceso de nitrógeno en suelos arenosos.")
         elif cultivo == "GIRASOL":
-            recomendaciones.append("Para girasol: Sensible a deficiencia de boro, considerar aplicación foliar.")
-            recomendaciones.append("Evitar estrés hídrico durante floración y llenado.")
+            recomendaciones.append("Para girasol: Evitar suelos compactados; sistema radicular profundo pero sensible a encharcamientos.")
+            recomendaciones.append("Aplicar boro en suelos deficientes para evitar fallas en polinización.")
+        elif cultivo == "SOJA":
+            recomendaciones.append("Para soja: Inocular con Bradyrhizobium; evitar fertilización nitrogenada innecesaria.")
+            recomendaciones.append("Monitorear pH: óptimo entre 6.0–7.0 para nodulación.")
         recomendaciones.append("Realizar análisis de suelo de laboratorio para validar resultados satelitales")
         recomendaciones.append("Considerar agricultura de precisión para aplicación variable de insumos")
     except Exception as e:
@@ -1188,8 +1184,8 @@ def limpiar_texto_para_pdf(texto):
         '\u2014': '--',         # — → --
         '\u2018': "'",          # ‘
         '\u2019': "'",          # ’
-        '\u201C': '"',          # “
-        '\u201D': '"',          # ”
+        '\u201C': '"',          # "
+        '\u201D': '"',          # "
         '\u2192': '->',         # →
         '\u2190': '<-',         # ←
         '\u2265': '>=',         # ≥
@@ -1313,12 +1309,13 @@ Número de zonas: {len(gdf_analizado)}"""
         return pdf_output
     except Exception as e:
         st.error(f"❌ Error generando PDF: {str(e)}")
+        import traceback
         st.error(f"Detalle: {traceback.format_exc()}")
         return None
 
 def generar_reporte_docx(gdf_analizado, cultivo, analisis_tipo, area_total,
-                         nutriente=None, satelite=None, indice=None,
-                         mapa_buffer=None, estadisticas=None, recomendaciones=None):
+                        nutriente=None, satelite=None, indice=None,
+                        mapa_buffer=None, estadisticas=None, recomendaciones=None):
     try:
         doc = Document()
         title = doc.add_heading(f'REPORTE DE ANÁLISIS AGRÍCOLA - {cultivo}', 0)
@@ -1434,7 +1431,176 @@ def generar_reporte_docx(gdf_analizado, cultivo, analisis_tipo, area_total,
         return docx_output
     except Exception as e:
         st.error(f"❌ Error generando DOCX: {str(e)}")
+        import traceback
         st.error(f"Detalle: {traceback.format_exc()}")
+        return None
+
+# ===== FUNCIONES DE VISUALIZACIÓN MEJORADAS CON MAPAS ESRI =====
+def crear_mapa_estatico_con_esri(gdf, titulo, columna_valor, analisis_tipo, nutriente, cultivo, satelite):
+    """Crea mapa estático con fondo ESRI Satellite"""
+    try:
+        # Convertir a Web Mercator para el mapa base
+        gdf_plot = gdf.to_crs(epsg=3857)
+        fig, ax = plt.subplots(1, 1, figsize=(12, 8))
+        if analisis_tipo == "FERTILIDAD ACTUAL":
+            cmap = LinearSegmentedColormap.from_list('fertilidad_gee', PALETAS_GEE['FERTILIDAD'])
+            vmin, vmax = 0, 1
+        else:
+            if nutriente == "NITRÓGENO":
+                cmap = LinearSegmentedColormap.from_list('nitrogeno_gee', PALETAS_GEE['NITROGENO'])
+                vmin, vmax = (PARAMETROS_CULTIVOS[cultivo]['NITROGENO']['min'] * 0.8,
+                              PARAMETROS_CULTIVOS[cultivo]['NITROGENO']['max'] * 1.2)
+            elif nutriente == "FÓSFORO":
+                cmap = LinearSegmentedColormap.from_list('fosforo_gee', PALETAS_GEE['FOSFORO'])
+                vmin, vmax = (PARAMETROS_CULTIVOS[cultivo]['FOSFORO']['min'] * 0.8,
+                              PARAMETROS_CULTIVOS[cultivo]['FOSFORO']['max'] * 1.2)
+            else:
+                cmap = LinearSegmentedColormap.from_list('potasio_gee', PALETAS_GEE['POTASIO'])
+                vmin, vmax = (PARAMETROS_CULTIVOS[cultivo]['POTASIO']['min'] * 0.8,
+                              PARAMETROS_CULTIVOS[cultivo]['POTASIO']['max'] * 1.2)
+        # Plot de las zonas con colores según valor
+        for idx, row in gdf_plot.iterrows():
+            valor = row[columna_valor]
+            valor_norm = (valor - vmin) / (vmax - vmin) if vmax != vmin else 0.5
+            valor_norm = max(0, min(1, valor_norm))
+            color = cmap(valor_norm)
+            gdf_plot.iloc[[idx]].plot(ax=ax, color=color, edgecolor='black', linewidth=1.5, alpha=0.7)
+            # Etiqueta de zona
+            centroid = row.geometry.centroid
+            ax.annotate(f"Z{row['id_zona']}\n{valor:.1f}", (centroid.x, centroid.y),
+                        xytext=(5, 5), textcoords="offset points",
+                        fontsize=8, color='black', weight='bold',
+                        bbox=dict(boxstyle="round,pad=0.3", facecolor='white', alpha=0.9))
+        # Agregar mapa base ESRI Satellite
+        try:
+            ctx.add_basemap(ax, source=ctx.providers.Esri.WorldImagery, alpha=0.7)
+        except:
+            st.warning("⚠️ No se pudo cargar el mapa base ESRI. Verifica la conexión a internet.")
+        info_satelite = SATELITES_DISPONIBLES.get(satelite, SATELITES_DISPONIBLES['DATOS_SIMULADOS'])
+        ax.set_title(f'{ICONOS_CULTIVOS[cultivo]} ANÁLISIS GEE - {cultivo}\n'
+                     f'{info_satelite["icono"]} {info_satelite["nombre"]} - {analisis_tipo}\n'
+                     f'{columna_valor}',
+                     fontsize=16, fontweight='bold', pad=20)
+        ax.set_xlabel('Longitud')
+        ax.set_ylabel('Latitud')
+        ax.grid(True, alpha=0.3)
+        # Barra de colores
+        sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=vmin, vmax=vmax))
+        sm.set_array([])
+        cbar = plt.colorbar(sm, ax=ax, shrink=0.8)
+        cbar.set_label(columna_valor, fontsize=12, fontweight='bold')
+        plt.tight_layout()
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png', dpi=150, bbox_inches='tight')
+        buf.seek(0)
+        plt.close()
+        return buf
+    except Exception as e:
+        st.error(f"❌ Error creando mapa con ESRI: {str(e)}")
+        return None
+
+def crear_mapa_texturas_con_esri(gdf_analizado, cultivo):
+    """Crea mapa de texturas con fondo ESRI Satellite"""
+    try:
+        # Convertir a Web Mercator
+        gdf_plot = gdf_analizado.to_crs(epsg=3857)
+        fig, ax = plt.subplots(1, 1, figsize=(12, 8))
+        colores_textura = {
+            'Franco': '#c7eae5',
+            'Franco arcilloso': '#5ab4ac',
+            'Franco arenoso-arcilloso': '#f6e8c3',
+            'NO_DETERMINADA': '#999999'
+        }
+        # Plot de cada zona con su color según textura
+        for idx, row in gdf_plot.iterrows():
+            textura = row['textura_suelo']
+            color = colores_textura.get(textura, '#999999')
+            gdf_plot.iloc[[idx]].plot(ax=ax, color=color, edgecolor='black', linewidth=1.5, alpha=0.8)
+            # Etiqueta de zona
+            centroid = row.geometry.centroid
+            ax.annotate(f"Z{row['id_zona']}\n{textura[:10]}", (centroid.x, centroid.y),
+                        xytext=(5, 5), textcoords="offset points",
+                        fontsize=8, color='black', weight='bold',
+                        bbox=dict(boxstyle="round,pad=0.3", facecolor='white', alpha=0.9))
+        # Agregar mapa base ESRI Satellite
+        try:
+            ctx.add_basemap(ax, source=ctx.providers.Esri.WorldImagery, alpha=0.6)
+        except:
+            st.warning("⚠️ No se pudo cargar el mapa base ESRI. Verifica la conexión a internet.")
+        ax.set_title(f'{ICONOS_CULTIVOS[cultivo]} MAPA DE TEXTURAS - {cultivo}',
+                     fontsize=16, fontweight='bold', pad=20)
+        ax.set_xlabel('Longitud')
+        ax.set_ylabel('Latitud')
+        ax.grid(True, alpha=0.3)
+        # Leyenda
+        from matplotlib.patches import Patch
+        legend_elements = [Patch(facecolor=color, edgecolor='black', label=textura)
+                           for textura, color in colores_textura.items()]
+        ax.legend(handles=legend_elements, title='Texturas', loc='upper left', bbox_to_anchor=(1.05, 1))
+        plt.tight_layout()
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png', dpi=150, bbox_inches='tight')
+        buf.seek(0)
+        plt.close()
+        return buf
+    except Exception as e:
+        st.error(f"Error creando mapa de texturas: {str(e)}")
+        return None
+
+def crear_mapa_potencial_cosecha_calor(gdf_analizado, cultivo):
+    """Crea mapa de calor de potencial de cosecha con fondo ESRI"""
+    try:
+        # Convertir a Web Mercator
+        gdf_plot = gdf_analizado.to_crs(epsg=3857)
+        fig, ax = plt.subplots(1, 1, figsize=(12, 8))
+        # Usar paleta de calor (hot) para zonas de mejor cosecha
+        cmap = plt.cm.hot
+        # Extraer centroides para el heatmap
+        centroids = gdf_plot.geometry.centroid
+        x_coords = [c.x for c in centroids]
+        y_coords = [c.y for c in centroids]
+        valores = gdf_plot['potencial_cosecha'].values
+        # Crear heatmap de puntos
+        heatmap = ax.scatter(x_coords, y_coords, c=valores, cmap=cmap,
+                             s=200, alpha=0.8, edgecolors='black', linewidth=1)
+        # Dibujar polígonos con transparencia
+        gdf_plot.plot(ax=ax, color='none', edgecolor='black', linewidth=1, alpha=0.5)
+        # Etiquetas de zonas con valores
+        for idx, row in gdf_plot.iterrows():
+            centroid = row.geometry.centroid
+            ax.annotate(f"Z{row['id_zona']}\n{row['potencial_cosecha']:.2f}",
+                        (centroid.x, centroid.y),
+                        xytext=(3, 3), textcoords="offset points",
+                        fontsize=7, color='black', weight='bold',
+                        bbox=dict(boxstyle="round,pad=0.2", facecolor='white', alpha=0.8))
+        # Agregar mapa base ESRI Satellite
+        try:
+            ctx.add_basemap(ax, source=ctx.providers.Esri.WorldImagery, alpha=0.5)
+        except:
+            st.warning("⚠️ No se pudo cargar el mapa base ESRI. Verifica la conexión a internet.")
+        ax.set_title(f"🔥 MAPA DE CALOR - POTENCIAL DE COSECHA - {cultivo}",
+                     fontsize=16, fontweight='bold')
+        ax.set_xlabel("Longitud")
+        ax.set_ylabel("Latitud")
+        ax.grid(True, alpha=0.2)
+        # Barra de colores
+        cbar = plt.colorbar(heatmap, ax=ax, shrink=0.8)
+        cbar.set_label("Potencial de Cosecha (0-1)", fontsize=12, fontweight='bold')
+        # Resaltar zonas con mejor potencial (>0.7)
+        zonas_calientes = gdf_plot[gdf_plot['potencial_cosecha'] > 0.7]
+        if not zonas_calientes.empty:
+            for idx, row in zonas_calientes.iterrows():
+                centroid = row.geometry.centroid
+                ax.plot(centroid.x, centroid.y, 'yo', markersize=10,
+                        markeredgecolor='red', markeredgewidth=2)
+        plt.tight_layout()
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png', dpi=150, bbox_inches='tight')
+        buf.seek(0)
+        plt.close()
+        return buf
+    except Exception as e:
+        st.error(f"Error creando mapa de calor: {str(e)}")
         return None
 
 # ===== FUNCIÓN PRINCIPAL DE ANÁLISIS (CORREGIDA) =====
@@ -1455,6 +1621,7 @@ def ejecutar_analisis(gdf, nutriente, analisis_tipo, n_divisiones, cultivo,
         gdf = validar_y_corregir_crs(gdf)
         area_total = calcular_superficie(gdf)
         resultados['area_total'] = area_total
+
         # === ANÁLISIS DE TEXTURA DEL SUELO ===
         if analisis_tipo == "ANÁLISIS DE TEXTURA":
             gdf_dividido = dividir_parcela_en_zonas(gdf, n_divisiones)
@@ -1462,12 +1629,14 @@ def ejecutar_analisis(gdf, nutriente, analisis_tipo, n_divisiones, cultivo,
             resultados['gdf_analizado'] = gdf_analizado
             resultados['exitoso'] = True
             return resultados
+
         # === ANÁLISIS DE CURVAS DE NIVEL ===
         elif analisis_tipo == "ANÁLISIS DE CURVAS DE NIVEL":
             gdf_dividido = dividir_parcela_en_zonas(gdf, n_divisiones)
             resultados['gdf_analizado'] = gdf_dividido
             resultados['exitoso'] = True
             return resultados
+
         # === ANÁLISIS SATELITAL (FERTILIDAD O NPK) ===
         elif analisis_tipo in ["FERTILIDAD ACTUAL", "RECOMENDACIONES NPK"]:
             datos_satelitales = None
@@ -1477,6 +1646,7 @@ def ejecutar_analisis(gdf, nutriente, analisis_tipo, n_divisiones, cultivo,
                 datos_satelitales = descargar_datos_landsat8(gdf, fecha_inicio, fecha_fin, indice)
             else:
                 datos_satelitales = generar_datos_simulados(gdf, cultivo, indice)
+
             gdf_dividido = dividir_parcela_en_zonas(gdf, n_divisiones)
             indices_gee = calcular_indices_satelitales_gee(gdf_dividido, cultivo, datos_satelitales)
             gdf_analizado = gdf_dividido.copy()
@@ -1495,11 +1665,14 @@ def ejecutar_analisis(gdf, nutriente, analisis_tipo, n_divisiones, cultivo,
                     area_ha = float(area_ha)
                 areas_ha_list.append(area_ha)
             gdf_analizado['area_ha'] = areas_ha_list
+
             if analisis_tipo == "RECOMENDACIONES NPK":
                 recomendaciones_npk = calcular_recomendaciones_npk_gee(indices_gee, nutriente, cultivo)
                 gdf_analizado['valor_recomendado'] = recomendaciones_npk
+
             resultados['gdf_analizado'] = gdf_analizado
             resultados['exitoso'] = True
+
             # === DATOS DE NASA POWER ===
             if satelite:
                 df_power = obtener_datos_nasa_power(gdf, fecha_inicio, fecha_fin)
@@ -1511,6 +1684,7 @@ def ejecutar_analisis(gdf, nutriente, analisis_tipo, n_divisiones, cultivo,
             return resultados
     except Exception as e:
         st.error(f"❌ Error en análisis: {str(e)}")
+        import traceback
         st.error(f"Detalle: {traceback.format_exc()}")
         return resultados
 
@@ -1545,49 +1719,16 @@ def mostrar_resultados_textura(gdf_analizado, cultivo, area_total):
     ax2.tick_params(axis='x', rotation=45)
     plt.tight_layout()
     st.pyplot(fig)
-    st.subheader("🗺️ MAPA DE TEXTURAS")
-    try:
-        fig, ax = plt.subplots(1, 1, figsize=(12, 8))
-        colores_textura = {
-            'Franco': '#c7eae5',
-            'Franco Arcilloso': '#5ab4ac',
-            'Franco Arenoso': '#f6e8c3',
-            'Arenoso': '#d8b365',
-            'Arcilloso': '#01665e',
-            'NO_DETERMINADA': '#999999'
-        }
-        for idx, row in gdf_analizado.iterrows():
-            textura = row['textura_suelo']
-            color = colores_textura.get(textura, '#999999')
-            gdf_analizado.iloc[[idx]].plot(ax=ax, color=color, edgecolor='black', linewidth=1.5)
-            centroid = row.geometry.centroid
-            ax.annotate(f"Z{row['id_zona']}\n{textura[:3]}",
-                        (centroid.x, centroid.y),
-                        xytext=(5, 5), textcoords="offset points",
-                        fontsize=8, color='black', weight='bold',
-                        bbox=dict(boxstyle="round,pad=0.3", facecolor='white', alpha=0.9))
-        ax.set_title(f'{ICONOS_CULTIVOS[cultivo]} MAPA DE TEXTURAS - {cultivo}',
-                     fontsize=16, fontweight='bold', pad=20)
-        ax.set_xlabel('Longitud')
-        ax.set_ylabel('Latitud')
-        ax.grid(True, alpha=0.3)
-        from matplotlib.patches import Patch
-        legend_elements = [Patch(facecolor=color, edgecolor='black', label=textura)
-                          for textura, color in colores_textura.items()]
-        ax.legend(handles=legend_elements, title='Texturas', loc='upper left', bbox_to_anchor=(1.05, 1))
-        plt.tight_layout()
-        buf = io.BytesIO()
-        plt.savefig(buf, format='png', dpi=150, bbox_inches='tight')
-        buf.seek(0)
-        st.image(buf, use_container_width=True)
+    st.subheader("🗺️ MAPA DE TEXTURAS CON ESRI SATELLITE")
+    mapa_texturas = crear_mapa_texturas_con_esri(gdf_analizado, cultivo)
+    if mapa_texturas:
+        st.image(mapa_texturas, use_container_width=True)
         st.download_button(
             "📥 Descargar Mapa de Texturas",
-            buf,
+            mapa_texturas,
             f"mapa_texturas_{cultivo}_{datetime.now().strftime('%Y%m%d_%H%M')}.png",
             "image/png"
         )
-    except Exception as e:
-        st.error(f"Error creando mapa: {str(e)}")
     st.subheader("📋 TABLA DE RESULTADOS POR ZONA")
     columnas_textura = ['id_zona', 'area_ha', 'textura_suelo', 'arena', 'limo', 'arcilla']
     columnas_textura = [col for col in columnas_textura if col in gdf_analizado.columns]
@@ -1644,77 +1785,77 @@ def mostrar_resultados_curvas_nivel(X, Y, Z, pendiente_grid, curvas, elevaciones
         with col4:
             num_curvas = len(curvas) if curvas else 0
             st.metric("🔄 Número de Curvas", f"{num_curvas}")
-        st.subheader("🔥 MAPA DE CALOR DE PENDIENTES")
-        st.image(mapa_pendientes, use_container_width=True)
+    st.subheader("🔥 MAPA DE CALOR DE PENDIENTES")
+    st.image(mapa_pendientes, use_container_width=True)
+    st.download_button(
+        "📥 Descargar Mapa de Pendientes",
+        mapa_pendientes,
+        f"mapa_pendientes_{cultivo}_{datetime.now().strftime('%Y%m%d_%H%M')}.png",
+        "image/png"
+    )
+    st.subheader("⚠️ ANÁLISIS DE RIESGO DE EROSION")
+    if 'stats_pendiente' in locals() and 'distribucion' in stats_pendiente:
+        riesgo_total = 0
+        for categoria, data in stats_pendiente['distribucion'].items():
+            if categoria in CLASIFICACION_PENDIENTES:
+                riesgo_total += data['porcentaje'] * CLASIFICACION_PENDIENTES[categoria]['factor_erosivo']
+        riesgo_promedio = riesgo_total / 100
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            if riesgo_promedio < 0.3:
+                st.success("✅ **RIESGO BAJO**")
+                st.metric("Factor Riesgo", f"{riesgo_promedio:.2f}")
+            elif riesgo_promedio < 0.6:
+                st.warning("⚠️ **RIESGO MODERADO**")
+                st.metric("Factor Riesgo", f"{riesgo_promedio:.2f}")
+            else:
+                st.error("🚨 **RIESGO ALTO**")
+                st.metric("Factor Riesgo", f"{riesgo_promedio:.2f}")
+        with col2:
+            area_total_ha = area_total
+            porcentaje_critico = sum(data['porcentaje'] for cat, data in stats_pendiente['distribucion'].items()
+                                     if cat in ['FUERTE (10-15%)', 'MUY FUERTE (15-25%)', 'EXTREMA (>25%)'])
+            area_critica = area_total_ha * (porcentaje_critico / 100)
+            st.metric("Área Crítica (>10%)", f"{area_critica:.2f} ha")
+        with col3:
+            porcentaje_manejable = sum(data['porcentaje'] for cat, data in stats_pendiente['distribucion'].items()
+                                       if cat in ['PLANA (0-2%)', 'SUAVE (2-5%)', 'MODERADA (5-10%)'])
+            area_manejable = area_total_ha * (porcentaje_manejable / 100)
+            st.metric("Área Manejable (<10%)", f"{area_manejable:.2f} ha")
+    st.subheader("📈 VISUALIZACIÓN 3D DEL TERRENO")
+    try:
+        fig = plt.figure(figsize=(12, 8))
+        ax = fig.add_subplot(111, projection='3d')
+        surf = ax.plot_surface(X, Y, Z, cmap='terrain', alpha=0.8, linewidth=0)
+        ax.set_xlabel('Longitud')
+        ax.set_ylabel('Latitud')
+        ax.set_zlabel('Elevación (m)')
+        ax.set_title(f'Modelo 3D del Terreno - {cultivo}')
+        fig.colorbar(surf, ax=ax, shrink=0.5, aspect=5, label='Elevación (m)')
+        plt.tight_layout()
+        st.pyplot(fig)
+    except Exception as e:
+        st.warning(f"No se pudo generar visualización 3D: {e}")
+    st.subheader("💾 DESCARGAR RESULTADOS")
+    sample_points = []
+    for i in range(0, X.shape[0], 5):
+        for j in range(0, X.shape[1], 5):
+            if not np.isnan(Z[i, j]):
+                sample_points.append({
+                    'lat': Y[i, j],
+                    'lon': X[i, j],
+                    'elevacion_m': Z[i, j],
+                    'pendiente_%': pendiente_grid[i, j]
+                })
+    if sample_points:
+        df_dem = pd.DataFrame(sample_points)
+        csv = df_dem.to_csv(index=False)
         st.download_button(
-            "📥 Descargar Mapa de Pendientes",
-            mapa_pendientes,
-            f"mapa_pendientes_{cultivo}_{datetime.now().strftime('%Y%m%d_%H%M')}.png",
-            "image/png"
+            label="📊 Descargar Muestras DEM (CSV)",
+            data=csv,
+            file_name=f"dem_muestras_{cultivo}_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+            mime="text/csv"
         )
-        st.subheader("⚠️ ANÁLISIS DE RIESGO DE EROSION")
-        if 'stats_pendiente' in locals() and 'distribucion' in stats_pendiente:
-            riesgo_total = 0
-            for categoria, data in stats_pendiente['distribucion'].items():
-                if categoria in CLASIFICACION_PENDIENTES:
-                    riesgo_total += data['porcentaje'] * CLASIFICACION_PENDIENTES[categoria]['factor_erosivo']
-            riesgo_promedio = riesgo_total / 100
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                if riesgo_promedio < 0.3:
-                    st.success("✅ **RIESGO BAJO**")
-                    st.metric("Factor Riesgo", f"{riesgo_promedio:.2f}")
-                elif riesgo_promedio < 0.6:
-                    st.warning("⚠️ **RIESGO MODERADO**")
-                    st.metric("Factor Riesgo", f"{riesgo_promedio:.2f}")
-                else:
-                    st.error("🚨 **RIESGO ALTO**")
-                    st.metric("Factor Riesgo", f"{riesgo_promedio:.2f}")
-            with col2:
-                area_total_ha = area_total
-                porcentaje_critico = sum(data['porcentaje'] for cat, data in stats_pendiente['distribucion'].items()
-                                         if cat in ['FUERTE (10-15%)', 'MUY FUERTE (15-25%)', 'EXTREMA (>25%)'])
-                area_critica = area_total_ha * (porcentaje_critico / 100)
-                st.metric("Área Crítica (>10%)", f"{area_critica:.2f} ha")
-            with col3:
-                porcentaje_manejable = sum(data['porcentaje'] for cat, data in stats_pendiente['distribucion'].items()
-                                           if cat in ['PLANA (0-2%)', 'SUAVE (2-5%)', 'MODERADA (5-10%)'])
-                area_manejable = area_total_ha * (porcentaje_manejable / 100)
-                st.metric("Área Manejable (<10%)", f"{area_manejable:.2f} ha")
-        st.subheader("📈 VISUALIZACIÓN 3D DEL TERRENO")
-        try:
-            fig = plt.figure(figsize=(12, 8))
-            ax = fig.add_subplot(111, projection='3d')
-            surf = ax.plot_surface(X, Y, Z, cmap='terrain', alpha=0.8, linewidth=0)
-            ax.set_xlabel('Longitud')
-            ax.set_ylabel('Latitud')
-            ax.set_zlabel('Elevación (m)')
-            ax.set_title(f'Modelo 3D del Terreno - {cultivo}')
-            fig.colorbar(surf, ax=ax, shrink=0.5, aspect=5, label='Elevación (m)')
-            plt.tight_layout()
-            st.pyplot(fig)
-        except Exception as e:
-            st.warning(f"No se pudo generar visualización 3D: {e}")
-        st.subheader("💾 DESCARGAR RESULTADOS")
-        sample_points = []
-        for i in range(0, X.shape[0], 5):
-            for j in range(0, X.shape[1], 5):
-                if not np.isnan(Z[i, j]):
-                    sample_points.append({
-                        'lat': Y[i, j],
-                        'lon': X[i, j],
-                        'elevacion_m': Z[i, j],
-                        'pendiente_%': pendiente_grid[i, j]
-                    })
-        if sample_points:
-            df_dem = pd.DataFrame(sample_points)
-            csv = df_dem.to_csv(index=False)
-            st.download_button(
-                label="📊 Descargar Muestras DEM (CSV)",
-                data=csv,
-                file_name=f"dem_muestras_{cultivo}_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
-                mime="text/csv"
-            )
 
 # ===== INTERFAZ PRINCIPAL =====
 if uploaded_file:
@@ -1836,7 +1977,7 @@ if uploaded_file:
                                 "☀️ Radiación Solar",
                                 "💨 Velocidad del Viento",
                                 "🌧️ Precipitación",
-                                "📈 Potencial de Cosecha"
+                                "🔥 Potencial de Cosecha"
                             ])
                             def crear_grafico_personalizado(series, titulo, ylabel, color_linea, fondo_grafico='#f8f9fa', color_texto='#2c3e50'):
                                 fig, ax = plt.subplots(figsize=(10, 4))
@@ -1876,11 +2017,11 @@ if uploaded_file:
                                 min_rad = serie_rad.min()
                                 # Interpretación simple
                                 if prom_rad > 5.5:
-                                    interpretacion = "☀️ **Alta radiación**: Condiciones óptimas para fotosíntesis en cultivos templados."
+                                    interpretacion = "☀️ **Alta radiación**: Condiciones óptimas para fotosíntesis."
                                 elif prom_rad > 4.0:
-                                    interpretacion = "🌤️ **Radiación moderada**: Adecuada para la mayoría de cultivos, con posible limitación en días nublados."
+                                    interpretacion = "🌤️ **Radiación moderada**: Adecuada para la mayoría de cultivos."
                                 else:
-                                    interpretacion = "☁️ **Radiación baja**: Puede limitar el crecimiento; vigilar desarrollo vegetativo."
+                                    interpretacion = "☁️ **Radiación baja**: Puede limitar el crecimiento."
                                 col_r1, col_r2, col_r3 = st.columns(3)
                                 with col_r1:
                                     st.metric("Promedio", f"{prom_rad:.1f} kWh/m²/día")
@@ -1902,11 +2043,11 @@ if uploaded_file:
                                 max_viento = serie_viento.max()
                                 min_viento = serie_viento.min()
                                 if prom_viento < 2.0:
-                                    interpretacion = "🍃 **Viento suave**: Bajo riesgo de estrés mecánico o deshidratación."
+                                    interpretacion = "🍃 **Viento suave**: Bajo riesgo de estrés mecánico."
                                 elif prom_viento < 4.0:
-                                    interpretacion = "🌬️ **Viento moderado**: Aceptable; monitorear en etapas sensibles (floración, fruto joven)."
+                                    interpretacion = "🌬️ **Viento moderado**: Aceptable; monitorear en etapas sensibles."
                                 else:
-                                    interpretacion = "💨 **Viento fuerte**: Alto riesgo de daño mecánico, aumento de evapotranspiración y posible caída de frutos."
+                                    interpretacion = "💨 **Viento fuerte**: Alto riesgo de daño mecánico."
                                 col_w1, col_w2, col_w3 = st.columns(3)
                                 with col_w1:
                                     st.metric("Promedio", f"{prom_viento:.2f} m/s")
@@ -1928,11 +2069,11 @@ if uploaded_file:
                                 total_precip = serie_precip.sum()
                                 dias_lluvia = (serie_precip > 0.1).sum()
                                 if prom_precip > 8:
-                                    interpretacion = "🌧️ **Precipitación alta**: Riesgo de encharcamiento y lixiviación de nutrientes. Asegurar drenaje."
+                                    interpretacion = "🌧️ **Precipitación alta**: Riesgo de encharcamiento y lixiviación."
                                 elif prom_precip > 3:
-                                    interpretacion = "💧 **Precipitación adecuada**: Condiciones hídricas favorables para cultivos templados."
+                                    interpretacion = "💧 **Precipitación adecuada**: Condiciones hídricas favorables."
                                 else:
-                                    interpretacion = "🏜️ **Precipitación baja**: Posible déficit hídrico; considerar riego suplementario."
+                                    interpretacion = "🏜️ **Precipitación baja**: Posible déficit hídrico; considerar riego."
                                 col_p1, col_p2, col_p3 = st.columns(3)
                                 with col_p1:
                                     st.metric("Total", f"{total_precip:.1f} mm")
@@ -1949,35 +2090,30 @@ if uploaded_file:
                                 st.markdown(f"**Interpretación agronómica:** {interpretacion}")
                             # === PESTAÑA: POTENCIAL DE COSECHA ===
                             with tab_cosecha:
-                                st.subheader("📊 Cálculo de Potencial de Cosecha Integrado")
+                                st.subheader("🔥 Análisis de Potencial de Cosecha - Puntos Calientes")
                                 st.markdown("""
-                                El potencial de cosecha se estima combinando:
-                                - Fertilidad del suelo (NPK, materia orgánica)
-                                - Radiación solar (NASA POWER)
-                                - Humedad del suelo (NDWI + parámetros del cultivo)
-                                - Estrés por viento (impacto negativo)
+                                **Metodología:**
+                                - Se integran datos de fertilidad (NPK), radiación solar, humedad (NDWI) y estrés por viento
+                                - Las zonas con valores más altos (rojo/amarillo) son los **puntos calientes** para mejor cosecha
+                                - Los círculos amarillos marcan zonas con potencial >0.7
                                 """)
                                 # --- Paso 1: Agregar datos meteorológicos promedio a cada zona ---
                                 rad_prom = df_power['radiacion_solar'].mean()
                                 viento_prom = df_power['viento_2m'].mean()
-                                # Asignar los mismos valores promedio a todas las zonas (simplificación razonable)
+                                # Asignar los mismos valores promedio a todas las zonas
                                 gdf_analizado['radiacion_solar'] = rad_prom
                                 gdf_analizado['viento_2m'] = viento_prom
                                 # --- Paso 2: Normalizar cada variable a [0, 1] ---
                                 def normalizar_solar(valor):
-                                    # Rango esperado: 3 a 7 kWh/m²/día
                                     return np.clip((valor - 3.0) / (7.0 - 3.0), 0, 1)
                                 def normalizar_viento(valor):
-                                    # Viento ideal < 2 m/s; >4 m/s es estresante → invertido
                                     return np.clip(1 - (valor - 1.0) / (5.0 - 1.0), 0, 1)
                                 def normalizar_humedad(ndwi):
-                                    # NDWI entre 0.1 y 0.4 es ideal para la mayoría de cultivos
                                     return np.clip((ndwi - 0.1) / (0.4 - 0.1), 0, 1)
                                 gdf_analizado['solar_norm'] = gdf_analizado['radiacion_solar'].apply(normalizar_solar)
                                 gdf_analizado['viento_norm'] = gdf_analizado['viento_2m'].apply(normalizar_viento)
                                 gdf_analizado['humedad_norm'] = gdf_analizado['ndwi'].apply(normalizar_humedad)
                                 # --- Paso 3: Calcular índice integrado ---
-                                # Ponderaciones agronómicas típicas
                                 w_fertilidad = 0.40
                                 w_solar = 0.25
                                 w_humedad = 0.20
@@ -1990,11 +2126,11 @@ if uploaded_file:
                                 ).clip(0, 1)
                                 # Escalar a toneladas/ha según cultivo base
                                 produccion_base = {
-                                    'TRIGO': 4.0,     # t/ha promedio
-                                    'SOJA': 3.0,      # t/ha promedio
-                                    'MAÍZ': 8.0,      # t/ha promedio
-                                    'SORGO': 5.0,     # t/ha promedio
-                                    'GIRASOL': 2.5    # t/ha promedio
+                                    'MAÍZ': 8.0,      # t/ha
+                                    'TRIGO': 4.0,
+                                    'SORGO': 5.0,
+                                    'GIRASOL': 2.5,   # t/ha (grano)
+                                    'SOJA': 3.5
                                 }
                                 base = produccion_base.get(cultivo, 10)
                                 gdf_analizado['produccion_estimada'] = gdf_analizado['potencial_cosecha'] * base
@@ -2009,142 +2145,70 @@ if uploaded_file:
                                 with col_c4:
                                     total_est = (gdf_analizado['produccion_estimada'] * gdf_analizado['area_ha']).sum()
                                     st.metric("Total Parcela", f"{total_est:.1f} t")
-                                # --- Paso 5: Crear mapa de calor ---
-                                fig, ax = plt.subplots(1, 1, figsize=(12, 8))
-                                cmap = LinearSegmentedColormap.from_list('cosecha', ['#f7f7f7', '#e6f598', '#abdda4', '#66c2a5', '#3288bd', '#5e4fa2'])
-                                gdf_analizado.plot(
-                                    column='potencial_cosecha',
-                                    cmap=cmap,
-                                    linewidth=0.8,
-                                    edgecolor='black',
-                                    alpha=0.9,
-                                    legend=True,
-                                    ax=ax,
-                                    legend_kwds={'label': "Potencial de Cosecha (0–1)", 'orientation': "horizontal"}
-                                )
-                                # Etiquetas por zona
-                                for idx, row in gdf_analizado.iterrows():
-                                    centroid = row.geometry.centroid
-                                    ax.annotate(
-                                        f"Z{row['id_zona']}\n{row['produccion_estimada']:.1f}",
-                                        (centroid.x, centroid.y),
-                                        xytext=(3, 3),
-                                        textcoords="offset points",
-                                        fontsize=7,
-                                        color='black',
-                                        weight='bold',
-                                        bbox=dict(boxstyle="round,pad=0.2", facecolor='white', alpha=0.8)
+                                # --- Paso 5: Crear mapa de calor con ESRI ---
+                                mapa_calor = crear_mapa_potencial_cosecha_calor(gdf_analizado, cultivo)
+                                if mapa_calor:
+                                    st.image(mapa_calor, use_container_width=True)
+                                    st.download_button(
+                                        "📥 Descargar Mapa de Calor",
+                                        mapa_calor,
+                                        f"potencial_cosecha_calor_{cultivo}_{datetime.now().strftime('%Y%m%d')}.png",
+                                        "image/png"
                                     )
-                                ax.set_title(f"🗺️ Mapa de Potencial de Cosecha - {cultivo}", fontsize=16, fontweight='bold')
-                                ax.set_xlabel("Longitud")
-                                ax.set_ylabel("Latitud")
-                                ax.grid(True, alpha=0.2)
-                                plt.tight_layout()
-                                st.pyplot(fig)
-                                # --- Paso 6: Interpretación ---
-                                prom_pot = gdf_analizado['potencial_cosecha'].mean()
-                                if prom_pot > 0.75:
-                                    st.success("✅ **Alto potencial**: Condiciones óptimas de suelo y clima.")
-                                elif prom_pot > 0.5:
-                                    st.info("ℹ️ **Potencial moderado**: Buenas condiciones, con oportunidades de mejora.")
-                                else:
-                                    st.warning("⚠️ **Bajo potencial**: Limitado por déficit en fertilidad, agua, luz o estrés por viento.")
-                                # --- Paso 7: Descarga ---
-                                buf_mapa = io.BytesIO()
-                                plt.savefig(buf_mapa, format='png', dpi=150, bbox_inches='tight')
-                                buf_mapa.seek(0)
-                                st.download_button(
-                                    "📥 Descargar Mapa de Potencial",
-                                    buf_mapa,
-                                    f"potencial_cosecha_{cultivo}_{datetime.now().strftime('%Y%m%d')}.png",
-                                    "image/png"
-                                )
-
-                            def crear_mapa_estatico(gdf, titulo, columna_valor, analisis_tipo, nutriente, cultivo, satelite):
-                                try:
-                                    fig, ax = plt.subplots(1, 1, figsize=(12, 8))
-                                    if analisis_tipo == "FERTILIDAD ACTUAL":
-                                        cmap = LinearSegmentedColormap.from_list('fertilidad_gee', PALETAS_GEE['FERTILIDAD'])
-                                        vmin, vmax = 0, 1
-                                    else:
-                                        if nutriente == "NITRÓGENO":
-                                            cmap = LinearSegmentedColormap.from_list('nitrogeno_gee', PALETAS_GEE['NITROGENO'])
-                                            vmin, vmax = (PARAMETROS_CULTIVOS[cultivo]['NITROGENO']['min'] * 0.8,
-                                                          PARAMETROS_CULTIVOS[cultivo]['NITROGENO']['max'] * 1.2)
-                                        elif nutriente == "FÓSFORO":
-                                            cmap = LinearSegmentedColormap.from_list('fosforo_gee', PALETAS_GEE['FOSFORO'])
-                                            vmin, vmax = (PARAMETROS_CULTIVOS[cultivo]['FOSFORO']['min'] * 0.8,
-                                                          PARAMETROS_CULTIVOS[cultivo]['FOSFORO']['max'] * 1.2)
-                                        else:
-                                            cmap = LinearSegmentedColormap.from_list('potasio_gee', PALETAS_GEE['POTASIO'])
-                                            vmin, vmax = (PARAMETROS_CULTIVOS[cultivo]['POTASIO']['min'] * 0.8,
-                                                          PARAMETROS_CULTIVOS[cultivo]['POTASIO']['max'] * 1.2)
-                                    for idx, row in gdf.iterrows():
-                                        valor = row[columna_valor]
-                                        valor_norm = (valor - vmin) / (vmax - vmin)
-                                        valor_norm = max(0, min(1, valor_norm))
-                                        color = cmap(valor_norm)
-                                        gdf.iloc[[idx]].plot(ax=ax, color=color, edgecolor='black', linewidth=1.5)
-                                        centroid = row.geometry.centroid
-                                        ax.annotate(f"Z{row['id_zona']}\n{valor:.1f}",
-                                                    (centroid.x, centroid.y),
-                                                    xytext=(5, 5), textcoords="offset points",
-                                                    fontsize=8, color='black', weight='bold',
-                                                    bbox=dict(boxstyle="round,pad=0.3", facecolor='white', alpha=0.9))
-                                    info_satelite = SATELITES_DISPONIBLES.get(satelite, SATELITES_DISPONIBLES['DATOS_SIMULADOS'])
-                                    ax.set_title(f'{ICONOS_CULTIVOS[cultivo]} ANÁLISIS GEE - {cultivo}\n'
-                                                 f'{info_satelite["icono"]} {info_satelite["nombre"]} - {analisis_tipo}\n'
-                                                 f'{columna_valor}',
-                                                 fontsize=16, fontweight='bold', pad=20)
-                                    ax.set_xlabel('Longitud')
-                                    ax.set_ylabel('Latitud')
-                                    ax.grid(True, alpha=0.3)
-                                    sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=vmin, vmax=vmax))
-                                    sm.set_array([])
-                                    cbar = plt.colorbar(sm, ax=ax, shrink=0.8)
-                                    cbar.set_label(columna_valor, fontsize=12, fontweight='bold')
-                                    plt.tight_layout()
-                                    buf = io.BytesIO()
-                                    plt.savefig(buf, format='png', dpi=150, bbox_inches='tight')
-                                    buf.seek(0)
-                                    plt.close()
-                                    return buf
-                                except Exception as e:
-                                    st.error(f"❌ Error creando mapa: {str(e)}")
-                                    return None
-
+                                # --- Paso 6: Identificar puntos calientes ---
+                                zonas_calientes = gdf_analizado[gdf_analizado['potencial_cosecha'] > 0.7]
+                                if not zonas_calientes.empty:
+                                    st.subheader("📍 ZONAS CALIENTES (Potencial > 0.7)")
+                                    st.dataframe(zonas_calientes[['id_zona', 'area_ha', 'potencial_cosecha', 'produccion_estimada']].sort_values('potencial_cosecha', ascending=False))
+                                    total_area_caliente = zonas_calientes['area_ha'].sum()
+                                    st.metric(f"Área total de zonas calientes", f"{total_area_caliente:.2f} ha")
+                                    st.markdown("**Recomendaciones para zonas calientes:**")
+                                    st.markdown("""
+                                    - ✅ **Maximizar inversión** en estas zonas (fertilización, riego)
+                                    - ✅ **Priorizar cosecha** temprana en estas áreas
+                                    - ✅ **Monitoreo intensivo** para mantener altos rendimientos
+                                    """)
+                            # Crear mapa estático con ESRI para análisis GEE
                             if analisis_tipo in ["FERTILIDAD ACTUAL", "RECOMENDACIONES NPK"]:
                                 columna_valor = 'valor_recomendado' if analisis_tipo == "RECOMENDACIONES NPK" else 'npk_actual'
-                                mapa_buffer = crear_mapa_estatico(gdf_analizado, f"ANÁLISIS {analisis_tipo}", columna_valor, analisis_tipo, nutriente, cultivo, satelite_seleccionado)
+                                mapa_buffer = crear_mapa_estatico_con_esri(gdf_analizado,
+                                                                          f"ANÁLISIS {analisis_tipo}",
+                                                                          columna_valor,
+                                                                          analisis_tipo,
+                                                                          nutriente,
+                                                                          cultivo,
+                                                                          satelite_seleccionado)
                                 if mapa_buffer:
+                                    st.subheader(f"🗺️ MAPA CON ESRI SATELLITE - {analisis_tipo}")
                                     st.image(mapa_buffer, use_container_width=True)
                                     st.session_state['resultados_guardados']['mapa_buffer'] = mapa_buffer
                                     st.download_button(
-                                        "📥 Descargar Mapa GEE",
+                                        "📥 Descargar Mapa GEE con ESRI",
                                         mapa_buffer,
-                                        f"mapa_gee_{cultivo}_{satelite_seleccionado}_{analisis_tipo.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M')}.png",
+                                        f"mapa_gee_esri_{cultivo}_{satelite_seleccionado}_{analisis_tipo.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M')}.png",
                                         "image/png"
                                     )
-                                st.subheader("🔬 ÍNDICES SATELITALES GEE POR ZONA")
-                                columnas_indices = ['id_zona', 'npk_actual', 'materia_organica', 'ndvi', 'ndre', 'humedad_suelo', 'ndwi']
-                                if analisis_tipo == "RECOMENDACIONES NPK":
-                                    columnas_indices = ['id_zona', 'valor_recomendado', 'npk_actual', 'materia_organica', 'ndvi', 'ndre', 'humedad_suelo', 'ndwi']
-                                columnas_indices = [col for col in columnas_indices if col in gdf_analizado.columns]
-                                tabla_indices = gdf_analizado[columnas_indices].copy()
-                                rename_dict = {
-                                    'id_zona': 'Zona',
-                                    'npk_actual': 'NPK Actual',
-                                    'valor_recomendado': 'Recomendación',
-                                    'materia_organica': 'Materia Org (%)',
-                                    'ndvi': 'NDVI',
-                                    'ndre': 'NDRE',
-                                    'humedad_suelo': 'Humedad',
-                                    'ndwi': 'NDWI'
-                                }
-                                tabla_indices = tabla_indices.rename(columns={k: v for k, v in rename_dict.items() if k in tabla_indices.columns})
-                                st.dataframe(tabla_indices)
+                            st.subheader("🔬 ÍNDICES SATELITALES GEE POR ZONA")
+                            columnas_indices = ['id_zona', 'npk_actual', 'materia_organica', 'ndvi', 'ndre', 'humedad_suelo', 'ndwi']
+                            if analisis_tipo == "RECOMENDACIONES NPK":
+                                columnas_indices = ['id_zona', 'valor_recomendado', 'npk_actual', 'materia_organica', 'ndvi', 'ndre', 'humedad_suelo', 'ndwi']
+                            columnas_indices = [col for col in columnas_indices if col in gdf_analizado.columns]
+                            tabla_indices = gdf_analizado[columnas_indices].copy()
+                            rename_dict = {
+                                'id_zona': 'Zona',
+                                'npk_actual': 'NPK Actual',
+                                'valor_recomendado': 'Recomendación',
+                                'materia_organica': 'Materia Org (%)',
+                                'ndvi': 'NDVI',
+                                'ndre': 'NDRE',
+                                'humedad_suelo': 'Humedad',
+                                'ndwi': 'NDWI'
+                            }
+                            tabla_indices = tabla_indices.rename(columns={k: v for k, v in rename_dict.items() if k in tabla_indices.columns})
+                            st.dataframe(tabla_indices)
         except Exception as e:
             st.error(f"❌ Error procesando archivo: {str(e)}")
+            import traceback
             st.error(f"Detalle: {traceback.format_exc()}")
 else:
     st.info("📁 Sube un archivo de tu parcela para comenzar el análisis")
@@ -2268,25 +2332,27 @@ with st.expander("📋 FORMATOS DE ARCHIVO ACEPTADOS"):
 
 with st.expander("ℹ️ INFORMACIÓN SOBRE LA METODOLOGÍA"):
     st.markdown("""
-    **🌱 SISTEMA DE ANÁLISIS MULTI-CULTIVO TEMPLADO**
+    **🌾 SISTEMA DE ANÁLISIS MULTI-CULTIVO TEMPLADO**
     **🛰️ SATÉLITES SOPORTADOS:**
     - **Sentinel-2:** Alta resolución (10m), revisita 5 días
     - **Landsat-8:** Resolución media (30m), datos históricos
     - **Datos Simulados:** Para pruebas y demostraciones
     **📊 CULTIVOS SOPORTADOS:**
-    - **🌾 TRIGO:** Cereal de invierno, sensible a déficit de nitrógeno
-    - **🫘 SOJA:** Leguminosa de verano, fija nitrógeno atmosférico
-    - **🌽 MAÍZ:** Cereal de verano, alta demanda hídrica y nutricional
-    - **🌾 SORGO:** Cereal tolerante a sequía, apto para zonas marginales
-    - **🌻 GIRASOL:** Oleaginosa, sensible a fotoperíodo y estrés hídrico en floración
-    **🚀 FUNCIONALIDADES:**
+    - **🌽 MAÍZ:** Cereal de alta demanda nutricional y sensible al estrés hídrico en floración.
+    - **🌾 TRIGO:** Cereal de ciclo invernal, sensible a disponibilidad de nitrógeno y densidad de siembra.
+    - **🫘 SORGO:** Cultivo resistente a sequía y suelos marginales, de bajo requerimiento hídrico.
+    - **🌻 GIRASOL:** Oleaginosa de raíz pivotante, sensible a compactación y deficiencia de boro.
+    - **🌱 SOJA:** Leguminosa fijadora de nitrógeno, sensible al pH y rotaciones agrícolas.
+    **🚀 FUNCIONALIDADES MEJORADAS:**
     - **🌱 Fertilidad Actual:** Estado NPK del suelo usando índices satelitales
+    - **🗺️ Mapas ESRI Satellite:** Mapas base de alta resolución
+    - **🔥 Mapas de Calor:** Identificación de puntos calientes para cosecha
     - **💧 NDWI (Humedad):** Índice de Agua en Vegetación/Suelo
     - **☀️ Radiación Solar:** Datos de NASA POWER (kWh/m²/día)
     - **💨 Velocidad del Viento:** Datos de NASA POWER (m/s)
     - **💧 Precipitación:** Datos de NASA POWER (mm/día)
-    - **💊 Recomendaciones NPK:** Dosis específicas por cultivo
-    - **🏗️ Análisis de Textura:** Composición del suelo (arena, limo, arcilla)
+    - **💊 Recomendaciones NPK:** Dosis específicas por cultivo templado
+    - **🏗️ Análisis de Textura:** Composición del suelo (nomenclatura Venezuela/Colombia)
     - **🏔️ Curvas de Nivel:** Análisis topográfico con mapa de calor de pendientes
     **🔬 METODOLOGÍA CIENTÍFICA:**
     - Análisis basado en imágenes satelitales
