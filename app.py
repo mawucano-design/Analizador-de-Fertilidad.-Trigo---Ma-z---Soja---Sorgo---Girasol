@@ -25,9 +25,6 @@ from docx.enum.table import WD_TABLE_ALIGNMENT
 import geojson
 warnings.filterwarnings('ignore')
 
-# Inyectar CSS personalizado
-with open("style.css", "r", encoding="utf-8") as f:
-    st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
 
 # CONFIGURACIÓN DE PÁGINA - DEBE SER LO PRIMERO
 st.set_page_config(
