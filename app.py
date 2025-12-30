@@ -26,6 +26,7 @@ import geojson
 import requests
 warnings.filterwarnings('ignore')
 
+
 # === ESTILOS PERSONALIZADOS CON ALTO CONTRASTE ===
 st.markdown("""
 <style>
