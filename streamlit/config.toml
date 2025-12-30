@@ -1,10 +1,7 @@
-[theme]
-base = "light"
-
 [server]
-enableCORS = false
+maxUploadSize = 200
 enableXsrfProtection = false
+enableCORS = false
 
-[global]
-# Esto es opcional, pero ayuda a evitar problemas de caché
-developmentMode = false
+[browser]
+gatherUsageStats = false
