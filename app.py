@@ -29,68 +29,120 @@ warnings.filterwarnings('ignore')
 # === ESTILOS PERSONALIZADOS CON ALTO CONTRASTE ===
 st.markdown("""
 <style>
-/* Fondo general */
+/* Fondo general de la app */
 .stApp {
-    background: linear-gradient(135deg, #f5f7fa 0%, #e4edf5 100%);
+    background: linear-gradient(135deg, #f0f8f5 0%, #e6f2ed 100%);
 }
 
-/* Sidebar mejorado con mejor contraste */
+/* === SIDEBAR: Fondo verde oscuro y texto verde agua claro === */
 [data-testid="stSidebar"] {
-    background: linear-gradient(180deg, #1a2a6c 0%, #2a4d69 100%);
-    color: white;
+    background: linear-gradient(180deg, #0a3d2e 0%, #0d513d 100%) !important;
 }
+
+/* Todo el texto dentro del sidebar es BLANCO o verde agua claro */
 [data-testid="stSidebar"] * {
-    color: #ffffff !important;
-    text-shadow: 0 1px 2px rgba(0,0,0,0.3) !important;
+    color: #a8e6cf !important;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4) !important;
 }
+
 .sidebar-title {
     font-size: 1.4em;
     font-weight: bold;
     margin-bottom: 1.2em;
     text-align: center;
     padding: 0.8em;
-    background: rgba(255,255,255,0.15);
+    background: rgba(168, 230, 207, 0.2);
     border-radius: 12px;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-    color: white !important;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+    color: #ffffff !important; /* Título del sidebar: blanco */
 }
 
-/* Botones con mejor contraste */
+/* Inputs y selects en sidebar */
+[data-testid="stSidebar"] .stSelectbox div,
+[data-testid="stSidebar"] .stDateInput div,
+[data-testid="stSidebar"] .stSlider label,
+[data-testid="stSidebar"] .stMarkdown,
+[data-testid="stSidebar"] p,
+[data-testid="stSidebar"] label {
+    color: #c1f0e0 !important;
+}
+
+/* Botones del sidebar */
 .stButton > button {
-    background: linear-gradient(120deg, #3498db, #2980b9);
+    background: linear-gradient(120deg, #1e7a5d, #0d513d);
     color: white !important;
     border: none;
     padding: 0.6em 1.2em;
     border-radius: 8px;
     font-weight: bold;
     transition: all 0.3s ease;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
 }
 .stButton > button:hover {
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(52, 152, 219, 0.6);
-    background: linear-gradient(120deg, #2980b9, #1a5276);
+    box-shadow: 0 4px 12px rgba(26, 118, 93, 0.6);
+    background: linear-gradient(120deg, #2a9d8f, #1e7a5d);
 }
 
-/* Títulos con mejor visibilidad */
-h1, h2, h3, h4, h5, h6 {
-    color: #1a2a6c !important;
+/* === TÍTULO PRINCIPAL (BANNER): fondo verde oscuro + texto BLANCO === */
+.main-title-banner {
+    background: linear-gradient(135deg, #0a3d2e 0%, #0d513d 100%) !important;
+    padding: 1.5em;
+    border-radius: 16px;
+    margin-bottom: 1.5em;
+    box-shadow: 0 4px 20px rgba(10, 61, 46, 0.4);
+}
+
+.main-title-banner h1 {
+    color: white !important;
+    text-align: center;
+    margin: 0;
+    font-size: 2.4em;
+    font-weight: 700 !important;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* === PESTAÑAS (tabs): fondo blanco, texto negro === */
+.stTabs [data-baseweb="tab-list"] {
+    background-color: white !important;
+    padding: 8px 16px;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    margin-top: 1em;
+}
+
+.stTabs [data-baseweb="tab"] {
+    color: #333333 !important;
+    font-weight: 600;
+    padding: 8px 20px;
+    border-radius: 6px;
+    margin-right: 6px;
+}
+
+.stTabs [data-baseweb="tab"]:hover {
+    color: #0d513d !important;
+    background-color: #f0f8f5 !important;
+}
+
+.stTabs [aria-selected="true"] {
+    background-color: #ffffff !important;
+    color: #0d513d !important;
+    font-weight: 700;
+    border-bottom: 3px solid #2a9d8f;
+}
+
+/* Evitar que los títulos del cuerpo principal tomen el color del sidebar */
+.stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp h5, .stApp h6 {
+    color: #0d513d !important;
     font-weight: 700 !important;
     text-shadow: none !important;
-}
-
-/* Inputs y selects en sidebar */
-[data-testid="stSidebar"] .stSelectbox div, 
-[data-testid="stSidebar"] .stDateInput div,
-[data-testid="stSidebar"] .stSlider label {
-    color: #f0f8ff !important;
 }
 </style>
 """, unsafe_allow_html=True)
 
 # CONFIGURACIÓN DE PÁGINA - DEBE SER LO PRIMERO
 st.set_page_config(
-    page_title="🌾 Analizador Multi-Cultivo Satellital",
+    page_title="🌱 Analizador Multi-Cultivo Satellital",
     layout="wide",
     page_icon="🛰️"
 )
@@ -100,7 +152,7 @@ st.markdown("""
 <div style="background: linear-gradient(135deg, #1a2a6c 0%, #2a4d69 100%);
 padding: 1.5em; border-radius: 16px; margin-bottom: 1.5em; box-shadow: 0 4px 20px rgba(26, 42, 108, 0.3);">
 <h1 style="color: white; text-align: center; margin: 0; font-size: 2.4em;">
-🛰️ ANALIZADOR MULTI-CULTIVO EXTENSIVO - TRIGO, MAÍZ, SOJA, GIRASOL, SORGO
+🛰️ ANALIZADOR MULTI-CULTIVO TEMPLADO - TRIGO, SOJA, MAÍZ, SORGO, GIRASOL
 </h1>
 </div>
 """, unsafe_allow_html=True)
@@ -138,48 +190,48 @@ SATELITES_DISPONIBLES = {
 PARAMETROS_CULTIVOS = {
     'TRIGO': {
         'NITROGENO': {'min': 120, 'max': 180},
-        'FOSFORO': {'min': 25, 'max': 45},
-        'POTASIO': {'min': 100, 'max': 180},
-        'MATERIA_ORGANICA_OPTIMA': 3.0,
-        'HUMEDAD_OPTIMA': 0.25,
-        'NDVI_OPTIMO': 0.7,
-        'NDRE_OPTIMO': 0.35
-    },
-    'MAÍZ': {
-        'NITROGENO': {'min': 180, 'max': 250},
-        'FOSFORO': {'min': 30, 'max': 50},
-        'POTASIO': {'min': 150, 'max': 220},
-        'MATERIA_ORGANICA_OPTIMA': 3.5,
-        'HUMEDAD_OPTIMA': 0.3,
-        'NDVI_OPTIMO': 0.8,
-        'NDRE_OPTIMO': 0.4
-    },
-    'SOJA': {
-        'NITROGENO': {'min': 0, 'max': 50},   # La soja fija nitrógeno
-        'FOSFORO': {'min': 40, 'max': 60},
+        'FOSFORO': {'min': 25, 'max': 40},
         'POTASIO': {'min': 150, 'max': 250},
         'MATERIA_ORGANICA_OPTIMA': 3.0,
-        'HUMEDAD_OPTIMA': 0.28,
-        'NDVI_OPTIMO': 0.75,
-        'NDRE_OPTIMO': 0.38
+        'HUMEDAD_OPTIMA': 0.25,
+        'NDVI_OPTIMO': 0.85,
+        'NDRE_OPTIMO': 0.45
     },
-    'GIRASOL': {
-        'NITROGENO': {'min': 100, 'max': 150},
-        'FOSFORO': {'min': 20, 'max': 40},
+    'SOJA': {
+        'NITROGENO': {'min': 80, 'max': 120},
+        'FOSFORO': {'min': 30, 'max': 50},
         'POTASIO': {'min': 180, 'max': 280},
-        'MATERIA_ORGANICA_OPTIMA': 2.5,
-        'HUMEDAD_OPTIMA': 0.22,
-        'NDVI_OPTIMO': 0.65,
-        'NDRE_OPTIMO': 0.3
+        'MATERIA_ORGANICA_OPTIMA': 3.5,
+        'HUMEDAD_OPTIMA': 0.30,
+        'NDVI_OPTIMO': 0.80,
+        'NDRE_OPTIMO': 0.40
+    },
+    'MAÍZ': {
+        'NITROGENO': {'min': 150, 'max': 250},
+        'FOSFORO': {'min': 40, 'max': 60},
+        'POTASIO': {'min': 200, 'max': 350},
+        'MATERIA_ORGANICA_OPTIMA': 4.0,
+        'HUMEDAD_OPTIMA': 0.35,
+        'NDVI_OPTIMO': 0.90,
+        'NDRE_OPTIMO': 0.50
     },
     'SORGO': {
-        'NITROGENO': {'min': 100, 'max': 180},
-        'FOSFORO': {'min': 25, 'max': 45},
+        'NITROGENO': {'min': 100, 'max': 150},
+        'FOSFORO': {'min': 25, 'max': 35},
         'POTASIO': {'min': 120, 'max': 200},
-        'MATERIA_ORGANICA_OPTIMA': 2.8,
-        'HUMEDAD_OPTIMA': 0.2,
-        'NDVI_OPTIMO': 0.7,
+        'MATERIA_ORGANICA_OPTIMA': 2.5,
+        'HUMEDAD_OPTIMA': 0.20,
+        'NDVI_OPTIMO': 0.75,
         'NDRE_OPTIMO': 0.35
+    },
+    'GIRASOL': {
+        'NITROGENO': {'min': 80, 'max': 120},
+        'FOSFORO': {'min': 20, 'max': 30},
+        'POTASIO': {'min': 100, 'max': 180},
+        'MATERIA_ORGANICA_OPTIMA': 2.8,
+        'HUMEDAD_OPTIMA': 0.22,
+        'NDVI_OPTIMO': 0.70,
+        'NDRE_OPTIMO': 0.30
     }
 }
 
@@ -187,43 +239,43 @@ PARAMETROS_CULTIVOS = {
 TEXTURA_SUELO_OPTIMA = {
     'TRIGO': {
         'textura_optima': 'Franco',
-        'arena_optima': 45,
-        'limo_optima': 35,
+        'arena_optima': 40,
+        'limo_optima': 40,
         'arcilla_optima': 20,
+        'densidad_aparente_optima': 1.3,
+        'porosidad_optima': 0.50
+    },
+    'SOJA': {
+        'textura_optima': 'Franco Arcilloso',
+        'arena_optima': 35,
+        'limo_optima': 30,
+        'arcilla_optima': 35,
         'densidad_aparente_optima': 1.2,
         'porosidad_optima': 0.55
     },
     'MAÍZ': {
-        'textura_optima': 'Franco Arcilloso',
-        'arena_optima': 40,
-        'limo_optima': 30,
-        'arcilla_optima': 30,
-        'densidad_aparente_optima': 1.25,
-        'porosidad_optima': 0.5
-    },
-    'SOJA': {
         'textura_optima': 'Franco',
-        'arena_optima': 50,
-        'limo_optima': 30,
+        'arena_optima': 45,
+        'limo_optima': 35,
         'arcilla_optima': 20,
-        'densidad_aparente_optima': 1.1,
-        'porosidad_optima': 0.6
-    },
-    'GIRASOL': {
-        'textura_optima': 'Franco Arenoso',
-        'arena_optima': 60,
-        'limo_optima': 25,
-        'arcilla_optima': 15,
-        'densidad_aparente_optima': 1.3,
-        'porosidad_optima': 0.45
+        'densidad_aparente_optima': 1.25,
+        'porosidad_optima': 0.52
     },
     'SORGO': {
+        'textura_optima': 'Franco Arenoso',
+        'arena_optima': 55,
+        'limo_optima': 30,
+        'arcilla_optima': 15,
+        'densidad_aparente_optima': 1.35,
+        'porosidad_optima': 0.48
+    },
+    'GIRASOL': {
         'textura_optima': 'Franco',
         'arena_optima': 50,
         'limo_optima': 30,
         'arcilla_optima': 20,
-        'densidad_aparente_optima': 1.2,
-        'porosidad_optima': 0.55
+        'densidad_aparente_optima': 1.3,
+        'porosidad_optima': 0.50
     }
 }
 
@@ -338,17 +390,18 @@ RECOMENDACIONES_TEXTURA = {
 # ICONOS Y COLORES POR CULTIVO
 ICONOS_CULTIVOS = {
     'TRIGO': '🌾',
-    'MAÍZ': '🌽',
     'SOJA': '🫘',
-    'GIRASOL': '🌻',
-    'SORGO': '🌾'
+    'MAÍZ': '🌽',
+    'SORGO': '🌾',
+    'GIRASOL': '🌻'
 }
+
 COLORES_CULTIVOS = {
     'TRIGO': '#FFD700',
+    'SOJA': '#8B4513',
     'MAÍZ': '#FFA500',
-    'SOJA': '#90EE90',
-    'GIRASOL': '#FFD700',
-    'SORGO': '#8B4513'
+    'SORGO': '#A0522D',
+    'GIRASOL': '#FFD700'
 }
 
 # PALETAS GEE MEJORADAS
@@ -364,11 +417,11 @@ PALETAS_GEE = {
 
 # URLs de imágenes para sidebar
 IMAGENES_CULTIVOS = {
-    'TRIGO': 'https://images.unsplash.com/photo-1592489637182-4c0bc9675bcf?auto=format&fit=crop&w=200&h=150&q=80',
-    'MAÍZ': 'https://images.unsplash.com/photo-1560807707-8cc77767d783?auto=format&fit=crop&w=200&h=150&q=80',
-    'SOJA': 'https://images.unsplash.com/photo-1592489637182-4c0bc9675bcf?auto=format&fit=crop&w=200&h=150&q=80',
-    'GIRASOL': 'https://images.unsplash.com/photo-1592489637182-4c0bc9675bcf?auto=format&fit=crop&w=200&h=150&q=80',
-    'SORGO': 'https://images.unsplash.com/photo-1560807707-8cc77767d783?auto=format&fit=crop&w=200&h=150&q=80'
+    'TRIGO': 'https://images.unsplash.com/photo-1586201375761-83865001e331?auto=format&fit=crop&w=200&h=150&q=80',
+    'SOJA': 'https://images.unsplash.com/photo-1592924357228-91a4daadcfea?auto=format&fit=crop&w=200&h=150&q=80',
+    'MAÍZ': 'https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6?auto=format&fit=crop&w=200&h=150&q=80',
+    'SORGO': 'https://images.unsplash.com/photo-1592924357228-91a4daadcfea?auto=format&fit=crop&w=200&h=150&q=80',
+    'GIRASOL': 'https://images.unsplash.com/photo-1595658658481-d53d3f99988f?auto=format&fit=crop&w=200&h=150&q=80'
 }
 
 # ===== INICIALIZACIÓN SEGURA DE VARIABLES DE CONFIGURACIÓN =====
@@ -383,7 +436,7 @@ resolucion_dem = 10.0
 # ===== SIDEBAR MEJORADO (INTERFAZ VISUAL) =====
 with st.sidebar:
     st.markdown('<div class="sidebar-title">⚙️ CONFIGURACIÓN</div>', unsafe_allow_html=True)
-    cultivo = st.selectbox("Cultivo:", ["TRIGO", "MAÍZ", "SOJA", "GIRASOL", "SORGO"])
+    cultivo = st.selectbox("Cultivo:", ["TRIGO", "SOJA", "MAÍZ", "SORGO", "GIRASOL"])
     st.image(IMAGENES_CULTIVOS[cultivo], use_container_width=True)
     analisis_tipo = st.selectbox("Tipo de Análisis:", ["FERTILIDAD ACTUAL", "RECOMENDACIONES NPK", "ANÁLISIS DE TEXTURA", "ANÁLISIS DE CURVAS DE NIVEL"])
     if analisis_tipo == "RECOMENDACIONES NPK":
@@ -769,7 +822,8 @@ def calcular_indices_satelitales_gee(gdf, cultivo, datos_satelitales):
         base_humedad = params['HUMEDAD_OPTIMA'] * 0.8
         variabilidad_humedad = patron_espacial * (params['HUMEDAD_OPTIMA'] * 0.4)
         humedad_suelo = base_humedad + variabilidad_humedad + np.random.normal(0, 0.05)
-        humedad_suelo = max(0.1, min(0.8, humedad_suelo))
+        humedad_suelo = max(0.1, min(0.8, humedad_suelo)
+)
         ndvi_base = valor_base_satelital * 0.8
         ndvi_variacion = patron_espacial * (valor_base_satelital * 0.4)
         ndvi = ndvi_base + ndvi_variacion + np.random.normal(0, 0.06)
@@ -1123,20 +1177,20 @@ def generar_recomendaciones_generales(gdf_analizado, analisis_tipo, cultivo):
                     recomendaciones.append("Textura franca: Condiciones óptimas, mantener prácticas de conservación")
         # === RECOMENDACIONES POR CULTIVO ===
         if cultivo == "TRIGO":
-            recomendaciones.append("Para trigo: Aplicar nitrógeno en etapas de encañado y espigado.")
-            recomendaciones.append("Evitar exceso de humedad en suelos pesados para prevenir enfermedades.")
-        elif cultivo == "MAÍZ":
-            recomendaciones.append("Para maíz: Altos requerimientos de nitrógeno, aplicar en varias dosis.")
-            recomendaciones.append("Mantener humedad uniforme durante floración y llenado de grano.")
+            recomendaciones.append("Para trigo: Monitorear nitrógeno en etapas de macollaje y encañado.")
+            recomendaciones.append("Evitar exceso de humedad en etapas finales para prevenir enfermedades fúngicas.")
         elif cultivo == "SOJA":
-            recomendaciones.append("Para soja: Inocular semillas con rizobios para fijación de nitrógeno.")
-            recomendaciones.append("Asegurar buen drenaje y niveles adecuados de fósforo y potasio.")
-        elif cultivo == "GIRASOL":
-            recomendaciones.append("Para girasol: Requiere potasio, evitar suelos muy compactados.")
-            recomendaciones.append("Resistente a sequía, pero requiere humedad en floración.")
+            recomendaciones.append("Para soja: Inocular con rizobios para fijación biológica de nitrógeno.")
+            recomendaciones.append("Asegurar buen drenaje y evitar compactación del suelo.")
+        elif cultivo == "MAÍZ":
+            recomendaciones.append("Para maíz: Alta demanda de nitrógeno, fraccionar aplicaciones.")
+            recomendaciones.append("Mantener humedad adecuada durante floración y llenado de grano.")
         elif cultivo == "SORGO":
-            recomendaciones.append("Para sorgo: Tolerante a sequía, no requiere riego intensivo.")
-            recomendaciones.append("Aplicar nitrógeno en labores preparatorias y en cobertura.")
+            recomendaciones.append("Para sorgo: Tolerante a sequía, pero sensible a frío en etapas tempranas.")
+            recomendaciones.append("Manejar densidad de siembra según disponibilidad hídrica.")
+        elif cultivo == "GIRASOL":
+            recomendaciones.append("Para girasol: Sensible a deficiencia de boro, considerar aplicación foliar.")
+            recomendaciones.append("Evitar estrés hídrico durante floración y llenado.")
         recomendaciones.append("Realizar análisis de suelo de laboratorio para validar resultados satelitales")
         recomendaciones.append("Considerar agricultura de precisión para aplicación variable de insumos")
     except Exception as e:
@@ -1155,8 +1209,8 @@ def limpiar_texto_para_pdf(texto):
         '\u2014': '--',         # — → --
         '\u2018': "'",          # ‘
         '\u2019': "'",          # ’
-        '\u201C': '"',          # "
-        '\u201D': '"',          # "
+        '\u201C': '"',          # “
+        '\u201D': '"',          # ”
         '\u2192': '->',         # →
         '\u2190': '<-',         # ←
         '\u2265': '>=',         # ≥
@@ -1801,8 +1855,13 @@ if uploaded_file:
                                 with col7:
                                     st.metric("💧 NDWI Promedio", f"{gdf_analizado['ndwi'].mean():.3f}")
 
-                                # === PESTAÑAS DETALLADAS CON DASHBOARDS ===
-                                tab_radiacion, tab_viento, tab_precip = st.tabs(["☀️ Radiación Solar", "💨 Velocidad del Viento", "🌧️ Precipitación"])
+                                # === PESTAÑAS CON NUEVA PESTAÑA DE POTENCIAL DE COSECHA ===
+                                tab_radiacion, tab_viento, tab_precip, tab_cosecha = st.tabs([
+                                    "☀️ Radiación Solar",
+                                    "💨 Velocidad del Viento",
+                                    "🌧️ Precipitación",
+                                    "📈 Potencial de Cosecha"
+                                ])
 
                                 def crear_grafico_personalizado(series, titulo, ylabel, color_linea, fondo_grafico='#f8f9fa', color_texto='#2c3e50'):
                                     fig, ax = plt.subplots(figsize=(10, 4))
@@ -1844,7 +1903,7 @@ if uploaded_file:
                                     min_rad = serie_rad.min()
                                     # Interpretación simple
                                     if prom_rad > 5.5:
-                                        interpretacion = "☀️ **Alta radiación**: Condiciones óptimas para fotosíntesis en cultivos extensivos."
+                                        interpretacion = "☀️ **Alta radiación**: Condiciones óptimas para fotosíntesis en cultivos templados."
                                     elif prom_rad > 4.0:
                                         interpretacion = "🌤️ **Radiación moderada**: Adecuada para la mayoría de cultivos, con posible limitación en días nublados."
                                     else:
@@ -1875,9 +1934,9 @@ if uploaded_file:
                                     if prom_viento < 2.0:
                                         interpretacion = "🍃 **Viento suave**: Bajo riesgo de estrés mecánico o deshidratación."
                                     elif prom_viento < 4.0:
-                                        interpretacion = "🌬️ **Viento moderado**: Aceptable; monitorear en etapas sensibles (floración, llenado de grano)."
+                                        interpretacion = "🌬️ **Viento moderado**: Aceptable; monitorear en etapas sensibles (floración, fruto joven)."
                                     else:
-                                        interpretacion = "💨 **Viento fuerte**: Alto riesgo de daño mecánico, aumento de evapotranspiración y posible caída de espigas."
+                                        interpretacion = "💨 **Viento fuerte**: Alto riesgo de daño mecánico, aumento de evapotranspiración y posible caída de frutos."
 
                                     col_w1, col_w2, col_w3 = st.columns(3)
                                     with col_w1:
@@ -1904,7 +1963,7 @@ if uploaded_file:
                                     if prom_precip > 8:
                                         interpretacion = "🌧️ **Precipitación alta**: Riesgo de encharcamiento y lixiviación de nutrientes. Asegurar drenaje."
                                     elif prom_precip > 3:
-                                        interpretacion = "💧 **Precipitación adecuada**: Condiciones hídricas favorables para cultivos extensivos."
+                                        interpretacion = "💧 **Precipitación adecuada**: Condiciones hídricas favorables para cultivos templados."
                                     else:
                                         interpretacion = "🏜️ **Precipitación baja**: Posible déficit hídrico; considerar riego suplementario."
 
@@ -1923,6 +1982,132 @@ if uploaded_file:
                                         color_barra='#2ecc71'
                                     ))
                                     st.markdown(f"**Interpretación agronómica:** {interpretacion}")
+
+                                # === PESTAÑA: POTENCIAL DE COSECHA ===
+                                with tab_cosecha:
+                                    st.subheader("📊 Cálculo de Potencial de Cosecha Integrado")
+                                    st.markdown("""
+                                    El potencial de cosecha se estima combinando:
+                                    - Fertilidad del suelo (NPK, materia orgánica)
+                                    - Radiación solar (NASA POWER)
+                                    - Humedad del suelo (NDWI + parámetros del cultivo)
+                                    - Estrés por viento (impacto negativo)
+                                    """)
+
+                                    # --- Paso 1: Agregar datos meteorológicos promedio a cada zona ---
+                                    rad_prom = df_power['radiacion_solar'].mean()
+                                    viento_prom = df_power['viento_2m'].mean()
+                                    
+                                    # Asignar los mismos valores promedio a todas las zonas (simplificación razonable)
+                                    gdf_analizado['radiacion_solar'] = rad_prom
+                                    gdf_analizado['viento_2m'] = viento_prom
+
+                                    # --- Paso 2: Normalizar cada variable a [0, 1] ---
+                                    def normalizar_solar(valor):
+                                        # Rango esperado: 3 a 7 kWh/m²/día
+                                        return np.clip((valor - 3.0) / (7.0 - 3.0), 0, 1)
+
+                                    def normalizar_viento(valor):
+                                        # Viento ideal < 2 m/s; >4 m/s es estresante → invertido
+                                        return np.clip(1 - (valor - 1.0) / (5.0 - 1.0), 0, 1)
+
+                                    def normalizar_humedad(ndwi):
+                                        # NDWI entre 0.1 y 0.4 es ideal para la mayoría de cultivos
+                                        return np.clip((ndwi - 0.1) / (0.4 - 0.1), 0, 1)
+
+                                    gdf_analizado['solar_norm'] = gdf_analizado['radiacion_solar'].apply(normalizar_solar)
+                                    gdf_analizado['viento_norm'] = gdf_analizado['viento_2m'].apply(normalizar_viento)
+                                    gdf_analizado['humedad_norm'] = gdf_analizado['ndwi'].apply(normalizar_humedad)
+
+                                    # --- Paso 3: Calcular índice integrado ---
+                                    # Ponderaciones agronómicas típicas
+                                    w_fertilidad = 0.40
+                                    w_solar = 0.25
+                                    w_humedad = 0.20
+                                    w_viento = 0.15
+
+                                    gdf_analizado['potencial_cosecha'] = (
+                                        w_fertilidad * gdf_analizado['npk_actual'] +
+                                        w_solar * gdf_analizado['solar_norm'] +
+                                        w_humedad * gdf_analizado['humedad_norm'] +
+                                        w_viento * gdf_analizado['viento_norm']
+                                    ).clip(0, 1)
+
+                                    # Escalar a toneladas/ha según cultivo base
+                                    produccion_base = {
+                                        'TRIGO': 4.0,     # t/ha promedio
+                                        'SOJA': 3.0,      # t/ha promedio
+                                        'MAÍZ': 8.0,      # t/ha promedio
+                                        'SORGO': 5.0,     # t/ha promedio
+                                        'GIRASOL': 2.5    # t/ha promedio
+                                    }
+                                    base = produccion_base.get(cultivo, 10)
+                                    gdf_analizado['produccion_estimada'] = gdf_analizado['potencial_cosecha'] * base
+
+                                    # --- Paso 4: Mostrar métricas resumen ---
+                                    col_c1, col_c2, col_c3, col_c4 = st.columns(4)
+                                    with col_c1:
+                                        st.metric("Potencial Promedio", f"{gdf_analizado['potencial_cosecha'].mean():.2f}")
+                                    with col_c2:
+                                        st.metric("Máximo", f"{gdf_analizado['potencial_cosecha'].max():.2f}")
+                                    with col_c3:
+                                        st.metric("Producción Estimada", f"{gdf_analizado['produccion_estimada'].mean():.1f} t/ha")
+                                    with col_c4:
+                                        total_est = (gdf_analizado['produccion_estimada'] * gdf_analizado['area_ha']).sum()
+                                        st.metric("Total Parcela", f"{total_est:.1f} t")
+
+                                    # --- Paso 5: Crear mapa de calor ---
+                                    fig, ax = plt.subplots(1, 1, figsize=(12, 8))
+                                    cmap = LinearSegmentedColormap.from_list('cosecha', ['#f7f7f7', '#e6f598', '#abdda4', '#66c2a5', '#3288bd', '#5e4fa2'])
+                                    gdf_analizado.plot(
+                                        column='potencial_cosecha',
+                                        cmap=cmap,
+                                        linewidth=0.8,
+                                        edgecolor='black',
+                                        alpha=0.9,
+                                        legend=True,
+                                        ax=ax,
+                                        legend_kwds={'label': "Potencial de Cosecha (0–1)", 'orientation': "horizontal"}
+                                    )
+                                    # Etiquetas por zona
+                                    for idx, row in gdf_analizado.iterrows():
+                                        centroid = row.geometry.centroid
+                                        ax.annotate(
+                                            f"Z{row['id_zona']}\n{row['produccion_estimada']:.1f}",
+                                            (centroid.x, centroid.y),
+                                            xytext=(3, 3),
+                                            textcoords="offset points",
+                                            fontsize=7,
+                                            color='black',
+                                            weight='bold',
+                                            bbox=dict(boxstyle="round,pad=0.2", facecolor='white', alpha=0.8)
+                                        )
+                                    ax.set_title(f"🗺️ Mapa de Potencial de Cosecha - {cultivo}", fontsize=16, fontweight='bold')
+                                    ax.set_xlabel("Longitud")
+                                    ax.set_ylabel("Latitud")
+                                    ax.grid(True, alpha=0.2)
+                                    plt.tight_layout()
+                                    st.pyplot(fig)
+
+                                    # --- Paso 6: Interpretación ---
+                                    prom_pot = gdf_analizado['potencial_cosecha'].mean()
+                                    if prom_pot > 0.75:
+                                        st.success("✅ **Alto potencial**: Condiciones óptimas de suelo y clima.")
+                                    elif prom_pot > 0.5:
+                                        st.info("ℹ️ **Potencial moderado**: Buenas condiciones, con oportunidades de mejora.")
+                                    else:
+                                        st.warning("⚠️ **Bajo potencial**: Limitado por déficit en fertilidad, agua, luz o estrés por viento.")
+
+                                    # --- Paso 7: Descarga ---
+                                    buf_mapa = io.BytesIO()
+                                    plt.savefig(buf_mapa, format='png', dpi=150, bbox_inches='tight')
+                                    buf_mapa.seek(0)
+                                    st.download_button(
+                                        "📥 Descargar Mapa de Potencial",
+                                        buf_mapa,
+                                        f"potencial_cosecha_{cultivo}_{datetime.now().strftime('%Y%m%d')}.png",
+                                        "image/png"
+                                    )
 
                             def crear_mapa_estatico(gdf, titulo, columna_valor, analisis_tipo, nutriente, cultivo, satelite):
                                 try:
@@ -2132,17 +2317,17 @@ with st.expander("📋 FORMATOS DE ARCHIVO ACEPTADOS"):
 
 with st.expander("ℹ️ INFORMACIÓN SOBRE LA METODOLOGÍA"):
     st.markdown("""
-    **🌱 SISTEMA DE ANÁLISIS MULTI-CULTIVO EXTENSIVO**
+    **🌱 SISTEMA DE ANÁLISIS MULTI-CULTIVO TEMPLADO**
     **🛰️ SATÉLITES SOPORTADOS:**
     - **Sentinel-2:** Alta resolución (10m), revisita 5 días
     - **Landsat-8:** Resolución media (30m), datos históricos
     - **Datos Simulados:** Para pruebas y demostraciones
     **📊 CULTIVOS SOPORTADOS:**
-    - **🌾 TRIGO:** Cereal de clima templado, moderado en nutrientes
-    - **🌽 MAÍZ:** Cereal de alta demanda de nitrógeno, amplio rango de adaptación
-    - **🫘 SOJA:** Leguminosa que fija nitrógeno, requiere fósforo y potasio
-    - **🌻 GIRASOL:** Oleaginosa con alta demanda de potasio, tolerante a sequía
-    - **🌾 SORGO:** Cereal resistente a sequía, similar al maíz en requerimientos
+    - **🌾 TRIGO:** Cereal de invierno, sensible a déficit de nitrógeno
+    - **🫘 SOJA:** Leguminosa de verano, fija nitrógeno atmosférico
+    - **🌽 MAÍZ:** Cereal de verano, alta demanda hídrica y nutricional
+    - **🌾 SORGO:** Cereal tolerante a sequía, apto para zonas marginales
+    - **🌻 GIRASOL:** Oleaginosa, sensible a fotoperíodo y estrés hídrico en floración
     **🚀 FUNCIONALIDADES:**
     - **🌱 Fertilidad Actual:** Estado NPK del suelo usando índices satelitales
     - **💧 NDWI (Humedad):** Índice de Agua en Vegetación/Suelo
@@ -2155,7 +2340,7 @@ with st.expander("ℹ️ INFORMACIÓN SOBRE LA METODOLOGÍA"):
     **🔬 METODOLOGÍA CIENTÍFICA:**
     - Análisis basado en imágenes satelitales
     - Integración con datos meteorológicos de NASA POWER
-    - Parámetros específicos para cultivos extensivos
+    - Parámetros específicos para cultivos templados
     - Cálculo de índices de vegetación y suelo
     - Modelos digitales de elevación (DEM) sintéticos
     - Recomendaciones validadas científicamente
