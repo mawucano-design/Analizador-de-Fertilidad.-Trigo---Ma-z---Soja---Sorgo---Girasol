@@ -2912,4 +2912,3 @@ with st.expander("ℹ️ INFORMACIÓN SOBRE LA METODOLOGÍA"):
     - El área recomendada es entre 1 y 1000 hectáreas
     - Todos los cálculos se realizan en EPSG:4326
     """)
-[file content end]
