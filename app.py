@@ -686,11 +686,11 @@ PALETAS_GEE = {
     'PENDIENTE': ['#4daf4a', '#a6d96a', '#ffffbf', '#fdae61', '#f46d43', '#d73027']
 }
 
-# URLs de imágenes para sidebar - ACTUALIZADAS
+# URLs de imágenes para sidebar - ACTUALIZADO CON NUEVOS CULTIVOS
 IMAGENES_CULTIVOS = {
-    'MAÍZ': 'https://images.unsplash.com/photo-1606598478222-d8e1a8d6a6d3?auto=format&fit=crop&w=200&h=150&q=80',
-    'SOYA': 'https://images.unsplash.com/photo-1627762459225-cf39e1c9d4a8?auto=format&fit=crop&w=200&h=150&q=80',
-    'TRIGO': 'https://images.unsplash.com/photo-1594590886981-2a441e8f6c68?auto=format&fit=crop&w=200&h=150&q=80',
+    'MAÍZ': 'https://images.unsplash.com/photo-1592924357228-91a4daadcfea?auto=format&fit=crop&w=200&h=150&q=80',
+    'SOYA': 'https://images.unsplash.com/photo-1598300042247-d088f8ab3a91?auto=format&fit=crop&w=200&h=150&q=80',
+    'TRIGO': 'https://images.unsplash.com/photo-1560493676-04071c5f467b?auto=format&fit=crop&w=200&h=150&q=80',
     'GIRASOL': 'https://images.unsplash.com/photo-1505253668822-42074d58a7c6?auto=format&fit=crop&w=200&h=150&q=80'
 }
 
@@ -2099,46 +2099,6 @@ def crear_mapa_potencial_cosecha_calor(gdf_analizado, cultivo):
         import traceback
         st.error(f"Detalle: {traceback.format_exc()}")
         return None
-
-def calcular_potencial_mejorado(gdf_analizado, cultivo, nutriente, w_fertilidad=0.40, w_solar=0.25, w_humedad=0.20, w_viento=0.15):
-    """
-    Calcula un nuevo potencial de cosecha simulando la aplicación de las recomendaciones NPK.
-    """
-    # 1. Simular mejora del índice npk_actual basado en valor_recomendado
-    params = PARAMETROS_CULTIVOS[cultivo]
-    if nutriente == "NITRÓGENO":
-        rango_min, rango_max = params['NITROGENO']['min'], params['NITROGENO']['max']
-    elif nutriente == "FÓSFORO":
-        rango_min, rango_max = params['FOSFORO']['min'], params['FOSFORO']['max']
-    else:
-        rango_min, rango_max = params['POTASIO']['min'], params['POTASIO']['max']
-
-    def simular_npk_mejorado(row):
-        recomendado = row['valor_recomendado']
-        # Normalizar recomendación al rango óptimo
-        rel = (recomendado - rango_min) / (rango_max - rango_min) if (rango_max != rango_min) else 0.5
-        rel = np.clip(rel, 0, 1)
-        # Mejorar npk_actual proporcionalmente
-        mejora = 0.1 + 0.3 * rel  # mejora entre 0.1 y 0.4
-        npk_mejorado = row['npk_actual'] + mejora
-        return np.clip(npk_mejorado, 0, 1)
-
-    gdf_analizado['npk_mejorado'] = gdf_analizado.apply(simular_npk_mejorado, axis=1)
-
-    # 2. Reusar normalizaciones ya calculadas: solar_norm, humedad_norm, viento_norm
-    gdf_analizado['potencial_cosecha_mejorado'] = (
-        w_fertilidad * gdf_analizado['npk_mejorado'] +
-        w_solar * gdf_analizado['solar_norm'] +
-        w_humedad * gdf_analizado['humedad_norm'] +
-        w_viento * gdf_analizado['viento_norm']
-    ).clip(0, 1)
-
-    # 3. Producción estimada mejorada
-    produccion_base = {'MAÍZ': 8.0, 'SOYA': 3.5, 'TRIGO': 4.5, 'GIRASOL': 2.5}
-    base = produccion_base.get(cultivo, 5.0)
-    gdf_analizado['produccion_estimada_mejorada'] = gdf_analizado['potencial_cosecha_mejorado'] * base
-
-    return gdf_analizado
 
 # ===== FUNCIONES DE GRÁFICOS NASA POWER CON ESTILO OSCURO =====
 def crear_grafico_personalizado(series, titulo, ylabel, color_linea, fondo_grafico='#0f172a', color_texto='#ffffff'):
