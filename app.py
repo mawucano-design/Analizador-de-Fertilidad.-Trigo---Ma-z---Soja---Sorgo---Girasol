@@ -27,9 +27,7 @@ import geojson
 import requests
 import contextily as ctx
 import yfinance as yf
-from scipy import stats
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 warnings.filterwarnings('ignore')
 
 
@@ -723,12 +721,391 @@ PALETAS_GEE = {
     'PENDIENTE': ['#4daf4a', '#a6d96a', '#ffffbf', '#fdae61', '#f46d43', '#d73027']
 }
 
+# ===== IMÁGENES SEGURAS PARA CULTIVOS =====
 IMAGENES_CULTIVOS = {
-    'MAÍZ': 'https://via.placeholder.com/200x150/FFD700/000000?text=MAÍZ',
-    'SOYA': 'https://via.placeholder.com/200x150/90EE90/000000?text=SOYA',
-    'TRIGO': 'https://via.placeholder.com/200x150/DAA520/000000?text=TRIGO',
-    'GIRASOL': 'https://via.placeholder.com/200x150/FFA500/000000?text=GIRASOL',
+    'MAÍZ': 'https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=400&h=300&fit=crop&auto=format',
+    'SOYA': 'https://images.unsplash.com/photo-1546548970-71785318a17b?w=400&h=300&fit=crop&auto=format',
+    'TRIGO': 'https://images.unsplash.com/photo-1593549157444-8e6db7b4534d?w=400&h=300&fit=crop&auto=format',
+    'GIRASOL': 'https://images.unsplash.com/photo-1592925144850-72d38b2f3d58?w=400&h=300&fit=crop&auto=format'
 }
+
+# ===== FUNCIONES PARA OBTENER DATOS ECONÓMICOS ACTUALIZADOS =====
+def obtener_precios_actualizados():
+    """
+    Obtiene precios actualizados de commodities agrícolas usando yfinance.
+    """
+    try:
+        symbols = {
+            'maiz': 'ZC=F',
+            'soya': 'ZS=F',
+            'trigo': 'ZW=F',
+            'girasol': 'BO=F'
+        }
+        
+        precios_actuales = {}
+        
+        for producto, symbol in symbols.items():
+            try:
+                ticker = yf.Ticker(symbol)
+                hist = ticker.history(period='1d')
+                if not hist.empty:
+                    precio = hist['Close'].iloc[-1]
+                    precios_actuales[producto] = float(precio)
+                else:
+                    # Usar precios por defecto si no hay datos
+                    precios_actuales[producto] = PRECIOS_API['precios_pizarra'][f'{producto}_rosario']
+            except Exception as e:
+                precios_actuales[producto] = PRECIOS_API['precios_pizarra'][f'{producto}_rosario']
+        
+        # Actualizar precios de insumos con inflación estimada
+        inflacion_estimada = 1.08  # 8% anual
+        insumos_actualizados = {}
+        for insumo, precio in PRECIOS_API['insumos'].items():
+            insumos_actualizados[insumo] = round(precio * inflacion_estimada, 2)
+        
+        return {
+            'commodities': precios_actuales,
+            'insumos': insumos_actualizados,
+            'pizarra_rosario': PRECIOS_API['precios_pizarra'],
+            'fecha_actualizacion': datetime.now().strftime("%Y-%m-%d")
+        }
+    except Exception as e:
+        # Si hay error, devolver precios por defecto
+        return PRECIOS_API
+
+def calcular_costo_fertilizacion(dosis_npk, cultivo, precios):
+    """
+    Calcula el costo de fertilización basado en dosis NPK.
+    """
+    # Precios por kg de nutriente
+    precio_n = precios['insumos']['urea'] / 1000 * 0.46  # Urea 46% N
+    precio_p = precios['insumos']['fosfato'] / 1000 * 0.46  # Fosfato 46% P2O5
+    precio_k = precios['insumos']['cloruro_potasio'] / 1000 * 0.60  # KCl 60% K2O
+    
+    # Dosis promedio (kg/ha) basado en recomendaciones
+    if cultivo == 'MAÍZ':
+        dosis = {'N': 150, 'P': 50, 'K': 120}
+    elif cultivo == 'SOYA':
+        dosis = {'N': 30, 'P': 40, 'K': 90}
+    elif cultivo == 'TRIGO':
+        dosis = {'N': 120, 'P': 40, 'K': 80}
+    else:  # GIRASOL
+        dosis = {'N': 80, 'P': 35, 'K': 100}
+    
+    # Ajustar dosis según NPK actual
+    factor_ajuste = max(0.5, min(1.5, (1 - dosis_npk) * 2))
+    
+    costo_n = dosis['N'] * factor_ajuste * precio_n
+    costo_p = dosis['P'] * factor_ajuste * precio_p
+    costo_k = dosis['K'] * factor_ajuste * precio_k
+    
+    return {
+        'costo_total': round(costo_n + costo_p + costo_k, 2),
+        'costo_n': round(costo_n, 2),
+        'costo_p': round(costo_p, 2),
+        'costo_k': round(costo_k, 2),
+        'dosis_ajustada': {
+            'N': round(dosis['N'] * factor_ajuste, 1),
+            'P': round(dosis['P'] * factor_ajuste, 1),
+            'K': round(dosis['K'] * factor_ajuste, 1)
+        }
+    }
+
+def calcular_rendimiento_potencial(npk_actual, cultivo, aplica_fertilizacion=True):
+    """
+    Calcula el rendimiento potencial basado en fertilidad y aplicación de NPK.
+    """
+    rendimiento_base = RENDIMIENTOS_BASE[cultivo]
+    
+    # Máximo rendimiento alcanzable con fertilización óptima
+    max_rendimiento = {
+        'MAÍZ': 12.0,
+        'SOYA': 4.5,
+        'TRIGO': 6.0,
+        'GIRASOL': 3.5
+    }
+    
+    if aplica_fertilizacion:
+        # Con fertilización: respuesta logística
+        factor_respuesta = 1.0 + (max_rendimiento[cultivo]/rendimiento_base - 1) * npk_actual
+        rendimiento = rendimiento_base * factor_respuesta
+    else:
+        # Sin fertilización: rendimiento base reducido por baja fertilidad
+        rendimiento = rendimiento_base * (0.3 + 0.7 * npk_actual)
+    
+    return round(rendimiento, 2)
+
+def calcular_tir(inversion, ingresos_anuales, anos=5, tasa_descuento=0.12):
+    """
+    Calcula la Tasa Interna de Retorno (TIR).
+    """
+    try:
+        # Flujo de caja: inversión inicial negativa, luego ingresos anuales
+        flujos = [-inversion] + [ingresos_anuales] * anos
+        
+        # Calcular TIR usando método iterativo simple
+        def npv(tasa):
+            return sum([flujo / ((1 + tasa) ** i) for i, flujo in enumerate(flujos)])
+        
+        # Buscar TIR por bisección
+        low, high = -0.99, 10.0
+        for _ in range(100):
+            mid = (low + high) / 2
+            if npv(mid) > 0:
+                low = mid
+            else:
+                high = mid
+        
+        tir = (low + high) / 2
+        return round(tir * 100, 2)  # En porcentaje
+    except:
+        return 0.0
+
+def generar_analisis_economico(gdf_analizado, cultivo, area_total, precios_actualizados):
+    """
+    Genera análisis económico completo para el lote.
+    """
+    if gdf_analizado.empty:
+        return None
+    
+    # Obtener precio de venta
+    precio_key = f'{cultivo.lower().replace("í", "i").replace("á", "a")}_rosario'
+    precio_venta = precios_actualizados['pizarra_rosario'].get(precio_key, 200)
+    
+    # Costos base
+    costo_base_ha = COSTOS_BASE[cultivo]
+    
+    resultados = {
+        'escenario_sin': {'costos': [], 'ingresos': [], 'beneficios': [], 'rendimientos': []},
+        'escenario_con': {'costos': [], 'ingresos': [], 'beneficios': [], 'rendimientos': []}
+    }
+    
+    # Calcular por zona
+    for idx, row in gdf_analizado.iterrows():
+        area_ha = row.get('area_ha', area_total / len(gdf_analizado))
+        npk_actual = row.get('npk_actual', 0.5)
+        
+        # Escenario SIN fertilización
+        rendimiento_sin = calcular_rendimiento_potencial(npk_actual, cultivo, aplica_fertilizacion=False)
+        ingreso_sin = rendimiento_sin * precio_venta * area_ha
+        costo_sin = costo_base_ha * area_ha
+        beneficio_sin = ingreso_sin - costo_sin
+        
+        # Escenario CON fertilización
+        rendimiento_con = calcular_rendimiento_potencial(npk_actual, cultivo, aplica_fertilizacion=True)
+        costo_fert = calcular_costo_fertilizacion(npk_actual, cultivo, precios_actualizados)
+        costo_con = (costo_base_ha + costo_fert['costo_total']) * area_ha
+        ingreso_con = rendimiento_con * precio_venta * area_ha
+        beneficio_con = ingreso_con - costo_con
+        
+        # Almacenar resultados
+        resultados['escenario_sin']['rendimientos'].append(rendimiento_sin)
+        resultados['escenario_sin']['ingresos'].append(ingreso_sin)
+        resultados['escenario_sin']['costos'].append(costo_sin)
+        resultados['escenario_sin']['beneficios'].append(beneficio_sin)
+        
+        resultados['escenario_con']['rendimientos'].append(rendimiento_con)
+        resultados['escenario_con']['ingresos'].append(ingreso_con)
+        resultados['escenario_con']['costos'].append(costo_con)
+        resultados['escenario_con']['beneficios'].append(beneficio_con)
+    
+    # Calcular totales
+    for escenario in ['sin', 'con']:
+        key = f'escenario_{escenario}'
+        resultados[key]['total_ingresos'] = sum(resultados[key]['ingresos'])
+        resultados[key]['total_costos'] = sum(resultados[key]['costos'])
+        resultados[key]['total_beneficios'] = sum(resultados[key]['beneficios'])
+        resultados[key]['rendimiento_promedio'] = np.mean(resultados[key]['rendimientos'])
+        if len(gdf_analizado) > 0:
+            resultados[key]['costo_promedio_ha'] = np.mean(resultados[key]['costos']) / np.mean([row.get('area_ha', 1) for idx, row in gdf_analizado.iterrows()])
+        else:
+            resultados[key]['costo_promedio_ha'] = 0
+    
+    # Calcular TIR
+    inversion_fertilizacion = resultados['escenario_con']['total_costos'] - resultados['escenario_sin']['total_costos']
+    ingreso_extra = resultados['escenario_con']['total_ingresos'] - resultados['escenario_sin']['total_ingresos']
+    
+    tir = calcular_tir(inversion_fertilizacion, ingreso_extra)
+    
+    resultados['tir'] = tir
+    resultados['precio_venta'] = precio_venta
+    resultados['inversion_fertilizacion'] = inversion_fertilizacion
+    resultados['ingreso_extra'] = ingreso_extra
+    if ingreso_extra > 0:
+        resultados['payback'] = round(inversion_fertilizacion / ingreso_extra * 12, 1)
+    else:
+        resultados['payback'] = float('inf')
+    
+    return resultados
+
+def crear_mapa_potencial_cosecha(gdf_analizado, cultivo, precios_actualizados):
+    """
+    Crea mapa de calor del potencial de cosecha con fertilización.
+    """
+    try:
+        # Convertir a Web Mercator
+        gdf_plot = gdf_analizado.to_crs(epsg=3857)
+        
+        # Calcular potencial por zona
+        potenciales = []
+        for idx, row in gdf_plot.iterrows():
+            npk_actual = row.get('npk_actual', 0.5)
+            rendimiento = calcular_rendimiento_potencial(npk_actual, cultivo, aplica_fertilizacion=True)
+            potenciales.append(rendimiento)
+        
+        gdf_plot['potencial_cosecha'] = potenciales
+        
+        fig, ax = plt.subplots(1, 1, figsize=(12, 8))
+        
+        # Configurar estilo oscuro
+        fig.patch.set_facecolor('#0f172a')
+        ax.set_facecolor('#0f172a')
+        
+        # Mapa de calor
+        scatter = ax.scatter(
+            [geom.centroid.x for geom in gdf_plot.geometry],
+            [geom.centroid.y for geom in gdf_plot.geometry],
+            c=gdf_plot['potencial_cosecha'],
+            cmap='RdYlGn',
+            s=300,
+            alpha=0.8,
+            edgecolors='white',
+            linewidth=1
+        )
+        
+        # Agregar mapa base ESRI Satellite
+        try:
+            ctx.add_basemap(ax, source=ctx.providers.Esri.WorldImagery, alpha=0.3)
+        except:
+            pass
+        
+        # Dibujar polígonos
+        gdf_plot.plot(ax=ax, color='none', edgecolor='white', linewidth=1, alpha=0.5)
+        
+        # Etiquetas
+        for idx, row in gdf_plot.iterrows():
+            centroid = row.geometry.centroid
+            ax.annotate(f"Z{row['id_zona']}\n{row['potencial_cosecha']:.1f}t", 
+                       (centroid.x, centroid.y),
+                       xytext=(0, 0), textcoords="offset points",
+                       fontsize=8, color='white', weight='bold',
+                       ha='center', va='center',
+                       bbox=dict(boxstyle="round,pad=0.3", facecolor='#1e293b', alpha=0.9, edgecolor='white'))
+        
+        ax.set_title(f'🌱 MAPA DE POTENCIAL DE COSECHA - {cultivo}\n(Con aplicación óptima de NPK)', 
+                    fontsize=16, fontweight='bold', pad=20, color='white')
+        ax.set_xlabel('Longitud', color='white')
+        ax.set_ylabel('Latitud', color='white')
+        ax.tick_params(colors='white')
+        ax.grid(True, alpha=0.3, color='#475569')
+        
+        # Barra de colores
+        cbar = plt.colorbar(scatter, ax=ax, shrink=0.8)
+        cbar.set_label('Rendimiento Potencial (ton/ha)', fontsize=12, color='white')
+        cbar.ax.yaxis.set_tick_params(color='white')
+        plt.setp(plt.getp(cbar.ax.axes, 'yticklabels'), color='white')
+        
+        plt.tight_layout()
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png', dpi=150, bbox_inches='tight', facecolor='#0f172a')
+        buf.seek(0)
+        plt.close()
+        
+        return buf, gdf_plot
+    except Exception as e:
+        st.error(f"Error creando mapa de potencial: {str(e)}")
+        return None, None
+
+def crear_mapa_rentabilidad(gdf_analizado, cultivo, precios_actualizados):
+    """
+    Crea mapa de calor de rentabilidad (USD/ha).
+    """
+    try:
+        gdf_plot = gdf_analizado.to_crs(epsg=3857)
+        
+        # Calcular rentabilidad por zona
+        rentabilidades = []
+        for idx, row in gdf_plot.iterrows():
+            npk_actual = row.get('npk_actual', 0.5)
+            area_ha = row.get('area_ha', 1)
+            
+            # Calcular costo con fertilización
+            costo_fert = calcular_costo_fertilizacion(npk_actual, cultivo, precios_actualizados)
+            costo_total_ha = COSTOS_BASE[cultivo] + costo_fert['costo_total']
+            
+            # Calcular ingreso
+            rendimiento = calcular_rendimiento_potencial(npk_actual, cultivo, aplica_fertilizacion=True)
+            precio_key = f'{cultivo.lower().replace("í", "i").replace("á", "a")}_rosario'
+            precio_venta = precios_actualizados['pizarra_rosario'].get(precio_key, 200)
+            ingreso_ha = rendimiento * precio_venta
+            
+            # Rentabilidad
+            rentabilidad = ingreso_ha - costo_total_ha
+            rentabilidades.append(rentabilidad)
+        
+        gdf_plot['rentabilidad_usd_ha'] = rentabilidades
+        
+        fig, ax = plt.subplots(1, 1, figsize=(12, 8))
+        fig.patch.set_facecolor('#0f172a')
+        ax.set_facecolor('#0f172a')
+        
+        # Mapa de calor de rentabilidad
+        scatter = ax.scatter(
+            [geom.centroid.x for geom in gdf_plot.geometry],
+            [geom.centroid.y for geom in gdf_plot.geometry],
+            c=gdf_plot['rentabilidad_usd_ha'],
+            cmap='RdYlBu_r',
+            s=300,
+            alpha=0.8,
+            edgecolors='white',
+            linewidth=1,
+            vmin=-500,
+            vmax=1500
+        )
+        
+        try:
+            ctx.add_basemap(ax, source=ctx.providers.Esri.WorldImagery, alpha=0.3)
+        except:
+            pass
+        
+        gdf_plot.plot(ax=ax, color='none', edgecolor='white', linewidth=1, alpha=0.5)
+        
+        # Etiquetas con color según rentabilidad
+        for idx, row in gdf_plot.iterrows():
+            centroid = row.geometry.centroid
+            rent_color = 'white' if row['rentabilidad_usd_ha'] > 0 else '#ff6b6b'
+            ax.annotate(f"Z{row['id_zona']}\n${row['rentabilidad_usd_ha']:.0f}", 
+                       (centroid.x, centroid.y),
+                       xytext=(0, 0), textcoords="offset points",
+                       fontsize=8, color=rent_color, weight='bold',
+                       ha='center', va='center',
+                       bbox=dict(boxstyle="round,pad=0.3", facecolor='#1e293b', alpha=0.9, edgecolor='white'))
+        
+        ax.set_title(f'💰 MAPA DE RENTABILIDAD - {cultivo}\n(Beneficio USD/ha con fertilización óptima)', 
+                    fontsize=16, fontweight='bold', pad=20, color='white')
+        ax.set_xlabel('Longitud', color='white')
+        ax.set_ylabel('Latitud', color='white')
+        ax.tick_params(colors='white')
+        ax.grid(True, alpha=0.3, color='#475569')
+        
+        cbar = plt.colorbar(scatter, ax=ax, shrink=0.8)
+        cbar.set_label('Rentabilidad (USD/ha)', fontsize=12, color='white')
+        cbar.ax.yaxis.set_tick_params(color='white')
+        plt.setp(plt.getp(cbar.ax.axes, 'yticklabels'), color='white')
+        
+        # Línea de equilibrio
+        ax.axhline(0, color='yellow', linestyle='--', alpha=0.5, transform=ax.transAxes)
+        
+        plt.tight_layout()
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png', dpi=150, bbox_inches='tight', facecolor='#0f172a')
+        buf.seek(0)
+        plt.close()
+        
+        return buf
+    except Exception as e:
+        st.error(f"Error creando mapa de rentabilidad: {str(e)}")
+        return None
 
 # ===== INICIALIZACIÓN DE PRECIOS =====
 def inicializar_precios():
@@ -739,6 +1116,7 @@ def inicializar_precios():
                 precios = obtener_precios_actualizados()
                 st.session_state['precios_actualizados'] = precios
         
+        # Actualizar cada 24 horas
         if 'ultima_actualizacion' in st.session_state:
             ultima = datetime.strptime(st.session_state['ultima_actualizacion'], "%Y-%m-%d %H:%M:%S")
             if (datetime.now() - ultima).days >= 1:
@@ -756,10 +1134,32 @@ def inicializar_precios():
 with st.sidebar:
     st.markdown('<div class="sidebar-title">⚙️ CONFIGURACIÓN</div>', unsafe_allow_html=True)
     cultivo = st.selectbox("Cultivo:", ["MAÍZ", "SOYA", "TRIGO", "GIRASOL"])
-    st.image(IMAGENES_CULTIVOS[cultivo], use_container_width=True)
+    
+    # IMAGEN CON MANEJO DE ERRORES
+    try:
+        # Normalizar el nombre del cultivo
+        cultivo_key = cultivo.upper().replace("Í", "I").replace("Á", "A")
+        
+        # Verificar si tenemos la imagen
+        if cultivo in IMAGENES_CULTIVOS:
+            st.image(IMAGENES_CULTIVOS[cultivo], 
+                    caption=f"Cultivo: {cultivo}",
+                    use_container_width=True)
+        else:
+            # Usar imagen por defecto
+            st.image("https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=400&h=300&fit=crop",
+                    caption=f"Cultivo: {cultivo}",
+                    use_container_width=True)
+    except Exception as e:
+        # Si todo falla, mostrar un placeholder simple
+        st.markdown(f"**🌱 {cultivo}**")
+        st.info(f"Imagen del cultivo: {cultivo}")
+    
     analisis_tipo = st.selectbox("Tipo de Análisis:", ["FERTILIDAD ACTUAL", "RECOMENDACIONES NPK", "ANÁLISIS DE TEXTURA", "ANÁLISIS DE CURVAS DE NIVEL"])
     if analisis_tipo == "RECOMENDACIONES NPK":
         nutriente = st.selectbox("Nutriente:", ["NITRÓGENO", "FÓSFORO", "POTASIO"])
+    else:
+        nutriente = None
     
     st.subheader("🛰️ Fuente de Datos Satelitales")
     satelite_seleccionado = st.selectbox(
@@ -831,7 +1231,7 @@ with st.sidebar:
         f"Precio venta {cultivo} USD/ton:",
         min_value=50.0,
         max_value=1000.0,
-        value=float(PRECIOS_API['precios_pizarra'].get(f'{cultivo.lower().replace("Í","I").replace("Á","A")}_rosario', 200)),
+        value=float(PRECIOS_API['precios_pizarra'].get(f'{cultivo.lower().replace("í", "i").replace("á", "a")}_rosario', 200)),
         step=10.0
     )
     
@@ -852,344 +1252,6 @@ with st.sidebar:
 
 # ===== INICIALIZAR PRECIOS =====
 inicializar_precios()
-
-# ===== FUNCIONES PARA OBTENER DATOS ECONÓMICOS ACTUALIZADOS =====
-def obtener_precios_actualizados():
-    """
-    Obtiene precios actualizados de commodities agrícolas usando yfinance
-    y actualiza los precios de referencia.
-    """
-    try:
-        symbols = {
-            'maiz': 'ZC=F',
-            'soya': 'ZS=F',
-            'trigo': 'ZW=F',
-            'girasol': 'BO=F'
-        }
-        
-        precios_actuales = {}
-        
-        for producto, symbol in symbols.items():
-            try:
-                ticker = yf.Ticker(symbol)
-                hist = ticker.history(period='1d')
-                if not hist.empty:
-                    precio = hist['Close'].iloc[-1]
-                    precios_actuales[producto] = float(precio)
-                else:
-                    precios_actuales[producto] = PRECIOS_API['precios_pizarra'][f'{producto}_rosario']
-            except Exception as e:
-                precios_actuales[producto] = PRECIOS_API['precios_pizarra'][f'{producto}_rosario']
-        
-        inflacion_estimada = 1.08
-        insumos_actualizados = {}
-        for insumo, precio in PRECIOS_API['insumos'].items():
-            insumos_actualizados[insumo] = round(precio * inflacion_estimada, 2)
-        
-        return {
-            'commodities': precios_actuales,
-            'insumos': insumos_actualizados,
-            'pizarra_rosario': PRECIOS_API['precios_pizarra'],
-            'fecha_actualizacion': datetime.now().strftime("%Y-%m-%d")
-        }
-    except Exception as e:
-        return PRECIOS_API
-
-def calcular_costo_fertilizacion(dosis_npk, cultivo, precios):
-    """
-    Calcula el costo de fertilización basado en dosis NPK.
-    """
-    precio_n = precios['insumos']['urea'] / 1000 * 0.46
-    precio_p = precios['insumos']['fosfato'] / 1000 * 0.46
-    precio_k = precios['insumos']['cloruro_potasio'] / 1000 * 0.60
-    
-    if cultivo == 'MAÍZ':
-        dosis = {'N': 150, 'P': 50, 'K': 120}
-    elif cultivo == 'SOYA':
-        dosis = {'N': 30, 'P': 40, 'K': 90}
-    elif cultivo == 'TRIGO':
-        dosis = {'N': 120, 'P': 40, 'K': 80}
-    else:
-        dosis = {'N': 80, 'P': 35, 'K': 100}
-    
-    factor_ajuste = max(0.5, min(1.5, (1 - dosis_npk) * 2))
-    
-    costo_n = dosis['N'] * factor_ajuste * precio_n
-    costo_p = dosis['P'] * factor_ajuste * precio_p
-    costo_k = dosis['K'] * factor_ajuste * precio_k
-    
-    return {
-        'costo_total': round(costo_n + costo_p + costo_k, 2),
-        'costo_n': round(costo_n, 2),
-        'costo_p': round(costo_p, 2),
-        'costo_k': round(costo_k, 2),
-        'dosis_ajustada': {
-            'N': round(dosis['N'] * factor_ajuste, 1),
-            'P': round(dosis['P'] * factor_ajuste, 1),
-            'K': round(dosis['K'] * factor_ajuste, 1)
-        }
-    }
-
-def calcular_rendimiento_potencial(npk_actual, cultivo, aplica_fertilizacion=True):
-    """
-    Calcula el rendimiento potencial basado en fertilidad y aplicación de NPK.
-    """
-    rendimiento_base = RENDIMIENTOS_BASE[cultivo]
-    
-    max_rendimiento = {
-        'MAÍZ': 12.0,
-        'SOYA': 4.5,
-        'TRIGO': 6.0,
-        'GIRASOL': 3.5
-    }
-    
-    if aplica_fertilizacion:
-        factor_respuesta = 1.0 + (max_rendimiento[cultivo]/rendimiento_base - 1) * npk_actual
-        rendimiento = rendimiento_base * factor_respuesta
-    else:
-        rendimiento = rendimiento_base * (0.3 + 0.7 * npk_actual)
-    
-    return round(rendimiento, 2)
-
-def calcular_tir(inversion, ingresos_anuales, anos=5, tasa_descuento=0.12):
-    """
-    Calcula la Tasa Interna de Retorno (TIR).
-    """
-    try:
-        flujos = [-inversion] + [ingresos_anuales] * anos
-        
-        def npv(tasa):
-            return sum([flujo / ((1 + tasa) ** i) for i, flujo in enumerate(flujos)])
-        
-        low, high = -0.99, 10.0
-        for _ in range(100):
-            mid = (low + high) / 2
-            if npv(mid) > 0:
-                low = mid
-            else:
-                high = mid
-        
-        tir = (low + high) / 2
-        return round(tir * 100, 2)
-    except:
-        return 0.0
-
-def generar_analisis_economico(gdf_analizado, cultivo, area_total, precios_actualizados):
-    """
-    Genera análisis económico completo para el lote.
-    """
-    if gdf_analizado.empty:
-        return None
-    
-    precio_key = f'{cultivo.lower().replace("Í","I").replace("Á","A")}_rosario'
-    precio_venta = precios_actualizados['pizarra_rosario'].get(precio_key, 200)
-    
-    costo_base_ha = COSTOS_BASE[cultivo]
-    
-    resultados = {
-        'escenario_sin': {'costos': [], 'ingresos': [], 'beneficios': [], 'rendimientos': []},
-        'escenario_con': {'costos': [], 'ingresos': [], 'beneficios': [], 'rendimientos': []}
-    }
-    
-    for idx, row in gdf_analizado.iterrows():
-        area_ha = row.get('area_ha', area_total / len(gdf_analizado))
-        npk_actual = row.get('npk_actual', 0.5)
-        
-        rendimiento_sin = calcular_rendimiento_potencial(npk_actual, cultivo, aplica_fertilizacion=False)
-        ingreso_sin = rendimiento_sin * precio_venta * area_ha
-        costo_sin = costo_base_ha * area_ha
-        beneficio_sin = ingreso_sin - costo_sin
-        
-        rendimiento_con = calcular_rendimiento_potencial(npk_actual, cultivo, aplica_fertilizacion=True)
-        costo_fert = calcular_costo_fertilizacion(npk_actual, cultivo, precios_actualizados)
-        costo_con = (costo_base_ha + costo_fert['costo_total']) * area_ha
-        ingreso_con = rendimiento_con * precio_venta * area_ha
-        beneficio_con = ingreso_con - costo_con
-        
-        resultados['escenario_sin']['rendimientos'].append(rendimiento_sin)
-        resultados['escenario_sin']['ingresos'].append(ingreso_sin)
-        resultados['escenario_sin']['costos'].append(costo_sin)
-        resultados['escenario_sin']['beneficios'].append(beneficio_sin)
-        
-        resultados['escenario_con']['rendimientos'].append(rendimiento_con)
-        resultados['escenario_con']['ingresos'].append(ingreso_con)
-        resultados['escenario_con']['costos'].append(costo_con)
-        resultados['escenario_con']['beneficios'].append(beneficio_con)
-    
-    for escenario in ['sin', 'con']:
-        key = f'escenario_{escenario}'
-        resultados[key]['total_ingresos'] = sum(resultados[key]['ingresos'])
-        resultados[key]['total_costos'] = sum(resultados[key]['costos'])
-        resultados[key]['total_beneficios'] = sum(resultados[key]['beneficios'])
-        resultados[key]['rendimiento_promedio'] = np.mean(resultados[key]['rendimientos'])
-        resultados[key]['costo_promedio_ha'] = np.mean(resultados[key]['costos']) / np.mean([row.get('area_ha', 1) for idx, row in gdf_analizado.iterrows()])
-    
-    inversion_fertilizacion = resultados['escenario_con']['total_costos'] - resultados['escenario_sin']['total_costos']
-    ingreso_extra = resultados['escenario_con']['total_ingresos'] - resultados['escenario_sin']['total_ingresos']
-    
-    tir = calcular_tir(inversion_fertilizacion, ingreso_extra)
-    
-    resultados['tir'] = tir
-    resultados['precio_venta'] = precio_venta
-    resultados['inversion_fertilizacion'] = inversion_fertilizacion
-    resultados['ingreso_extra'] = ingreso_extra
-    resultados['payback'] = round(inversion_fertilizacion / ingreso_extra * 12, 1) if ingreso_extra > 0 else float('inf')
-    
-    return resultados
-
-def crear_mapa_potencial_cosecha(gdf_analizado, cultivo, precios_actualizados):
-    """
-    Crea mapa de calor del potencial de cosecha con fertilización.
-    """
-    try:
-        gdf_plot = gdf_analizado.to_crs(epsg=3857)
-        
-        potenciales = []
-        for idx, row in gdf_plot.iterrows():
-            npk_actual = row.get('npk_actual', 0.5)
-            rendimiento = calcular_rendimiento_potencial(npk_actual, cultivo, aplica_fertilizacion=True)
-            potenciales.append(rendimiento)
-        
-        gdf_plot['potencial_cosecha'] = potenciales
-        
-        fig, ax = plt.subplots(1, 1, figsize=(12, 8))
-        
-        fig.patch.set_facecolor('#0f172a')
-        ax.set_facecolor('#0f172a')
-        
-        scatter = ax.scatter(
-            [geom.centroid.x for geom in gdf_plot.geometry],
-            [geom.centroid.y for geom in gdf_plot.geometry],
-            c=gdf_plot['potencial_cosecha'],
-            cmap='RdYlGn',
-            s=300,
-            alpha=0.8,
-            edgecolors='white',
-            linewidth=1
-        )
-        
-        try:
-            ctx.add_basemap(ax, source=ctx.providers.Esri.WorldImagery, alpha=0.3)
-        except:
-            pass
-        
-        gdf_plot.plot(ax=ax, color='none', edgecolor='white', linewidth=1, alpha=0.5)
-        
-        for idx, row in gdf_plot.iterrows():
-            centroid = row.geometry.centroid
-            ax.annotate(f"Z{row['id_zona']}\n{row['potencial_cosecha']:.1f}t", 
-                       (centroid.x, centroid.y),
-                       xytext=(0, 0), textcoords="offset points",
-                       fontsize=8, color='white', weight='bold',
-                       ha='center', va='center',
-                       bbox=dict(boxstyle="round,pad=0.3", facecolor='#1e293b', alpha=0.9, edgecolor='white'))
-        
-        ax.set_title(f'🌱 MAPA DE POTENCIAL DE COSECHA - {cultivo}\n(Con aplicación óptima de NPK)', 
-                    fontsize=16, fontweight='bold', pad=20, color='white')
-        ax.set_xlabel('Longitud', color='white')
-        ax.set_ylabel('Latitud', color='white')
-        ax.tick_params(colors='white')
-        ax.grid(True, alpha=0.3, color='#475569')
-        
-        cbar = plt.colorbar(scatter, ax=ax, shrink=0.8)
-        cbar.set_label('Rendimiento Potencial (ton/ha)', fontsize=12, color='white')
-        cbar.ax.yaxis.set_tick_params(color='white')
-        plt.setp(plt.getp(cbar.ax.axes, 'yticklabels'), color='white')
-        
-        plt.tight_layout()
-        buf = io.BytesIO()
-        plt.savefig(buf, format='png', dpi=150, bbox_inches='tight', facecolor='#0f172a')
-        buf.seek(0)
-        plt.close()
-        
-        return buf, gdf_plot
-    except Exception as e:
-        st.error(f"Error creando mapa de potencial: {str(e)}")
-        return None, None
-
-def crear_mapa_rentabilidad(gdf_analizado, cultivo, precios_actualizados):
-    """
-    Crea mapa de calor de rentabilidad (USD/ha).
-    """
-    try:
-        gdf_plot = gdf_analizado.to_crs(epsg=3857)
-        
-        rentabilidades = []
-        for idx, row in gdf_plot.iterrows():
-            npk_actual = row.get('npk_actual', 0.5)
-            area_ha = row.get('area_ha', 1)
-            
-            costo_fert = calcular_costo_fertilizacion(npk_actual, cultivo, precios_actualizados)
-            costo_total_ha = COSTOS_BASE[cultivo] + costo_fert['costo_total']
-            
-            rendimiento = calcular_rendimiento_potencial(npk_actual, cultivo, aplica_fertilizacion=True)
-            precio_key = f'{cultivo.lower().replace("Í","I").replace("Á","A")}_rosario'
-            precio_venta = precios_actualizados['pizarra_rosario'].get(precio_key, 200)
-            ingreso_ha = rendimiento * precio_venta
-            
-            rentabilidad = ingreso_ha - costo_total_ha
-            rentabilidades.append(rentabilidad)
-        
-        gdf_plot['rentabilidad_usd_ha'] = rentabilidades
-        
-        fig, ax = plt.subplots(1, 1, figsize=(12, 8))
-        fig.patch.set_facecolor('#0f172a')
-        ax.set_facecolor('#0f172a')
-        
-        scatter = ax.scatter(
-            [geom.centroid.x for geom in gdf_plot.geometry],
-            [geom.centroid.y for geom in gdf_plot.geometry],
-            c=gdf_plot['rentabilidad_usd_ha'],
-            cmap='RdYlBu_r',
-            s=300,
-            alpha=0.8,
-            edgecolors='white',
-            linewidth=1,
-            vmin=-500,
-            vmax=1500
-        )
-        
-        try:
-            ctx.add_basemap(ax, source=ctx.providers.Esri.WorldImagery, alpha=0.3)
-        except:
-            pass
-        
-        gdf_plot.plot(ax=ax, color='none', edgecolor='white', linewidth=1, alpha=0.5)
-        
-        for idx, row in gdf_plot.iterrows():
-            centroid = row.geometry.centroid
-            rent_color = 'white' if row['rentabilidad_usd_ha'] > 0 else '#ff6b6b'
-            ax.annotate(f"Z{row['id_zona']}\n${row['rentabilidad_usd_ha']:.0f}", 
-                       (centroid.x, centroid.y),
-                       xytext=(0, 0), textcoords="offset points",
-                       fontsize=8, color=rent_color, weight='bold',
-                       ha='center', va='center',
-                       bbox=dict(boxstyle="round,pad=0.3", facecolor='#1e293b', alpha=0.9, edgecolor='white'))
-        
-        ax.set_title(f'💰 MAPA DE RENTABILIDAD - {cultivo}\n(Beneficio USD/ha con fertilización óptima)', 
-                    fontsize=16, fontweight='bold', pad=20, color='white')
-        ax.set_xlabel('Longitud', color='white')
-        ax.set_ylabel('Latitud', color='white')
-        ax.tick_params(colors='white')
-        ax.grid(True, alpha=0.3, color='#475569')
-        
-        cbar = plt.colorbar(scatter, ax=ax, shrink=0.8)
-        cbar.set_label('Rentabilidad (USD/ha)', fontsize=12, color='white')
-        cbar.ax.yaxis.set_tick_params(color='white')
-        plt.setp(plt.getp(cbar.ax.axes, 'yticklabels'), color='white')
-        
-        ax.axhline(0, color='yellow', linestyle='--', alpha=0.5, transform=ax.transAxes)
-        
-        plt.tight_layout()
-        buf = io.BytesIO()
-        plt.savefig(buf, format='png', dpi=150, bbox_inches='tight', facecolor='#0f172a')
-        buf.seek(0)
-        plt.close()
-        
-        return buf
-    except Exception as e:
-        st.error(f"Error creando mapa de rentabilidad: {str(e)}")
-        return None
 
 # ===== FUNCIONES AUXILIARES - CORREGIDAS PARA EPSG:4326 =====
 def validar_y_corregir_crs(gdf):
@@ -2228,7 +2290,7 @@ def crear_mapa_estatico_con_esri(gdf, titulo, columna_valor, analisis_tipo, nutr
             else:
                 cmap = LinearSegmentedColormap.from_list('potasio_gee', PALETAS_GEE['POTASIO'])
                 vmin, vmax = (PARAMETROS_CULTIVOS[cultivo]['POTASIO']['min'] * 0.8,
-                              PARAMETROS_CULTIVos[cultivo]['POTASIO']['max'] * 1.2)
+                              PARAMETROS_CULTIVOS[cultivo]['POTASIO']['max'] * 1.2)
         
         for idx, row in gdf_plot.iterrows():
             valor = row[columna_valor]
@@ -2396,10 +2458,27 @@ def ejecutar_analisis(gdf, nutriente, analisis_tipo, n_divisiones, cultivo,
         elif analisis_tipo == "ANÁLISIS DE CURVAS DE NIVEL":
             gdf_dividido = dividir_parcela_en_zonas(gdf, n_divisiones)
             resultados['gdf_analizado'] = gdf_dividido
+            
+            # Generar DEM sintético y calcular pendientes
+            X, Y, Z, bounds = generar_dem_sintetico(gdf, resolucion_dem)
+            pendiente_grid = calcular_pendiente_simple(X, Y, Z, resolucion_dem)
+            
+            # Generar curvas de nivel
+            curvas, elevaciones = generar_curvas_nivel_simple(X, Y, Z, intervalo_curvas, gdf)
+            
+            # Crear mapa de pendientes
+            mapa_buffer, stats_pendiente = crear_mapa_pendientes_simple(X, Y, pendiente_grid, gdf)
+            resultados['mapa_buffer'] = mapa_buffer
+            resultados['estadisticas'] = stats_pendiente
+            
             resultados['exitoso'] = True
             return resultados
         
-        elif analisis_tipo in ["FERTILIDAD ACTUAL", "RECOMENDACIONES NPK"]:
+        else:  # FERTILIDAD ACTUAL o RECOMENDACIONES NPK
+            # Dividir la parcela en zonas
+            gdf_dividido = dividir_parcela_en_zonas(gdf, n_divisiones)
+            
+            # Obtener datos satelitales según la fuente seleccionada
             datos_satelitales = None
             if satelite == "SENTINEL-2":
                 datos_satelitales = descargar_datos_sentinel2(gdf, fecha_inicio, fecha_fin, indice)
@@ -2408,995 +2487,611 @@ def ejecutar_analisis(gdf, nutriente, analisis_tipo, n_divisiones, cultivo,
             else:
                 datos_satelitales = generar_datos_simulados(gdf, cultivo, indice)
             
-            gdf_dividido = dividir_parcela_en_zonas(gdf, n_divisiones)
-            indices_gee = calcular_indices_satelitales_gee(gdf_dividido, cultivo, datos_satelitales)
+            # Obtener datos meteorológicos de NASA POWER
+            df_power = obtener_datos_nasa_power(gdf, fecha_inicio, fecha_fin)
+            resultados['df_power'] = df_power
+            
+            # Calcular índices de fertilidad
+            indices_fertilidad = calcular_indices_satelitales_gee(gdf_dividido, cultivo, datos_satelitales)
+            
+            # Crear GeoDataFrame con resultados
             gdf_analizado = gdf_dividido.copy()
+            for i, (idx, row) in enumerate(gdf_analizado.iterrows()):
+                for key, value in indices_fertilidad[i].items():
+                    gdf_analizado.at[idx, key] = value
             
-            for idx, indice_data in enumerate(indices_gee):
-                for key, value in indice_data.items():
-                    gdf_analizado.loc[gdf_analizado.index[idx], key] = value
-            
-            areas_ha_list = []
+            # Calcular área por zona
+            gdf_analizado['area_ha'] = 0.0
             for idx, row in gdf_analizado.iterrows():
-                area_gdf = gpd.GeoDataFrame({'geometry': [row.geometry]}, crs=gdf_analizado.crs)
-                area_ha = calcular_superficie(area_gdf)
-                if hasattr(area_ha, 'iloc'):
-                    area_ha = float(area_ha.iloc[0])
-                elif hasattr(area_ha, '__len__') and len(area_ha) > 0:
-                    area_ha = float(area_ha[0])
-                else:
-                    area_ha = float(area_ha)
-                areas_ha_list.append(area_ha)
+                area_zona = calcular_superficie(gpd.GeoDataFrame({'geometry': [row.geometry]}, crs=gdf_analizado.crs))
+                gdf_analizado.at[idx, 'area_ha'] = area_zona
             
-            gdf_analizado['area_ha'] = areas_ha_list
-            
+            # Para RECOMENDACIONES NPK, calcular recomendaciones
             if analisis_tipo == "RECOMENDACIONES NPK":
-                recomendaciones_npk = calcular_recomendaciones_npk_gee(indices_gee, nutriente, cultivo)
-                gdf_analizado['valor_recomendado'] = recomendaciones_npk
+                recomendaciones = calcular_recomendaciones_npk_gee(indices_fertilidad, nutriente, cultivo)
+                gdf_analizado['valor_recomendado'] = recomendaciones
+                columna_valor = 'valor_recomendado'
+            else:
+                columna_valor = 'npk_actual'
+            
+            # Crear mapa estático
+            mapa_buffer = crear_mapa_estatico_con_esri(gdf_analizado, f"Análisis de {analisis_tipo}", 
+                                                     columna_valor, analisis_tipo, nutriente, cultivo, satelite)
             
             resultados['gdf_analizado'] = gdf_analizado
+            resultados['mapa_buffer'] = mapa_buffer
             resultados['exitoso'] = True
             
-            if satelite:
-                df_power = obtener_datos_nasa_power(gdf, fecha_inicio, fecha_fin)
-                if df_power is not None:
-                    resultados['df_power'] = df_power
+            return resultados
             
-            return resultados
-        else:
-            return resultados
     except Exception as e:
+        st.error(f"Error en ejecutar_analisis: {str(e)}")
         return resultados
 
-# ===== FUNCIONES DE VISUALIZACIÓN =====
-def mostrar_resultados_textura(gdf_analizado, cultivo, area_total):
-    st.subheader("📊 ESTADÍSTICAS DE TEXTURA")
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        textura_predominante = gdf_analizado['textura_suelo'].mode()[0] if len(gdf_analizado) > 0 else "NO_DETERMINADA"
-        st.metric("🏗️ Textura Predominante", textura_predominante)
-    with col2:
-        avg_arena = gdf_analizado['arena'].mean()
-        st.metric("🏖️ Arena Promedio", f"{avg_arena:.1f}%")
-    with col3:
-        avg_limo = gdf_analizado['limo'].mean()
-        st.metric("🌫️ Limo Promedio", f"{avg_limo:.1f}%")
-    with col4:
-        avg_arcilla = gdf_analizado['arcilla'].mean()
-        st.metric("🧱 Arcilla Promedio", f"{avg_arcilla:.1f}%")
-    
-    st.subheader("📈 COMPOSICIÓN GRANULOMÉTRICA")
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
-    fig.patch.set_facecolor('#0f172a')
-    ax1.set_facecolor('#0f172a')
-    ax2.set_facecolor('#0f172a')
-    
-    composicion = [gdf_analizado['arena'].mean(), gdf_analizado['limo'].mean(), gdf_analizado['arcilla'].mean()]
-    labels = ['Arena', 'Limo', 'Arcilla']
-    colors_pie = ['#d8b365', '#f6e8c3', '#01665e']
-    ax1.pie(composicion, labels=labels, colors=colors_pie, autopct='%1.1f%%', startangle=90, textprops={'color': 'white'})
-    ax1.set_title('Composición Promedio del Suelo', color='white')
-    
-    textura_dist = gdf_analizado['textura_suelo'].value_counts()
-    ax2.bar(textura_dist.index, textura_dist.values, color=[PALETAS_GEE['TEXTURA'][i % len(PALETAS_GEE['TEXTURA'])] for i in range(len(textura_dist))])
-    ax2.set_title('Distribución de Texturas', color='white')
-    ax2.set_xlabel('Textura', color='white')
-    ax2.set_ylabel('Número de Zonas', color='white')
-    ax2.tick_params(axis='x', rotation=45, colors='white')
-    ax2.tick_params(axis='y', colors='white')
-    ax2.set_facecolor('#0f172a')
-    
-    plt.tight_layout()
-    st.pyplot(fig)
-    
-    st.subheader("🗺️ MAPA DE TEXTURAS CON ESRI SATELLITE")
-    mapa_texturas = crear_mapa_texturas_con_esri(gdf_analizado, cultivo)
-    if mapa_texturas:
-        st.image(mapa_texturas, use_container_width=True)
-        st.download_button(
-            "📥 Descargar Mapa de Texturas",
-            mapa_texturas,
-            f"mapa_texturas_{cultivo}_{datetime.now().strftime('%Y%m%d_%H%M')}.png",
-            "image/png"
-        )
-    
-    st.subheader("📋 TABLA DE RESULTADOS POR ZONA")
-    columnas_textura = ['id_zona', 'area_ha', 'textura_suelo', 'arena', 'limo', 'arcilla']
-    columnas_textura = [col for col in columnas_textura if col in gdf_analizado.columns]
-    if columnas_textura:
-        tabla_textura = gdf_analizado[columnas_textura].copy()
-        tabla_textura.columns = ['Zona', 'Área (ha)', 'Textura', 'Arena (%)', 'Limo (%)', 'Arcilla (%)']
-        st.dataframe(tabla_textura)
-    
-    st.subheader("💡 RECOMENDACIONES DE MANEJO POR TEXTURA")
-    if 'textura_suelo' in gdf_analizado.columns:
-        textura_predominante = gdf_analizado['textura_suelo'].mode()[0] if len(gdf_analizado) > 0 else "NO_DETERMINADA"
-        if textura_predominante in RECOMENDACIONES_TEXTURA:
-            st.markdown(f"#### 🏗️ **{textura_predominante.upper()}**")
-            info_textura = RECOMENDACIONES_TEXTURA[textura_predominante]
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.markdown("**✅ PROPIEDADES FÍSICAS**")
-                for prop in info_textura['propiedades']:
-                    st.markdown(f"• {prop}")
-            with col2:
-                st.markdown("**⚠️ LIMITANTES**")
-                for lim in info_textura['limitantes']:
-                    st.markdown(f"• {lim}")
-            with col3:
-                st.markdown("**🛠️ MANEJO RECOMENDADO**")
-                for man in info_textura['manejo']:
-                    st.markdown(f"• {man}")
-    
-    st.subheader("💾 DESCARGAR RESULTADOS")
-    if 'columnas_textura' in locals() and columnas_textura:
-        tabla_textura = gdf_analizado[columnas_textura].copy()
-        tabla_textura.columns = ['Zona', 'Área (ha)', 'Textura', 'Arena (%)', 'Limo (%)', 'Arcilla (%)']
-        csv = tabla_textura.to_csv(index=False)
-        st.download_button(
-            "📥 Descargar CSV con Análisis de Textura",
-            csv,
-            f"textura_{cultivo}_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
-            "text/csv"
-        )
-
-def mostrar_resultados_curvas_nivel(X, Y, Z, pendiente_grid, curvas, elevaciones, gdf_original, cultivo, area_total):
-    st.subheader("📊 ESTADÍSTICAS TOPOGRÁFICAS")
-    elevaciones_flat = Z.flatten()
-    elevaciones_flat = elevaciones_flat[~np.isnan(elevaciones_flat)]
-    if len(elevaciones_flat) > 0:
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            elevacion_promedio = np.mean(elevaciones_flat)
-            st.metric("🏔️ Elevación Promedio", f"{elevacion_promedio:.1f} m")
-        with col2:
-            rango_elevacion = np.max(elevaciones_flat) - np.min(elevaciones_flat)
-            st.metric("📏 Rango de Elevación", f"{rango_elevacion:.1f} m")
-        with col3:
-            mapa_pendientes, stats_pendiente = crear_mapa_pendientes_simple(X, Y, pendiente_grid, gdf_original)
-            st.metric("📐 Pendiente Promedio", f"{stats_pendiente['promedio']:.1f}%")
-        with col4:
-            num_curvas = len(curvas) if curvas else 0
-            st.metric("🔄 Número de Curvas", f"{num_curvas}")
-        
-        st.subheader("🔥 MAPA DE CALOR DE PENDIENTES")
-        st.image(mapa_pendientes, use_container_width=True)
-        st.download_button(
-            "📥 Descargar Mapa de Pendientes",
-            mapa_pendientes,
-            f"mapa_pendientes_{cultivo}_{datetime.now().strftime('%Y%m%d_%H%M')}.png",
-            "image/png"
-        )
-        
-        st.subheader("⚠️ ANÁLISIS DE RIESGO DE EROSION")
-        if 'stats_pendiente' in locals() and 'distribucion' in stats_pendiente:
-            riesgo_total = 0
-            for categoria, data in stats_pendiente['distribucion'].items():
-                if categoria in CLASIFICACION_PENDIENTES:
-                    riesgo_total += data['porcentaje'] * CLASIFICACION_PENDIENTES[categoria]['factor_erosivo']
-            riesgo_promedio = riesgo_total / 100
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                if riesgo_promedio < 0.3:
-                    st.success("✅ **RIESGO BAJO**")
-                    st.metric("Factor Riesgo", f"{riesgo_promedio:.2f}")
-                elif riesgo_promedio < 0.6:
-                    st.warning("⚠️ **RIESGO MODERADO**")
-                    st.metric("Factor Riesgo", f"{riesgo_promedio:.2f}")
-                else:
-                    st.error("🚨 **RIESGO ALTO**")
-                    st.metric("Factor Riesgo", f"{riesgo_promedio:.2f}")
-            with col2:
-                area_total_ha = area_total
-                porcentaje_critico = sum(data['porcentaje'] for cat, data in stats_pendiente['distribucion'].items()
-                                         if cat in ['FUERTE (10-15%)', 'MUY FUERTE (15-25%)', 'EXTREMA (>25%)'])
-                area_critica = area_total_ha * (porcentaje_critico / 100)
-                st.metric("Área Crítica (>10%)", f"{area_critica:.2f} ha")
-            with col3:
-                porcentaje_manejable = sum(data['porcentaje'] for cat, data in stats_pendiente['distribucion'].items()
-                                           if cat in ['PLANA (0-2%)', 'SUAVE (2-5%)', 'MODERADA (5-10%)'])
-                area_manejable = area_total_ha * (porcentaje_manejable / 100)
-                st.metric("Área Manejable (<10%)", f"{area_manejable:.2f} ha")
-        
-        st.subheader("📈 VISUALIZACIÓN 3D DEL TERRENO")
-        try:
-            fig = plt.figure(figsize=(12, 8))
-            ax = fig.add_subplot(111, projection='3d')
-            surf = ax.plot_surface(X, Y, Z, cmap='terrain', alpha=0.8, linewidth=0)
-            ax.set_xlabel('Longitud', color='white')
-            ax.set_ylabel('Latitud', color='white')
-            ax.set_zlabel('Elevación (m)', color='white')
-            ax.set_title(f'Modelo 3D del Terreno - {cultivo}', color='white')
-            ax.tick_params(colors='white')
-            fig.patch.set_facecolor('#0f172a')
-            ax.set_facecolor('#0f172a')
-            ax.xaxis.label.set_color('white')
-            ax.yaxis.label.set_color('white')
-            ax.zaxis.label.set_color('white')
-            ax.title.set_color('white')
-            cbar = fig.colorbar(surf, ax=ax, shrink=0.5, aspect=5, label='Elevación (m)')
-            cbar.set_label('Elevación (m)', color='white')
-            cbar.ax.yaxis.set_tick_params(color='white')
-            plt.setp(plt.getp(cbar.ax.axes, 'yticklabels'), color='white')
-            plt.tight_layout()
-            st.pyplot(fig)
-        except Exception as e:
-            st.warning(f"No se pudo generar visualización 3D: {e}")
-        
-        st.subheader("💾 DESCARGAR RESULTADOS")
-        sample_points = []
-        for i in range(0, X.shape[0], 5):
-            for j in range(0, X.shape[1], 5):
-                if not np.isnan(Z[i, j]):
-                    sample_points.append({
-                        'lat': Y[i, j],
-                        'lon': X[i, j],
-                        'elevacion_m': Z[i, j],
-                        'pendiente_%': pendiente_grid[i, j]
-                    })
-        if sample_points:
-            df_dem = pd.DataFrame(sample_points)
-            csv = df_dem.to_csv(index=False)
-            st.download_button(
-                label="📊 Descargar Muestras DEM (CSV)",
-                data=csv,
-                file_name=f"dem_muestras_{cultivo}_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
-                mime="text/csv"
-            )
+# ===== CORRECCIÓN DEL TYPO EN crear_mapa_estatico_con_esri =====
+# En la función crear_mapa_estatico_con_esri, corregir PARAMETROS_CULTIVos por PARAMETROS_CULTIVOS
+# La corrección ya está aplicada en el código anterior
 
 # ===== INTERFAZ PRINCIPAL =====
-if uploaded_file:
-    with st.spinner("Cargando parcela..."):
-        try:
-            gdf = cargar_archivo_parcela(uploaded_file)
-            if gdf is not None:
-                st.success(f"✅ **Parcela cargada exitosamente:** {len(gdf)} polígono(s)")
-                area_total = calcular_superficie(gdf)
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.write("**📊 INFORMACIÓN DE LA PARCELA:**")
-                    st.write(f"- Polígonos: {len(gdf)}")
-                    st.write(f"- Área total: {area_total:.1f} ha")
-                    st.write(f"- CRS: {gdf.crs}")
-                    st.write(f"- Formato: {uploaded_file.name.split('.')[-1].upper()}")
-                    st.write("**📍 Vista Previa:**")
-                    fig, ax = plt.subplots(figsize=(8, 6))
-                    fig.patch.set_facecolor('#0f172a')
-                    ax.set_facecolor('#0f172a')
-                    gdf.plot(ax=ax, color='lightgreen', edgecolor='white', alpha=0.7)
-                    ax.set_title(f"Parcela: {uploaded_file.name}", color='white')
-                    ax.set_xlabel("Longitud", color='white')
-                    ax.set_ylabel("Latitud", color='white')
-                    ax.tick_params(colors='white')
-                    ax.grid(True, alpha=0.3, color='#475569')
-                    st.pyplot(fig)
-                with col2:
-                    st.write("**🎯 CONFIGURACIÓN GEE:**")
-                    st.write(f"- Cultivo: {ICONOS_CULTIVOS[cultivo]} {cultivo}")
-                    st.write(f"- Análisis: {analisis_tipo}")
-                    st.write(f"- Zonas: {n_divisiones}")
-                    if analisis_tipo in ["FERTILIDAD ACTUAL", "RECOMENDACIONES NPK"]:
-                        st.write(f"- Satélite: {SATELITES_DISPONIBLES[satelite_seleccionado]['nombre']}")
-                        st.write(f"- Índice: {indice_seleccionado}")
-                        st.write(f"- Período: {fecha_inicio} a {fecha_fin}")
-                    elif analisis_tipo == "ANÁLISIS DE CURVAS DE NIVEL":
-                        st.write(f"- Intervalo curvas: {intervalo_curvas} m")
-                        st.write(f"- Resolución DEM: {resolucion_dem} m")
+def main():
+    # Configurar la página
+    st.set_page_config(
+        page_title="Analizador Multi-Cultivo Satellital",
+        page_icon="🌱",
+        layout="wide",
+        initial_sidebar_state="expanded"
+    )
+    
+    # Título principal
+    st.markdown("""
+    <div class="hero-banner">
+        <div class="hero-content">
+            <h1 class="hero-title">ANALIZADOR MULTI-CULTIVO SATELITAL</h1>
+            <p class="hero-subtitle">Potenciado con NASA POWER, GEE y tecnología avanzada para una agricultura de precisión</p>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Inicializar precios
+    inicializar_precios()
+    
+    # Mostrar información de precios actualizados
+    if 'precios_actualizados' in st.session_state:
+        precios = st.session_state['precios_actualizados']
+        fecha_actualizacion = precios.get('fecha_actualizacion', 'N/A')
+        
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("🌽 Maíz", f"${precios['pizarra_rosario'].get('maiz_rosario', 200)}/ton")
+        with col2:
+            st.metric("🫘 Soya", f"${precios['pizarra_rosario'].get('soya_rosario', 400)}/ton")
+        with col3:
+            st.metric("🌾 Trigo", f"${precios['pizarra_rosario'].get('trigo_rosario', 250)}/ton")
+        with col4:
+            st.metric("🌻 Girasol", f"${precios['pizarra_rosario'].get('girasol_rosario', 350)}/ton")
+        
+        st.caption(f"📅 Precios actualizados al: {fecha_actualizacion}")
+    
+    # Crear pestañas principales
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 ANÁLISIS PRINCIPAL", "🌱 FERTILIDAD", "💰 ECONOMÍA", "📈 REPORTES", "ℹ️ AYUDA"])
+    
+    with tab1:
+        st.header("📊 ANÁLISIS PRINCIPAL")
+        
+        if uploaded_file is not None:
+            with st.spinner("Cargando y analizando parcela..."):
+                gdf_cargado = cargar_archivo_parcela(uploaded_file)
                 
-                if st.button("🚀 EJECUTAR ANÁLISIS COMPLETO", type="primary"):
-                    resultados = None
-                    if analisis_tipo in ["FERTILIDAD ACTUAL", "RECOMENDACIONES NPK"]:
-                        resultados = ejecutar_analisis(
-                            gdf, nutriente, analisis_tipo, n_divisiones,
-                            cultivo, satelite_seleccionado, indice_seleccionado,
-                            fecha_inicio, fecha_fin
-                        )
-                    elif analisis_tipo == "ANÁLISIS DE CURVAS DE NIVEL":
-                        resultados = ejecutar_analisis(
-                            gdf, None, analisis_tipo, n_divisiones,
-                            cultivo, None, None, None, None,
-                            intervalo_curvas, resolucion_dem
-                        )
-                    else:
-                        resultados = ejecutar_analisis(
-                            gdf, None, analisis_tipo, n_divisiones,
-                            cultivo, None, None, None, None
-                        )
+                if gdf_cargado is not None and not gdf_cargado.empty:
+                    # Ejecutar análisis según tipo seleccionado
+                    resultados = ejecutar_analisis(
+                        gdf=gdf_cargado,
+                        nutriente=nutriente,
+                        analisis_tipo=analisis_tipo,
+                        n_divisiones=n_divisiones,
+                        cultivo=cultivo,
+                        satelite=satelite_seleccionado,
+                        indice=indice_seleccionado if 'indice_seleccionado' in locals() else None,
+                        fecha_inicio=fecha_inicio if 'fecha_inicio' in locals() else None,
+                        fecha_fin=fecha_fin if 'fecha_fin' in locals() else None,
+                        intervalo_curvas=intervalo_curvas if 'intervalo_curvas' in locals() else 5.0,
+                        resolucion_dem=resolucion_dem if 'resolucion_dem' in locals() else 10.0
+                    )
                     
-                    if resultados and resultados['exitoso']:
-                        st.session_state['resultados_guardados'] = {
-                            'gdf_analizado': resultados['gdf_analizado'],
-                            'analisis_tipo': analisis_tipo,
-                            'cultivo': cultivo,
-                            'area_total': resultados['area_total'],
-                            'nutriente': nutriente,
-                            'satelite_seleccionado': satelite_seleccionado,
-                            'indice_seleccionado': indice_seleccionado,
-                            'mapa_buffer': resultados.get('mapa_buffer'),
-                            'X': None,
-                            'Y': None,
-                            'Z': None,
-                            'pendiente_grid': None,
-                            'gdf_original': gdf if analisis_tipo == "ANÁLISIS DE CURVAS DE NIVEL" else None,
-                            'df_power': resultados.get('df_power')
-                        }
+                    if resultados['exitoso']:
+                        # Mostrar resultados
+                        col1, col2 = st.columns([2, 1])
                         
-                        if analisis_tipo == "ANÁLISIS DE TEXTURA":
-                            mostrar_resultados_textura(resultados['gdf_analizado'], cultivo, resultados['area_total'])
-                        elif analisis_tipo == "ANÁLISIS DE CURVAS DE NIVEL":
-                            X, Y, Z, _ = generar_dem_sintetico(gdf, resolucion_dem)
-                            pendiente_grid = calcular_pendiente_simple(X, Y, Z, resolucion_dem)
-                            curvas, elevaciones = generar_curvas_nivel_simple(X, Y, Z, intervalo_curvas, gdf)
-                            st.session_state['resultados_guardados'].update({
-                                'X': X, 'Y': Y, 'Z': Z, 'pendiente_grid': pendiente_grid
-                            })
-                            mostrar_resultados_curvas_nivel(X, Y, Z, pendiente_grid, curvas, elevaciones, gdf, cultivo, resultados['area_total'])
-                        else:
-                            gdf_analizado = resultados['gdf_analizado']
-                            col1, col2, col3, col4 = st.columns(4)
-                            with col1:
-                                st.metric("Zonas Analizadas", len(gdf_analizado))
-                            with col2:
-                                st.metric("Área Total", f"{resultados['area_total']:.1f} ha")
-                            with col3:
-                                if analisis_tipo == "FERTILIDAD ACTUAL":
-                                    valor_prom = gdf_analizado['npk_actual'].mean()
-                                    st.metric("Índice NPK Promedio", f"{valor_prom:.3f}")
-                                else:
-                                    valor_prom = gdf_analizado['valor_recomendado'].mean()
-                                    st.metric(f"{nutriente} Promedio", f"{valor_prom:.1f} kg/ha")
-                            with col4:
-                                if analisis_tipo == "FERTILIDAD ACTUAL" and gdf_analizado['npk_actual'].mean() > 0:
-                                    coef_var = (gdf_analizado['npk_actual'].std() / gdf_analizado['npk_actual'].mean() * 100)
-                                    st.metric("Coef. Variación", f"{coef_var:.1f}%")
-                                elif analisis_tipo == "RECOMENDACIONES NPK" and gdf_analizado['valor_recomendado'].mean() > 0:
-                                    coef_var = (gdf_analizado['valor_recomendado'].std() / gdf_analizado['valor_recomendado'].mean() * 100)
-                                    st.metric("Coef. Variación", f"{coef_var:.1f}%")
+                        with col1:
+                            if resultados['mapa_buffer']:
+                                st.image(resultados['mapa_buffer'], caption=f"Mapa de {analisis_tipo} - {cultivo}", use_container_width=True)
+                        
+                        with col2:
+                            st.subheader("📈 Resumen del Análisis")
+                            st.metric("Área Total", f"{resultados['area_total']:.2f} ha")
+                            st.metric("Número de Zonas", f"{len(resultados['gdf_analizado'])}")
                             
-                            if resultados.get('df_power') is not None:
-                                df_power = resultados['df_power']
-                                st.subheader("🌤️ DATOS METEOROLÓGICOS (NASA POWER) + ANÁLISIS ECONÓMICO")
-                                
-                                tab_radiacion, tab_viento, tab_precip, tab_cosecha, tab_economico = st.tabs([
-                                    "☀️ Radiación Solar",
-                                    "💨 Velocidad del Viento",
-                                    "🌧️ Precipitación",
-                                    "🔥 Potencial de Cosecha",
-                                    "💰 Análisis Económico"
-                                ])
-                                
-                                with tab_radiacion:
-                                    serie_rad = df_power.set_index('fecha')['radiacion_solar']
-                                    prom_rad = serie_rad.mean()
-                                    max_rad = serie_rad.max()
-                                    min_rad = serie_rad.min()
-                                    if prom_rad > 5.5:
-                                        interpretacion = "☀️ **Alta radiación**: Condiciones óptimas para fotosíntesis en cultivos."
-                                    elif prom_rad > 4.0:
-                                        interpretacion = "🌤️ **Radiación moderada**: Adecuada para la mayoría de cultivos."
-                                    else:
-                                        interpretacion = "☁️ **Radiación baja**: Puede limitar el crecimiento; vigilar desarrollo vegetativo."
-
-                                    col_r1, col_r2, col_r3 = st.columns(3)
-                                    with col_r1:
-                                        st.metric("Promedio", f"{prom_rad:.1f} kWh/m²/día")
-                                    with col_r2:
-                                        st.metric("Máximo", f"{max_rad:.1f}")
-                                    with col_r3:
-                                        st.metric("Mínimo", f"{min_rad:.1f}")
-
-                                    st.pyplot(crear_grafico_personalizado(
-                                        serie_rad,
-                                        "Evolución Diaria de Radiación Solar",
-                                        "Radiación (kWh/m²/día)",
-                                        color_linea='#e67e22'
-                                    ))
-                                    st.markdown(f"**Interpretación agronómica:** {interpretacion}")
-
-                                with tab_viento:
-                                    serie_viento = df_power.set_index('fecha')['viento_2m']
-                                    prom_viento = serie_viento.mean()
-                                    max_viento = serie_viento.max()
-                                    min_viento = serie_viento.min()
-                                    if prom_viento < 2.0:
-                                        interpretacion = "🍃 **Viento suave**: Bajo riesgo de estrés mecánico o deshidratación."
-                                    elif prom_viento < 4.0:
-                                        interpretacion = "🌬️ **Viento moderado**: Aceptable; monitorear en etapas sensibles."
-                                    else:
-                                        interpretacion = "💨 **Viento fuerte**: Alto riesgo de daño mecánico, aumento de evapotranspiración."
-
-                                    col_w1, col_w2, col_w3 = st.columns(3)
-                                    with col_w1:
-                                        st.metric("Promedio", f"{prom_viento:.2f} m/s")
-                                    with col_w2:
-                                        st.metric("Máximo", f"{max_viento:.2f}")
-                                    with col_w3:
-                                        st.metric("Mínimo", f"{min_viento:.2f}")
-
-                                    st.pyplot(crear_grafico_personalizado(
-                                        serie_viento,
-                                        "Evolución Diaria de Velocidad del Viento",
-                                        "Viento a 2m (m/s)",
-                                        color_linea='#3498db'
-                                    ))
-                                    st.markdown(f"**Interpretación agronómica:** {interpretacion}")
-
-                                with tab_precip:
-                                    serie_precip = df_power.set_index('fecha')['precipitacion']
-                                    prom_precip = serie_precip.mean()
-                                    total_precip = serie_precip.sum()
-                                    dias_lluvia = (serie_precip > 0.1).sum()
-                                    if prom_precip > 8:
-                                        interpretacion = "🌧️ **Precipitación alta**: Riesgo de encharcamiento y lixiviación de nutrientes."
-                                    elif prom_precip > 3:
-                                        interpretacion = "💧 **Precipitación adecuada**: Condiciones hídricas favorables."
-                                    else:
-                                        interpretacion = "🏜️ **Precipitación baja**: Posible déficit hídrico; considerar riego suplementario."
-
-                                    col_p1, col_p2, col_p3 = st.columns(3)
-                                    with col_p1:
-                                        st.metric("Total", f"{total_precip:.1f} mm")
-                                    with col_p2:
-                                        st.metric("Promedio", f"{prom_precip:.1f} mm/día")
-                                    with col_p3:
-                                        st.metric("Días con lluvia", f"{dias_lluvia}")
-
-                                    st.pyplot(crear_grafico_barras_personalizado(
-                                        serie_precip,
-                                        "Precipitación Diaria",
-                                        "Precipitación (mm/día)",
-                                        color_barra='#2ecc71'
-                                    ))
-                                    st.markdown(f"**Interpretación agronómica:** {interpretacion}")
-
-                                with tab_cosecha:
-                                    st.subheader("🔥 Análisis de Potencial de Cosecha - Puntos Calientes")
-                                    st.markdown("""
-                                    **Metodología:**
-                                    - Se integran datos de fertilidad (NPK), radiación solar, humedad (NDWI) y estrés por viento
-                                    - Las zonas con valores más altos (rojo/amarillo) son los **puntos calientes** para mejor cosecha
-                                    """)
-
-                                    rad_prom = df_power['radiacion_solar'].mean()
-                                    viento_prom = df_power['viento_2m'].mean()
-                                    
-                                    gdf_analizado['radiacion_solar'] = rad_prom
-                                    gdf_analizado['viento_2m'] = viento_prom
-
-                                    def normalizar_solar(valor):
-                                        return np.clip((valor - 3.0) / (7.0 - 3.0), 0, 1)
-
-                                    def normalizar_viento(valor):
-                                        return np.clip(1 - (valor - 1.0) / (5.0 - 1.0), 0, 1)
-
-                                    def normalizar_humedad(ndwi):
-                                        return np.clip((ndwi - 0.1) / (0.4 - 0.1), 0, 1)
-
-                                    gdf_analizado['solar_norm'] = gdf_analizado['radiacion_solar'].apply(normalizar_solar)
-                                    gdf_analizado['viento_norm'] = gdf_analizado['viento_2m'].apply(normalizar_viento)
-                                    gdf_analizado['humedad_norm'] = gdf_analizado['ndwi'].apply(normalizar_humedad)
-
-                                    w_fertilidad = 0.40
-                                    w_solar = 0.25
-                                    w_humedad = 0.20
-                                    w_viento = 0.15
-
-                                    gdf_analizado['potencial_cosecha'] = (
-                                        w_fertilidad * gdf_analizado['npk_actual'] +
-                                        w_solar * gdf_analizado['solar_norm'] +
-                                        w_humedad * gdf_analizado['humedad_norm'] +
-                                        w_viento * gdf_analizado['viento_norm']
-                                    ).clip(0, 1)
-
-                                    produccion_base = {
-                                        'MAÍZ': 8.0,
-                                        'SOYA': 3.5,
-                                        'TRIGO': 4.5,
-                                        'GIRASOL': 2.5
-                                    }
-                                    base = produccion_base.get(cultivo, 5.0)
-                                    gdf_analizado['produccion_estimada'] = gdf_analizado['potencial_cosecha'] * base
-
-                                    col_c1, col_c2, col_c3, col_c4 = st.columns(4)
-                                    with col_c1:
-                                        st.metric("Potencial Promedio", f"{gdf_analizado['potencial_cosecha'].mean():.2f}")
-                                    with col_c2:
-                                        st.metric("Máximo", f"{gdf_analizado['potencial_cosecha'].max():.2f}")
-                                    with col_c3:
-                                        st.metric("Producción Estimada", f"{gdf_analizado['produccion_estimada'].mean():.1f} t/ha")
-                                    with col_c4:
-                                        total_est = (gdf_analizado['produccion_estimada'] * gdf_analizado['area_ha']).sum()
-                                        st.metric("Total Parcela", f"{total_est:.1f} t")
-
-                                    mapa_potencial, gdf_potencial = crear_mapa_potencial_cosecha(gdf_analizado, cultivo, st.session_state.get('precios_actualizados', PRECIOS_API))
-                                    if mapa_potencial:
-                                        st.image(mapa_potencial, use_container_width=True)
+                            # Mostrar estadísticas específicas
+                            if analisis_tipo == "FERTILIDAD ACTUAL":
+                                if 'npk_actual' in resultados['gdf_analizado'].columns:
+                                    npk_promedio = resultados['gdf_analizado']['npk_actual'].mean()
+                                    st.metric("Fertilidad Promedio (NPK)", f"{npk_promedio:.2%}")
+                            elif analisis_tipo == "RECOMENDACIONES NPK":
+                                if 'valor_recomendado' in resultados['gdf_analizado'].columns:
+                                    rec_promedio = resultados['gdf_analizado']['valor_recomendado'].mean()
+                                    st.metric(f"{nutriente} Recomendado", f"{rec_promedio:.1f} kg/ha")
+                            
+                            # Botón para análisis económico
+                            if st.button("💰 Realizar Análisis Económico", type="primary"):
+                                st.session_state['mostrar_economia'] = True
+                        
+                        # Mostrar tabla de datos
+                        st.subheader("📋 Datos por Zona")
+                        if resultados['gdf_analizado'] is not None:
+                            # Seleccionar columnas a mostrar
+                            columnas_interes = ['id_zona', 'area_ha']
+                            if 'npk_actual' in resultados['gdf_analizado'].columns:
+                                columnas_interes.append('npk_actual')
+                            if 'materia_organica' in resultados['gdf_analizado'].columns:
+                                columnas_interes.append('materia_organica')
+                            if 'humedad_suelo' in resultados['gdf_analizado'].columns:
+                                columnas_interes.append('humedad_suelo')
+                            if 'valor_recomendado' in resultados['gdf_analizado'].columns:
+                                columnas_interes.append('valor_recomendado')
+                            if 'textura_suelo' in resultados['gdf_analizado'].columns:
+                                columnas_interes.append('textura_suelo')
+                            
+                            df_display = resultados['gdf_analizado'][columnas_interes].copy()
+                            st.dataframe(df_display, use_container_width=True)
+                            
+                            # Opciones de exportación
+                            col_exp1, col_exp2, col_exp3 = st.columns(3)
+                            with col_exp1:
+                                if st.button("📥 Exportar a GeoJSON"):
+                                    geojson_data, nombre_archivo = exportar_a_geojson(resultados['gdf_analizado'], f"{cultivo}_{analisis_tipo}")
+                                    if geojson_data:
                                         st.download_button(
-                                            "📥 Descargar Mapa de Potencial",
-                                            mapa_potencial,
-                                            f"mapa_potencial_{cultivo}_{datetime.now().strftime('%Y%m%d_%H%M')}.png",
-                                            "image/png"
+                                            label="Descargar GeoJSON",
+                                            data=geojson_data,
+                                            file_name=nombre_archivo,
+                                            mime="application/json"
                                         )
-
-                                    zonas_calientes = gdf_analizado[gdf_analizado['potencial_cosecha'] > 0.7]
-                                    if not zonas_calientes.empty:
-                                        st.subheader("📍 ZONAS CALIENTES (Potencial > 0.7)")
-                                        st.dataframe(zonas_calientes[['id_zona', 'area_ha', 'potencial_cosecha', 'produccion_estimada']].sort_values('potencial_cosecha', ascending=False))
-                                        
-                                        total_area_caliente = zonas_calientes['area_ha'].sum()
-                                        st.metric(f"Área total de zonas calientes", f"{total_area_caliente:.2f} ha")
-                                        
-                                        st.markdown("**Recomendaciones para zonas calientes:**")
-                                        st.markdown("""
-                                        - ✅ **Maximizar inversión** en estas zonas (fertilización, riego)
-                                        - ✅ **Priorizar cosecha** temprana en estas áreas
-                                        - ✅ **Monitoreo intensivo** para mantener altos rendimientos
-                                        """)
-
-                                with tab_economico:
-                                    st.subheader("📈 ANÁLISIS ECONÓMICO COMPLETO")
-                                    
-                                    if 'precios_actualizados' not in st.session_state:
-                                        precios_actualizados = obtener_precios_actualizados()
-                                        st.session_state['precios_actualizados'] = precios_actualizados
-                                    else:
-                                        precios_actualizados = st.session_state['precios_actualizados']
-                                    
-                                    if 'parametros_economicos' in st.session_state:
-                                        params = st.session_state['parametros_economicos']
-                                    else:
-                                        params = {
-                                            'plaza': 'ROSARIO',
-                                            'costo_base_ha': COSTOS_BASE[cultivo],
-                                            'precio_venta': precio_venta_manual,
-                                            'tasa_descuento': 0.12
-                                        }
-                                    
-                                    with st.spinner("Calculando análisis económico..."):
-                                        analisis_economico = generar_analisis_economico(
-                                            gdf_analizado, 
-                                            cultivo, 
-                                            resultados['area_total'],
-                                            precios_actualizados
-                                        )
-                                        
-                                        if analisis_economico:
-                                            mapa_potencial, gdf_potencial = crear_mapa_potencial_cosecha(
-                                                gdf_analizado, cultivo, precios_actualizados
-                                            )
-                                            
-                                            mapa_rentabilidad = crear_mapa_rentabilidad(
-                                                gdf_analizado, cultivo, precios_actualizados
-                                            )
-                                            
-                                            col1, col2, col3, col4 = st.columns(4)
-                                            with col1:
-                                                st.metric(
-                                                    "📊 TIR Proyecto",
-                                                    f"{analisis_economico['tir']}%",
-                                                    delta="Alta rentabilidad" if analisis_economico['tir'] > 20 else "Rentable" if analisis_economico['tir'] > 12 else "Baja rentabilidad"
-                                                )
-                                            
-                                            with col2:
-                                                beneficio_extra = analisis_economico['escenario_con']['total_beneficios'] - analisis_economico['escenario_sin']['total_beneficios']
-                                                st.metric(
-                                                    "💰 Beneficio Extra",
-                                                    f"${beneficio_extra:,.0f}",
-                                                    delta=f"+${analisis_economico['ingreso_extra']:,.0f} ingresos"
-                                                )
-                                            
-                                            with col3:
-                                                st.metric(
-                                                    "⏱️ Payback",
-                                                    f"{analisis_economico['payback']} meses",
-                                                    delta="Rápido retorno" if analisis_economico['payback'] < 12 else "Retorno moderado"
-                                                )
-                                            
-                                            with col4:
-                                                inversion_ha = analisis_economico['inversion_fertilizacion'] / resultados['area_total']
-                                                st.metric(
-                                                    "🧪 Inversión Fert/ha",
-                                                    f"${inversion_ha:,.0f}",
-                                                    delta="Alta inversión" if inversion_ha > 300 else "Inversión moderada"
-                                                )
-                                            
-                                            st.subheader("🗺️ MAPA DE POTENCIAL DE COSECHA")
-                                            if mapa_potencial:
-                                                st.image(mapa_potencial, use_container_width=True)
-                                                st.download_button(
-                                                    "📥 Descargar Mapa de Potencial",
-                                                    mapa_potencial,
-                                                    f"mapa_potencial_{cultivo}_{datetime.now().strftime('%Y%m%d')}.png",
-                                                    "image/png"
-                                                )
-                                            
-                                            st.subheader("💰 MAPA DE RENTABILIDAD POR ZONA")
-                                            if mapa_rentabilidad:
-                                                st.image(mapa_rentabilidad, use_container_width=True)
-                                                st.download_button(
-                                                    "📥 Descargar Mapa de Rentabilidad",
-                                                    mapa_rentabilidad,
-                                                    f"mapa_rentabilidad_{cultivo}_{datetime.now().strftime('%Y%m%d')}.png",
-                                                    "image/png"
-                                                )
-                                            
-                                            st.subheader("📋 COMPARATIVA ECONÓMICA")
-                                            comparativa_data = {
-                                                'Métrica': [
-                                                    'Rendimiento Promedio (ton/ha)',
-                                                    'Ingresos Totales (USD)',
-                                                    'Costos Totales (USD)',
-                                                    'Beneficio Neto (USD)',
-                                                    'Costo por Hectárea (USD)',
-                                                    'Rentabilidad/ha (USD)'
-                                                ],
-                                                'Sin Fertilización': [
-                                                    f"{analisis_economico['escenario_sin']['rendimiento_promedio']:.2f}",
-                                                    f"${analisis_economico['escenario_sin']['total_ingresos']:,.0f}",
-                                                    f"${analisis_economico['escenario_sin']['total_costos']:,.0f}",
-                                                    f"${analisis_economico['escenario_sin']['total_beneficios']:,.0f}",
-                                                    f"${analisis_economico['escenario_sin']['costo_promedio_ha']:,.0f}",
-                                                    f"${analisis_economico['escenario_sin']['total_beneficios']/resultados['area_total']:,.0f}"
-                                                ],
-                                                'Con Fertilización': [
-                                                    f"{analisis_economico['escenario_con']['rendimiento_promedio']:.2f}",
-                                                    f"${analisis_economico['escenario_con']['total_ingresos']:,.0f}",
-                                                    f"${analisis_economico['escenario_con']['total_costos']:,.0f}",
-                                                    f"${analisis_economico['escenario_con']['total_beneficios']:,.0f}",
-                                                    f"${analisis_economico['escenario_con']['costo_promedio_ha']:,.0f}",
-                                                    f"${analisis_economico['escenario_con']['total_beneficios']/resultados['area_total']:,.0f}"
-                                                ],
-                                                'Diferencia': [
-                                                    f"+{analisis_economico['escenario_con']['rendimiento_promedio'] - analisis_economico['escenario_sin']['rendimiento_promedio']:.2f}",
-                                                    f"+${analisis_economico['ingreso_extra']:,.0f}",
-                                                    f"+${analisis_economico['inversion_fertilizacion']:,.0f}",
-                                                    f"+${analisis_economico['escenario_con']['total_beneficios'] - analisis_economico['escenario_sin']['total_beneficios']:,.0f}",
-                                                    f"+${analisis_economico['escenario_con']['costo_promedio_ha'] - analisis_economico['escenario_sin']['costo_promedio_ha']:,.0f}",
-                                                    f"+${(analisis_economico['escenario_con']['total_beneficios'] - analisis_economico['escenario_sin']['total_beneficios'])/resultados['area_total']:,.0f}"
-                                                ]
-                                            }
-                                            
-                                            df_comparativa = pd.DataFrame(comparativa_data)
-                                            st.dataframe(df_comparativa)
-                                            
-                                            st.subheader("📊 FLUJO DE CAJA PROYECTADO (5 años)")
-                                            
-                                            anos = 5
-                                            flujos_con = [-analisis_economico['inversion_fertilizacion']] + [analisis_economico['ingreso_extra']] * anos
-                                            flujos_sin = [0] * (anos + 1)
-                                            
-                                            fig_fc = go.Figure()
-                                            
-                                            fig_fc.add_trace(go.Scatter(
-                                                x=list(range(anos + 1)),
-                                                y=flujos_con,
-                                                mode='lines+markers',
-                                                name='Con Fertilización',
-                                                line=dict(color='#2ecc71', width=3),
-                                                marker=dict(size=8)
-                                            ))
-                                            
-                                            fig_fc.add_trace(go.Scatter(
-                                                x=list(range(anos + 1)),
-                                                y=flujos_sin,
-                                                mode='lines',
-                                                name='Sin Fertilización',
-                                                line=dict(color='#e74c3c', width=2, dash='dash')
-                                            ))
-                                            
-                                            fig_fc.add_hline(y=0, line_dash="dot", line_color="white")
-                                            
-                                            fig_fc.update_layout(
-                                                title='Flujo de Caja Acumulado',
-                                                xaxis_title='Año',
-                                                yaxis_title='USD',
-                                                template='plotly_dark',
-                                                hovermode='x unified',
-                                                showlegend=True,
-                                                plot_bgcolor='rgba(15, 23, 42, 0.8)',
-                                                paper_bgcolor='rgba(15, 23, 42, 0.8)',
-                                                font=dict(color='white')
-                                            )
-                                            
-                                            st.plotly_chart(fig_fc, use_container_width=True)
-                                            
-                                            st.subheader("💡 RECOMENDACIONES ECONÓMICAS")
-                                            
-                                            col_rec1, col_rec2 = st.columns(2)
-                                            
-                                            with col_rec1:
-                                                st.markdown("**✅ ACCIONES RECOMENDADAS:**")
-                                                if analisis_economico['tir'] > 20:
-                                                    st.markdown("- **INVERSIÓN PRIORITARIA**: Alta rentabilidad esperada")
-                                                    st.markdown("- Aplicar fertilización completa en todas las zonas")
-                                                    st.markdown("- Considerar tecnología de precisión para maximizar ROI")
-                                                elif analisis_economico['tir'] > 12:
-                                                    st.markdown("- **INVERSIÓN RECOMENDADA**: Rentabilidad aceptable")
-                                                    st.markdown("- Aplicar fertilización en zonas con NPK < 0.6")
-                                                    st.markdown("- Monitorear resultados para ajustes futuros")
-                                                else:
-                                                    st.markdown("- **EVALUAR ALTERNATIVAS**: Baja rentabilidad")
-                                                    st.markdown("- Considerar cultivos alternativos")
-                                                    st.markdown("- Buscar precios de insumos más competitivos")
-                                            
-                                            with col_rec2:
-                                                st.markdown("**📊 INDICADORES CLAVE:**")
-                                                st.markdown(f"- **TIR**: {analisis_economico['tir']}% {'(Excelente)' if analisis_economico['tir'] > 25 else '(Buena)' if analisis_economico['tir'] > 15 else '(Aceptable)'}")
-                                                st.markdown(f"- **Payback**: {analisis_economico['payback']} meses")
-                                                st.markdown(f"- **ROI Fertilización**: {(analisis_economico['ingreso_extra']/analisis_economico['inversion_fertilizacion']*100):.1f}%")
-                                                st.markdown(f"- **Rentabilidad/ha extra**: ${((analisis_economico['escenario_con']['total_beneficios'] - analisis_economico['escenario_sin']['total_beneficios'])/resultados['area_total']):.0f}")
-                                            
-                                            st.subheader("📥 EXPORTAR ANÁLISIS ECONÓMICO")
-                                            
-                                            if st.button("📊 Generar Reporte Económico Excel"):
-                                                output = BytesIO()
-                                                with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                                                    resumen_df = pd.DataFrame({
-                                                        'Métrica': ['TIR', 'Payback (meses)', 'Inversión Total', 'Ingreso Extra', 'Beneficio Extra Neto'],
-                                                        'Valor': [
-                                                            f"{analisis_economico['tir']}%",
-                                                            f"{analisis_economico['payback']}",
-                                                            f"${analisis_economico['inversion_fertilizacion']:,.0f}",
-                                                            f"${analisis_economico['ingreso_extra']:,.0f}",
-                                                            f"${analisis_economico['escenario_con']['total_beneficios'] - analisis_economico['escenario_sin']['total_beneficios']:,.0f}"
-                                                        ]
-                                                    })
-                                                    resumen_df.to_excel(writer, sheet_name='Resumen', index=False)
-                                                    
-                                                    if gdf_potencial is not None:
-                                                        detalle_df = gdf_potencial.drop(columns=['geometry']).copy()
-                                                        detalle_df.to_excel(writer, sheet_name='Detalle_Zonas', index=False)
-                                                    
-                                                    flujos_df = pd.DataFrame({
-                                                        'Año': range(anos + 1),
-                                                        'Flujo_Con_Fertilizacion': flujos_con,
-                                                        'Flujo_Sin_Fertilizacion': flujos_sin,
-                                                        'Flujo_Incremental': [con - sin for con, sin in zip(flujos_con, flujos_sin)]
-                                                    })
-                                                    flujos_df.to_excel(writer, sheet_name='Flujos_Caja', index=False)
-                                                
-                                                output.seek(0)
-                                                
-                                                st.download_button(
-                                                    label="📥 Descargar Reporte Económico (Excel)",
-                                                    data=output,
-                                                    file_name=f"analisis_economico_{cultivo}_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
-                                                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                                                )
-                                        else:
-                                            st.warning("No se pudo generar el análisis económico. Verifique los datos.")
-                            
-                            if analisis_tipo in ["FERTILIDAD ACTUAL", "RECOMENDACIONES NPK"]:
-                                columna_valor = 'valor_recomendado' if analisis_tipo == "RECOMENDACIONES NPK" else 'npk_actual'
-                                mapa_buffer = crear_mapa_estatico_con_esri(gdf_analizado, 
-                                                                          f"ANÁLISIS {analisis_tipo}", 
-                                                                          columna_valor, 
-                                                                          analisis_tipo, 
-                                                                          nutriente, 
-                                                                          cultivo, 
-                                                                          satelite_seleccionado)
-                                if mapa_buffer:
-                                    st.subheader(f"🗺️ MAPA CON ESRI SATELLITE - {analisis_tipo}")
-                                    st.image(mapa_buffer, use_container_width=True)
-                                    st.session_state['resultados_guardados']['mapa_buffer'] = mapa_buffer
-                                    st.download_button(
-                                        "📥 Descargar Mapa GEE con ESRI",
-                                        mapa_buffer,
-                                        f"mapa_gee_esri_{cultivo}_{satelite_seleccionado}_{analisis_tipo.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M')}.png",
-                                        "image/png"
+                            with col_exp2:
+                                if st.button("📄 Generar Reporte PDF"):
+                                    reporte_pdf = generar_reporte_pdf(
+                                        gdf_analizado=resultados['gdf_analizado'],
+                                        cultivo=cultivo,
+                                        analisis_tipo=analisis_tipo,
+                                        area_total=resultados['area_total'],
+                                        nutriente=nutriente,
+                                        satelite=satelite_seleccionado,
+                                        indice=indice_seleccionado if 'indice_seleccionado' in locals() else None,
+                                        mapa_buffer=resultados['mapa_buffer'],
+                                        estadisticas=resultados['estadisticas']
                                     )
-                                
-                                st.subheader("🔬 ÍNDICES SATELITALES GEE POR ZONA")
-                                columnas_indices = ['id_zona', 'npk_actual', 'materia_organica', 'ndvi', 'ndre', 'humedad_suelo', 'ndwi']
-                                if analisis_tipo == "RECOMENDACIONES NPK":
-                                    columnas_indices = ['id_zona', 'valor_recomendado', 'npk_actual', 'materia_organica', 'ndvi', 'ndre', 'humedad_suelo', 'ndwi']
-                                columnas_indices = [col for col in columnas_indices if col in gdf_analizado.columns]
-                                tabla_indices = gdf_analizado[columnas_indices].copy()
-                                rename_dict = {
-                                    'id_zona': 'Zona',
-                                    'npk_actual': 'NPK Actual',
-                                    'valor_recomendado': 'Recomendación',
-                                    'materia_organica': 'Materia Org (%)',
-                                    'ndvi': 'NDVI',
-                                    'ndre': 'NDRE',
-                                    'humedad_suelo': 'Humedad',
-                                    'ndwi': 'NDWI'
-                                }
-                                tabla_indices = tabla_indices.rename(columns={k: v for k, v in rename_dict.items() if k in tabla_indices.columns})
-                                st.dataframe(tabla_indices)
-        except Exception as e:
-            st.error(f"❌ Error procesando archivo: {str(e)}")
-else:
-    st.info("📁 Sube un archivo de tu parcela para comenzar el análisis")
-
-# ===== EXPORTACIÓN PERSISTENTE =====
-if 'resultados_guardados' in st.session_state:
-    res = st.session_state['resultados_guardados']
-    st.markdown("---")
-    st.subheader("📤 EXPORTAR RESULTADOS")
-    col_exp1, col_exp2, col_exp3, col_exp4 = st.columns(4)
+                                    if reporte_pdf:
+                                        st.download_button(
+                                            label="Descargar PDF",
+                                            data=reporte_pdf,
+                                            file_name=f"reporte_{cultivo}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
+                                            mime="application/pdf"
+                                        )
+                            with col_exp3:
+                                if st.button("📝 Generar Reporte Word"):
+                                    reporte_docx = generar_reporte_docx(
+                                        gdf_analizado=resultados['gdf_analizado'],
+                                        cultivo=cultivo,
+                                        analisis_tipo=analisis_tipo,
+                                        area_total=resultados['area_total'],
+                                        nutriente=nutriente,
+                                        satelite=satelite_seleccionado,
+                                        indice=indice_seleccionado if 'indice_seleccionado' in locals() else None,
+                                        mapa_buffer=resultados['mapa_buffer'],
+                                        estadisticas=resultados['estadisticas']
+                                    )
+                                    if reporte_docx:
+                                        st.download_button(
+                                            label="Descargar Word",
+                                            data=reporte_docx,
+                                            file_name=f"reporte_{cultivo}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx",
+                                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                                        )
+                    else:
+                        st.error("❌ Error al ejecutar el análisis")
+                else:
+                    st.warning("⚠️ No se pudo cargar el archivo de parcela")
+        else:
+            st.info("📤 Sube un archivo de parcela para comenzar el análisis")
+            
+            # Mostrar ejemplo de formato
+            with st.expander("📋 Formatos de archivo aceptados"):
+                st.markdown("""
+                **Formato Shapefile (.zip)**:
+                - Archivo ZIP que contenga: .shp, .shx, .dbf, .prj
+                - Sistema de coordenadas preferido: WGS84 (EPSG:4326)
+                
+                **Formato KML/KMZ**:
+                - Archivo .kml o .kmz (Google Earth)
+                - Debe contener polígonos válidos
+                
+                **Ejemplo de estructura:**
+                ```
+                mi_parcela.zip
+                ├── parcela.shp
+                ├── parcela.shx
+                ├── parcela.dbf
+                └── parcela.prj
+                ```
+                """)
     
-    with col_exp1:
-        if st.button("🗺️ Exportar GeoJSON", key="export_geojson"):
-            geojson_data, nombre_archivo = exportar_a_geojson(res['gdf_analizado'], f"parcela_{res['cultivo']}")
-            if geojson_data:
-                st.download_button(
-                    label="📥 Descargar GeoJSON",
-                    data=geojson_data,
-                    file_name=nombre_archivo,
-                    mime="application/json",
-                    key="geojson_download"
-                )
+    with tab2:
+        st.header("🌱 ANÁLISIS DE FERTILIDAD")
+        if 'gdf_analizado' in locals() and resultados.get('exitoso'):
+            # Mostrar análisis detallado de fertilidad
+            gdf_analizado = resultados['gdf_analizado']
+            
+            # Gráficos de distribución
+            col1, col2 = st.columns(2)
+            with col1:
+                if 'npk_actual' in gdf_analizado.columns:
+                    fig, ax = plt.subplots(figsize=(8, 4))
+                    ax.hist(gdf_analizado['npk_actual'], bins=20, color='#3b82f6', edgecolor='white', alpha=0.7)
+                    ax.set_xlabel('Índice NPK', color='white')
+                    ax.set_ylabel('Frecuencia', color='white')
+                    ax.set_title('Distribución de Fertilidad (NPK)', color='white', fontweight='bold')
+                    ax.set_facecolor('#0f172a')
+                    fig.patch.set_facecolor('#0f172a')
+                    ax.tick_params(colors='white')
+                    st.pyplot(fig)
+            
+            with col2:
+                if 'materia_organica' in gdf_analizado.columns:
+                    fig, ax = plt.subplots(figsize=(8, 4))
+                    ax.scatter(gdf_analizado['materia_organica'], gdf_analizado['npk_actual'] if 'npk_actual' in gdf_analizado.columns else gdf_analizado['id_zona'],
+                              color='#10b981', alpha=0.6)
+                    ax.set_xlabel('Materia Orgánica (%)', color='white')
+                    ax.set_ylabel('NPK' if 'npk_actual' in gdf_analizado.columns else 'Zona', color='white')
+                    ax.set_title('Relación Materia Orgánica - Fertilidad', color='white', fontweight='bold')
+                    ax.set_facecolor('#0f172a')
+                    fig.patch.set_facecolor('#0f172a')
+                    ax.tick_params(colors='white')
+                    st.pyplot(fig)
+            
+            # Recomendaciones de fertilización
+            st.subheader("💡 Recomendaciones de Fertilización")
+            if 'npk_actual' in gdf_analizado.columns:
+                npk_promedio = gdf_analizado['npk_actual'].mean()
+                
+                if npk_promedio < 0.3:
+                    st.error("**Fertilidad CRÍTICA** - Se requiere fertilización intensiva inmediata")
+                    st.markdown("""
+                    **Acciones recomendadas:**
+                    - Aplicación urgente de fertilizantes balanceados NPK
+                    - Incorporar materia orgánica (estiércol, compost)
+                    - Considerar cultivos de cobertura para mejorar suelo
+                    """)
+                elif npk_promedio < 0.5:
+                    st.warning("**Fertilidad BAJA** - Se recomienda fertilización moderada")
+                    st.markdown("""
+                    **Acciones recomendadas:**
+                    - Aplicar fertilizantes según análisis de suelo
+                    - Fraccionar aplicaciones de nitrógeno
+                    - Mantener cobertura vegetal
+                    """)
+                elif npk_promedio < 0.7:
+                    st.info("**Fertilidad ADECUADA** - Mantener prácticas actuales")
+                    st.markdown("""
+                    **Acciones recomendadas:**
+                    - Mantener rotación de cultivos
+                    - Monitoreo periódico de nutrientes
+                    - Ajustes menores según necesidades específicas
+                    """)
+                else:
+                    st.success("**Fertilidad ÓPTIMA** - Excelente condición del suelo")
+                    st.markdown("""
+                    **Acciones recomendadas:**
+                    - Continuar con prácticas actuales
+                    - Monitoreo preventivo
+                    - Mantener balance de nutrientes
+                    """)
     
-    with col_exp2:
-        if st.button("📄 Generar Reporte PDF", key="export_pdf"):
-            with st.spinner("Generando PDF..."):
-                analisis_economico = None
-                if res.get('df_power') and res['analisis_tipo'] in ["FERTILIDAD ACTUAL", "RECOMENDACIONES NPK"]:
+    with tab3:
+        st.header("💰 ANÁLISIS ECONÓMICO")
+        
+        if 'mostrar_economia' in st.session_state and st.session_state['mostrar_economia']:
+            if 'precios_actualizados' in st.session_state and 'gdf_analizado' in locals():
+                precios = st.session_state['precios_actualizados']
+                gdf_analizado = resultados['gdf_analizado']
+                area_total = resultados['area_total']
+                
+                # Realizar análisis económico
+                with st.spinner("Calculando análisis económico..."):
                     analisis_economico = generar_analisis_economico(
-                        res['gdf_analizado'],
-                        res['cultivo'],
-                        res['area_total'],
-                        st.session_state.get('precios_actualizados', PRECIOS_API)
+                        gdf_analizado=gdf_analizado,
+                        cultivo=cultivo,
+                        area_total=area_total,
+                        precios_actualizados=precios
                     )
                 
-                estadisticas = generar_resumen_estadisticas(
-                    res['gdf_analizado'],
-                    res['analisis_tipo'],
-                    res['cultivo'],
-                    res.get('df_power')
-                )
-                recomendaciones = generar_recomendaciones_generales(res['gdf_analizado'], res['analisis_tipo'], res['cultivo'])
-                mapa_buffer = res.get('mapa_buffer')
-                
-                pdf_buffer = generar_reporte_pdf(
-                    res['gdf_analizado'], res['cultivo'], res['analisis_tipo'], res['area_total'],
-                    res.get('nutriente'), res.get('satelite_seleccionado'), res.get('indice_seleccionado'),
-                    mapa_buffer, estadisticas, recomendaciones, analisis_economico
-                )
-                if pdf_buffer:
-                    st.download_button(
-                        label="📥 Descargar PDF",
-                        data=pdf_buffer,
-                        file_name=f"reporte_{res['cultivo']}_{res['analisis_tipo'].replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf",
-                        mime="application/pdf",
-                        key="pdf_download"
-                    )
-                else:
-                    st.error("❌ No se pudo generar el reporte PDF")
+                if analisis_economico:
+                    # Mostrar métricas económicas
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        st.metric("📈 TIR", f"{analisis_economico['tir']}%")
+                    with col2:
+                        st.metric("💰 Payback", f"{analisis_economico['payback']} meses")
+                    with col3:
+                        st.metric("📊 ROI", f"{(analisis_economico['ingreso_extra']/analisis_economico['inversion_fertilizacion']*100):.1f}%")
+                    with col4:
+                        beneficio_neto = analisis_economico['escenario_con']['total_beneficios']
+                        st.metric("💵 Beneficio Neto", f"${beneficio_neto:,.0f}")
+                    
+                    # Comparación de escenarios
+                    st.subheader("📊 Comparación de Escenarios")
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        st.markdown("""
+                        <div class="dashboard-card">
+                        <h3>❌ Sin Fertilización</h3>
+                        """, unsafe_allow_html=True)
+                        st.metric("Rendimiento", f"{analisis_economico['escenario_sin']['rendimiento_promedio']:.1f} t/ha")
+                        st.metric("Costo Total", f"${analisis_economico['escenario_sin']['total_costos']:,.0f}")
+                        st.metric("Beneficio", f"${analisis_economico['escenario_sin']['total_beneficios']:,.0f}")
+                    
+                    with col2:
+                        st.markdown("""
+                        <div class="dashboard-card">
+                        <h3>✅ Con Fertilización</h3>
+                        """, unsafe_allow_html=True)
+                        st.metric("Rendimiento", f"{analisis_economico['escenario_con']['rendimiento_promedio']:.1f} t/ha")
+                        st.metric("Costo Total", f"${analisis_economico['escenario_con']['total_costos']:,.0f}")
+                        st.metric("Beneficio", f"${analisis_economico['escenario_con']['total_beneficios']:,.0f}")
+                    
+                    # Crear mapas económicos
+                    st.subheader("🗺️ Mapas de Rentabilidad")
+                    
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        # Mapa de potencial de cosecha
+                        mapa_potencial, gdf_potencial = crear_mapa_potencial_cosecha(
+                            gdf_analizado, cultivo, precios
+                        )
+                        if mapa_potencial:
+                            st.image(mapa_potencial, caption="Potencial de Cosecha (t/ha)", use_container_width=True)
+                    
+                    with col2:
+                        # Mapa de rentabilidad
+                        mapa_rentabilidad = crear_mapa_rentabilidad(
+                            gdf_analizado, cultivo, precios
+                        )
+                        if mapa_rentabilidad:
+                            st.image(mapa_rentabilidad, caption="Rentabilidad (USD/ha)", use_container_width=True)
+                    
+                    # Detalles de costos
+                    with st.expander("📋 Detalle de Costos de Fertilización"):
+                        if 'npk_actual' in gdf_analizado.columns:
+                            npk_promedio = gdf_analizado['npk_actual'].mean()
+                            costo_fert = calcular_costo_fertilizacion(npk_promedio, cultivo, precios)
+                            
+                            st.markdown(f"""
+                            **Cálculo para fertilidad promedio: {npk_promedio:.2f}**
+                            - **Nitrógeno (N):** {costo_fert['dosis_ajustada']['N']} kg/ha = ${costo_fert['costo_n']}/ha
+                            - **Fósforo (P):** {costo_fert['dosis_ajustada']['P']} kg/ha = ${costo_fert['costo_p']}/ha
+                            - **Potasio (K):** {costo_fert['dosis_ajustada']['K']} kg/ha = ${costo_fert['costo_k']}/ha
+                            - **Costo Total Fertilización:** ${costo_fert['costo_total']}/ha
+                            """)
+                    
+                    # Recomendación final
+                    st.subheader("🎯 Recomendación Económica")
+                    if analisis_economico['tir'] > 15:
+                        st.success(f"""
+                        **✅ RECOMENDACIÓN: INVERTIR EN FERTILIZACIÓN**
+                        
+                        La fertilización muestra excelente retorno económico:
+                        - TIR del {analisis_economico['tir']}% (superior al costo de capital)
+                        - Payback de {analisis_economico['payback']} meses
+                        - Incremento de beneficio: ${analisis_economico['ingreso_extra']:,.0f}
+                        """)
+                    elif analisis_economico['tir'] > 8:
+                        st.info(f"""
+                        **⚠️ RECOMENDACIÓN: CONSIDERAR FERTILIZACIÓN SELECTIVA**
+                        
+                        La fertilización muestra retorno moderado:
+                        - TIR del {analisis_economico['tir']}%
+                        - Evaluar zonas específicas de mayor rentabilidad
+                        - Considerar fertilización diferenciada por zonas
+                        """)
+                    else:
+                        st.warning(f"""
+                        **❌ RECOMENDACIÓN: POSTERGAR FERTILIZACIÓN**
+                        
+                        El retorno económico no justifica la inversión:
+                        - TIR del {analisis_economico['tir']}% (inferior al costo de capital)
+                        - Evaluar mejoras en otros aspectos productivos
+                        - Considerar análisis de suelo de laboratorio
+                        """)
+            else:
+                st.info("Realiza primero un análisis de fertilidad para habilitar el análisis económico")
+        else:
+            st.info("👈 Haz clic en 'Realizar Análisis Económico' en la pestaña principal")
     
-    with col_exp3:
-        if st.button("📝 Generar Reporte DOCX", key="export_docx"):
-            with st.spinner("Generando DOCX..."):
-                analisis_economico = None
-                if res.get('df_power') and res['analisis_tipo'] in ["FERTILIDAD ACTUAL", "RECOMENDACIONES NPK"]:
-                    analisis_economico = generar_analisis_economico(
-                        res['gdf_analizado'],
-                        res['cultivo'],
-                        res['area_total'],
-                        st.session_state.get('precios_actualizados', PRECIOS_API)
+    with tab4:
+        st.header("📈 REPORTES Y EXPORTACIÓN")
+        
+        if 'gdf_analizado' in locals() and resultados.get('exitoso'):
+            # Generar estadísticas
+            estadisticas = generar_resumen_estadisticas(
+                resultados['gdf_analizado'],
+                analisis_tipo,
+                cultivo,
+                resultados.get('df_power')
+            )
+            
+            # Generar recomendaciones
+            recomendaciones = generar_recomendaciones_generales(
+                resultados['gdf_analizado'],
+                analisis_tipo,
+                cultivo
+            )
+            
+            # Mostrar resumen
+            st.subheader("📊 Resumen Estadístico")
+            if estadisticas:
+                cols = st.columns(3)
+                items = list(estadisticas.items())
+                for i, (key, value) in enumerate(items):
+                    with cols[i % 3]:
+                        st.metric(key, value)
+            
+            # Mostrar recomendaciones
+            st.subheader("💡 Recomendaciones de Manejo")
+            for i, rec in enumerate(recomendaciones[:5]):  # Mostrar solo 5 principales
+                st.markdown(f"{i+1}. {rec}")
+            
+            # Opciones de exportación completas
+            st.subheader("📤 Exportar Resultados")
+            
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.markdown("**GeoJSON**")
+                if st.button("🌐 Exportar GeoJSON", key="export_geojson"):
+                    geojson_data, nombre_archivo = exportar_a_geojson(
+                        resultados['gdf_analizado'],
+                        f"{cultivo}_{analisis_tipo}"
                     )
+                    if geojson_data:
+                        st.download_button(
+                            label="Descargar",
+                            data=geojson_data,
+                            file_name=nombre_archivo,
+                            mime="application/json"
+                        )
+            
+            with col2:
+                st.markdown("**Reporte PDF**")
+                if st.button("📄 Generar PDF", key="export_pdf"):
+                    with st.spinner("Generando PDF..."):
+                        reporte_pdf = generar_reporte_pdf(
+                            gdf_analizado=resultados['gdf_analizado'],
+                            cultivo=cultivo,
+                            analisis_tipo=analisis_tipo,
+                            area_total=resultados['area_total'],
+                            nutriente=nutriente,
+                            satelite=satelite_seleccionado,
+                            indice=indice_seleccionado if 'indice_seleccionado' in locals() else None,
+                            mapa_buffer=resultados['mapa_buffer'],
+                            estadisticas=estadisticas,
+                            recomendaciones=recomendaciones
+                        )
+                        if reporte_pdf:
+                            st.download_button(
+                                label="Descargar PDF",
+                                data=reporte_pdf,
+                                file_name=f"reporte_{cultivo}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
+                                mime="application/pdf"
+                            )
+            
+            with col3:
+                st.markdown("**Reporte Word**")
+                if st.button("📝 Generar Word", key="export_word"):
+                    with st.spinner("Generando Word..."):
+                        reporte_docx = generar_reporte_docx(
+                            gdf_analizado=resultados['gdf_analizado'],
+                            cultivo=cultivo,
+                            analisis_tipo=analisis_tipo,
+                            area_total=resultados['area_total'],
+                            nutriente=nutriente,
+                            satelite=satelite_seleccionado,
+                            indice=indice_seleccionado if 'indice_seleccionado' in locals() else None,
+                            mapa_buffer=resultados['mapa_buffer'],
+                            estadisticas=estadisticas,
+                            recomendaciones=recomendaciones
+                        )
+                        if reporte_docx:
+                            st.download_button(
+                                label="Descargar Word",
+                                data=reporte_docx,
+                                file_name=f"reporte_{cultivo}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx",
+                                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                            )
+            
+            # Exportar datos tabulares
+            st.subheader("📊 Exportar Datos Tabulares")
+            if resultados['gdf_analizado'] is not None:
+                df_export = resultados['gdf_analizado'].drop(columns=['geometry'] if 'geometry' in resultados['gdf_analizado'].columns else [])
+                csv_data = df_export.to_csv(index=False).encode('utf-8')
                 
-                estadisticas = generar_resumen_estadisticas(
-                    res['gdf_analizado'],
-                    res['analisis_tipo'],
-                    res['cultivo'],
-                    res.get('df_power')
-                )
-                recomendaciones = generar_recomendaciones_generales(res['gdf_analizado'], res['analisis_tipo'], res['cultivo'])
-                mapa_buffer = res.get('mapa_buffer')
-                
-                docx_buffer = generar_reporte_docx(
-                    res['gdf_analizado'], res['cultivo'], res['analisis_tipo'], res['area_total'],
-                    res.get('nutriente'), res.get('satelite_seleccionado'), res.get('indice_seleccionado'),
-                    mapa_buffer, estadisticas, recomendaciones, analisis_economico
-                )
-                if docx_buffer:
-                    st.download_button(
-                        label="📥 Descargar DOCX",
-                        data=docx_buffer,
-                        file_name=f"reporte_{res['cultivo']}_{res['analisis_tipo'].replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M')}.docx",
-                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                        key="docx_download"
-                    )
-                else:
-                    st.error("❌ No se pudo generar el reporte DOCX")
-    
-    with col_exp4:
-        if st.button("📊 Exportar CSV", key="export_csv"):
-            if res['gdf_analizado'] is not None:
-                if 'geometry' in res['gdf_analizado'].columns:
-                    df_export = res['gdf_analizado'].drop(columns=['geometry']).copy()
-                else:
-                    df_export = res['gdf_analizado'].copy()
-                csv = df_export.to_csv(index=False)
                 st.download_button(
                     label="📥 Descargar CSV",
-                    data=csv,
-                    file_name=f"datos_{res['cultivo']}_{res['analisis_tipo'].replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
-                    mime="text/csv",
-                    key="csv_download"
+                    data=csv_data,
+                    file_name=f"datos_{cultivo}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                    mime="text/csv"
                 )
+        else:
+            st.info("Realiza primero un análisis para generar reportes")
+    
+    with tab5:
+        st.header("ℹ️ AYUDA Y DOCUMENTACIÓN")
+        
+        st.markdown("""
+        ### 📖 Guía de Uso
+        
+        **1. Configuración Inicial**
+        - Selecciona el cultivo en el sidebar
+        - Elige el tipo de análisis
+        - Configura parámetros según el análisis seleccionado
+        
+        **2. Subida de Archivos**
+        - Formatos aceptados: Shapefile (.zip), KML, KMZ
+        - El archivo debe contener polígonos válidos
+        - Sistema de coordenadas preferido: WGS84 (EPSG:4326)
+        
+        **3. Tipos de Análisis Disponibles**
+        
+        **🌱 Fertilidad Actual**
+        - Analiza el estado nutricional del suelo
+        - Genera índice NPK integrado
+        - Incluye materia orgánica y humedad
+        
+        **🧪 Recomendaciones NPK**
+        - Recomienda dosis específicas de nutrientes
+        - Basado en índices de vegetación
+        - Personalizado por cultivo
+        
+        **🏺 Análisis de Textura**
+        - Clasificación textural del suelo
+        - Recomendaciones de manejo
+        - Compatibilidad con cultivo
+        
+        **🗺️ Curvas de Nivel**
+        - Análisis de pendientes
+        - Generación de curvas de nivel
+        - Identificación de áreas de riesgo
+        
+        **4. Análisis Económico**
+        - Calcula rentabilidad por zona
+        - Evalúa TIR y payback
+        - Compara escenarios con/sin fertilización
+        
+            
+        # Información del sistema
+        with st.expander("🔧 Información del Sistema"):
+            st.markdown(f"""
+            **Versión de la Aplicación:** 2.0.0
+            **Última Actualización:** {datetime.now().strftime("%d/%m/%Y")}
+            **Sistema de Coordenadas:** EPSG:4326 (WGS84)
+            **Satélites Disponibles:** {len(SATELITES_DISPONIBLES)}
+            **Cultivos Soportados:** {len(PARAMETROS_CULTIVOS)}
+            **Bibliotecas Principales:**
+            - Streamlit {st.__version__}
+            - GeoPandas {gpd.__version__}
+            - Matplotlib {plt.__version__}
+            - Plotly {go.__version__}
+            """)
 
-# ===== INFORMACIÓN ADICIONAL =====
-with st.expander("📋 FORMATOS DE ARCHIVO ACEPTADOS"):
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.markdown("**🗺️ Shapefile (.zip)**")
-        st.markdown("""
-        - Archivo ZIP que contiene:
-        - .shp (geometrías)
-        - .shx (índice)
-        - .dbf (atributos)
-        - .prj (proyección, opcional)
-        - Se recomienda usar EPSG:4326 (WGS84)
-        """)
-    with col2:
-        st.markdown("**🌐 KML (.kml)**")
-        st.markdown("""
-        - Formato Keyhole Markup Language
-        - Usado por Google Earth
-        - Contiene geometrías y atributos
-        - Puede incluir estilos y colores
-        - Siempre en EPSG:4326
-        """)
-    with col3:
-        st.markdown("**📦 KMZ (.kmz)**")
-        st.markdown("""
-        - Versión comprimida de KML
-        - Archivo ZIP con extensión .kmz
-        - Puede incluir recursos (imágenes, etc.)
-        - Compatible con Google Earth
-        - Siempre en EPSG:4326
-        """)
-
-with st.expander("ℹ️ INFORMACIÓN SOBRE LA METODOLOGÍA"):
-    st.markdown("""
-    **🌱 SISTEMA DE ANÁLISIS MULTI-CULTIVO**
-    
-    **🛰️ SATÉLITES SOPORTADOS:**
-    - **Sentinel-2:** Alta resolución (10m), revisita 5 días
-    - **Landsat-8:** Resolución media (30m), datos históricos
-    - **Datos Simulados:** Para pruebas y demostraciones
-    
-    **📊 CULTIVOS SOPORTADOS:**
-    - **🌽 MAÍZ:** Cultivo de gran importancia global, alto requerimiento de nitrógeno
-    - **🫘 SOYA:** Leguminosa, fija nitrógeno atmosférico, importante fuente de proteína
-    - **🌾 TRIGO:** Cereal básico, sensible a condiciones hídricas
-    - **🌻 GIRASOL:** Oleaginosa, tolerante a sequía moderada
-    
-    **💰 ANÁLISIS ECONÓMICO INCLUIDO:**
-    - **Tasa Interna de Retorno (TIR):** Rentabilidad de la inversión
-    - **Payback Period:** Tiempo de recuperación de la inversión
-    - **Mapas de Rentabilidad:** Visualización por zona
-    - **Comparativa Costo/Beneficio:** Con y sin fertilización
-    - **Precios Actualizados:** Mercado Rosario y Buenos Aires
-    
-    **🚀 FUNCIONALIDADES MEJORADAS:**
-    - **🌱 Fertilidad Actual:** Estado NPK del suelo usando índices satelitales
-    - **🗺️ Mapas ESRI Satellite:** Mapas base de alta resolución
-    - **🔥 Mapas de Potencial de Cosecha:** Identificación de puntos calientes
-    - **💰 Análisis Económico:** Rentabilidad por zona
-    - **💧 NDWI (Humedad):** Índice de Agua en Vegetación/Suelo
-    - **☀️ Radiación Solar:** Datos de NASA POWER (kWh/m²/día)
-    - **💨 Velocidad del Viento:** Datos de NASA POWER (m/s)
-    - **💧 Precipitación:** Datos de NASA POWER (mm/día)
-    - **💊 Recomendaciones NPK:** Dosis específicas por cultivo
-    - **🏗️ Análisis de Textura:** Composición del suelo (nomenclatura Venezuela/Colombia)
-    - **🏔️ Curvas de Nivel:** Análisis topográfico con mapa de calor de pendientes
-    
-    **🔬 METODOLOGÍA CIENTÍFICA:**
-    - Análisis basado en imágenes satelitales
-    - Integración con datos meteorológicos de NASA POWER
-    - Parámetros específicos para cultivos
-    - Cálculo de índices de vegetación y suelo
-    - Modelos digitales de elevación (DEM) sintéticos
-    - Recomendaciones validadas científicamente
-    
-    **💡 CONSEJOS:**
-    - Para mejores resultados, usa archivos en coordenadas EPSG:4326 (WGS84)
-    - Los archivos KML deben contener polígonos (no puntos o líneas)
-    - El área recomendada es entre 1 y 1000 hectáreas
-    - Actualiza precios regularmente para análisis económico preciso
-    - Todos los cálculos se realizan en EPSG:4326
-    """)
+# Ejecutar la aplicación
+if __name__ == "__main__":
+    main()
