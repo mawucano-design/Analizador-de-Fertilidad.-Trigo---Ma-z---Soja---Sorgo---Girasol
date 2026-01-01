@@ -2986,7 +2986,7 @@ if uploaded_file:
                                     if prom_viento < 2.0:
                                         interpretacion = "🍃 **Viento suave**: Bajo riesgo de estrés mecánico o deshidratación."
                                     elif prom_viento < 4.0:
-                                        interpretacion = "🌬️ **Viento moderado**: Aceptable; monitorear en etapas sensibles.")
+                                        interpretacion = "🌬️ **Viento moderado**: Aceptable; monitorear en etapas sensibles."
                                     else:
                                         interpretacion = "💨 **Viento fuerte**: Alto riesgo de daño mecánico, aumento de evapotranspiración."
 
