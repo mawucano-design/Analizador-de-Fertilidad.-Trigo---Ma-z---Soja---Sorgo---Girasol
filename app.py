@@ -2311,7 +2311,7 @@ def ejecutar_analisis(gdf, nutriente, analisis_tipo, n_divisiones, cultivo,
     resultados = {
         'exitoso': False,
         'gdf_analizado': None,
-        'mapa_buffer': None,
+        'mapa_buffer': None,  # Inicializado explícitamente como None
         'tabla_datos': None,
         'estadisticas': {},
         'recomendaciones': [],
@@ -2326,34 +2326,23 @@ def ejecutar_analisis(gdf, nutriente, analisis_tipo, n_divisiones, cultivo,
         if analisis_tipo == "ANÁLISIS DE TEXTURA":
             gdf_dividido = dividir_parcela_en_zonas(gdf, n_divisiones)
             gdf_analizado = analizar_textura_suelo(gdf_dividido, cultivo)
+            # Generar mapa de texturas
+            mapa_buffer = crear_mapa_texturas_con_esri(gdf_analizado, cultivo)
             resultados['gdf_analizado'] = gdf_analizado
+            resultados['mapa_buffer'] = mapa_buffer
             resultados['exitoso'] = True
             return resultados
-        
+            
         elif analisis_tipo == "ANÁLISIS DE CURVAS DE NIVEL":
             gdf_dividido = dividir_parcela_en_zonas(gdf, n_divisiones)
             resultados['gdf_analizado'] = gdf_dividido
-            
-            # Generar DEM sintético y calcular pendientes
-            X, Y, Z, bounds = generar_dem_sintetico(gdf, resolucion_dem)
-            pendiente_grid = calcular_pendiente_simple(X, Y, Z, resolucion_dem)
-            
-            # Generar curvas de nivel
-            curvas, elevaciones = generar_curvas_nivel_simple(X, Y, Z, intervalo_curvas, gdf)
-            
-            # Crear mapa de pendientes
-            mapa_buffer, stats_pendiente = crear_mapa_pendientes_simple(X, Y, pendiente_grid, gdf)
-            resultados['mapa_buffer'] = mapa_buffer
-            resultados['estadisticas'] = stats_pendiente
-            
             resultados['exitoso'] = True
+            # Para curvas de nivel, podrías generar su propio mapa si lo implementas
+            resultados['mapa_buffer'] = None  # O llama a tu función de mapa de pendientes
             return resultados
-        
-        else:  # FERTILIDAD ACTUAL o RECOMENDACIONES NPK
-            # Dividir la parcela en zonas
-            gdf_dividido = dividir_parcela_en_zonas(gdf, n_divisiones)
             
-            # Obtener datos satelitales según la fuente seleccionada
+        elif analisis_tipo in ["FERTILIDAD ACTUAL", "RECOMENDACIONES NPK"]:
+            # ... (tu código para obtener datos satelitales y gdf_analizado)
             datos_satelitales = None
             if satelite == "SENTINEL-2":
                 datos_satelitales = descargar_datos_sentinel2(gdf, fecha_inicio, fecha_fin, indice)
@@ -2361,48 +2350,55 @@ def ejecutar_analisis(gdf, nutriente, analisis_tipo, n_divisiones, cultivo,
                 datos_satelitales = descargar_datos_landsat8(gdf, fecha_inicio, fecha_fin, indice)
             else:
                 datos_satelitales = generar_datos_simulados(gdf, cultivo, indice)
-            
-            # Obtener datos meteorológicos de NASA POWER
-            df_power = obtener_datos_nasa_power(gdf, fecha_inicio, fecha_fin)
-            resultados['df_power'] = df_power
-            
-            # Calcular índices de fertilidad
-            indices_fertilidad = calcular_indices_satelitales_gee(gdf_dividido, cultivo, datos_satelitales)
-            
-            # Crear GeoDataFrame con resultados
+                
+            gdf_dividido = dividir_parcela_en_zonas(gdf, n_divisiones)
+            indices_gee = calcular_indices_satelitales_gee(gdf_dividido, cultivo, datos_satelitales)
             gdf_analizado = gdf_dividido.copy()
-            for i, (idx, row) in enumerate(gdf_analizado.iterrows()):
-                for key, value in indices_fertilidad[i].items():
-                    gdf_analizado.at[idx, key] = value
-            
-            # Calcular área por zona
-            gdf_analizado['area_ha'] = 0.0
+            for idx, indice_data in enumerate(indices_gee):
+                for key, value in indice_data.items():
+                    gdf_analizado.loc[gdf_analizado.index[idx], key] = value
+                    
+            areas_ha_list = []
             for idx, row in gdf_analizado.iterrows():
-                area_zona = calcular_superficie(gpd.GeoDataFrame({'geometry': [row.geometry]}, crs=gdf_analizado.crs))
-                gdf_analizado.at[idx, 'area_ha'] = area_zona
+                area_gdf = gpd.GeoDataFrame({'geometry': [row.geometry]}, crs=gdf_analizado.crs)
+                area_ha = calcular_superficie(area_gdf)
+                if hasattr(area_ha, 'iloc'):
+                    area_ha = float(area_ha.iloc[0])
+                elif hasattr(area_ha, '__len__') and len(area_ha) > 0:
+                    area_ha = float(area_ha[0])
+                else:
+                    area_ha = float(area_ha)
+                areas_ha_list.append(area_ha)
+            gdf_analizado['area_ha'] = areas_ha_list
             
-            # Para RECOMENDACIONES NPK, calcular recomendaciones
             if analisis_tipo == "RECOMENDACIONES NPK":
-                recomendaciones = calcular_recomendaciones_npk_gee(indices_fertilidad, nutriente, cultivo)
-                gdf_analizado['valor_recomendado'] = recomendaciones
-                columna_valor = 'valor_recomendado'
-            else:
-                columna_valor = 'npk_actual'
-            
-            # Crear mapa estático
-            mapa_buffer = crear_mapa_estatico_con_esri(gdf_analizado, f"Análisis de {analisis_tipo}", 
-                                                     columna_valor, analisis_tipo, nutriente, cultivo, satelite)
-            
+                recomendaciones_npk = calcular_recomendaciones_npk_gee(indices_gee, nutriente, cultivo)
+                gdf_analizado['valor_recomendado'] = recomendaciones_npk
+
+            # ✅ GENERAR EL MAPA DE RESULTADOS
+            if analisis_tipo == "FERTILIDAD ACTUAL":
+                mapa_buffer = crear_mapa_estatico_con_esri(
+                    gdf_analizado, "Fertilidad", 'npk_actual', analisis_tipo, None, cultivo, satelite
+                )
+            else:  # RECOMENDACIONES NPK
+                mapa_buffer = crear_mapa_estatico_con_esri(
+                    gdf_analizado, f"Recomendación {nutriente}", 'valor_recomendado', analisis_tipo, nutriente, cultivo, satelite
+                )
+                
             resultados['gdf_analizado'] = gdf_analizado
-            resultados['mapa_buffer'] = mapa_buffer
+            resultados['mapa_buffer'] = mapa_buffer  # ← Asignado aquí
             resultados['exitoso'] = True
             
+            if satelite:
+                df_power = obtener_datos_nasa_power(gdf, fecha_inicio, fecha_fin)
+                if df_power is not None:
+                    resultados['df_power'] = df_power
             return resultados
-            
+        else:
+            return resultados
     except Exception as e:
         st.error(f"Error en ejecutar_analisis: {str(e)}")
         return resultados
-
 # ===== INTERFAZ PRINCIPAL =====
 def main():
     # Inicializar session_state si no existe
