@@ -708,8 +708,17 @@ with st.sidebar:
     st.markdown('<div class="sidebar-title">⚙️ CONFIGURACIÓN</div>', unsafe_allow_html=True)
     cultivo = st.selectbox("Cultivo:", ["MAÍZ", "SOYA", "TRIGO", "GIRASOL"])
     st.image(IMAGENES_CULTIVOS[cultivo], use_container_width=True)
-    analisis_tipo = st.selectbox("Tipo de Análisis:", ["FERTILIDAD ACTUAL", "RECOMENDACIONES NPK", "ANÁLISIS DE TEXTURA", "ANÁLISIS DE CURVAS DE NIVEL"])
-    if analisis_tipo == "RECOMENDACIONES NPK":
+    
+    # MODIFICADO: Se añade "POTENCIAL DE COSECHA (NPK)" como opción
+    analisis_tipo = st.selectbox("Tipo de Análisis:", 
+                                ["FERTILIDAD ACTUAL", 
+                                 "RECOMENDACIONES NPK", 
+                                 "POTENCIAL DE COSECHA (NPK)",  # ← NUEVA OPCIÓN
+                                 "ANÁLISIS DE TEXTURA", 
+                                 "ANÁLISIS DE CURVAS DE NIVEL"])
+    
+    # MODIFICADO: Ahora incluye "POTENCIAL DE COSECHA (NPK)"
+    if analisis_tipo in ["RECOMENDACIONES NPK", "POTENCIAL DE COSECHA (NPK)"]:
         nutriente = st.selectbox("Nutriente:", ["NITRÓGENO", "FÓSFORO", "POTASIO"])
     
     st.subheader("🛰️ Fuente de Datos Satelitales")
@@ -727,7 +736,7 @@ with st.sidebar:
         - Índices: {', '.join(info_satelite['indices'][:3])}
         """)
     
-    if analisis_tipo in ["FERTILIDAD ACTUAL", "RECOMENDACIONES NPK"]:
+    if analisis_tipo in ["FERTILIDAD ACTUAL", "RECOMENDACIONES NPK", "POTENCIAL DE COSECHA (NPK)"]:
         st.subheader("📊 Índices de Vegetación")
         if satelite_seleccionado == "SENTINEL-2":
             indice_seleccionado = st.selectbox("Índice:", SATELITES_DISPONIBLES['SENTINEL-2']['indices'])
@@ -736,7 +745,7 @@ with st.sidebar:
         else:
             indice_seleccionado = st.selectbox("Índice:", SATELITES_DISPONIBLES['DATOS_SIMULADOS']['indices'])
 
-    if analisis_tipo in ["FERTILIDAD ACTUAL", "RECOMENDACIONES NPK"]:
+    if analisis_tipo in ["FERTILIDAD ACTUAL", "RECOMENDACIONES NPK", "POTENCIAL DE COSECHA (NPK)"]:
         st.subheader("📅 Rango Temporal")
         fecha_fin = st.date_input("Fecha fin", datetime.now())
         fecha_inicio = st.date_input("Fecha inicio", datetime.now() - timedelta(days=30))
@@ -1141,6 +1150,73 @@ def calcular_recomendaciones_npk_gee(indices, nutriente, cultivo):
             recomendaciones.append(round(k_recomendado, 1))
     return recomendaciones
 
+# ===== FUNCIÓN NUEVA PARA CALCULAR POTENCIAL DE COSECHA BASADO EN NPK =====
+def calcular_potencial_cosecha_npk(gdf_analizado, cultivo, nutriente, recomendaciones_npk):
+    """
+    Calcula el potencial de cosecha basado en las recomendaciones NPK.
+    Convierte las recomendaciones de fertilización en un índice de potencial (0-1).
+    """
+    try:
+        params = PARAMETROS_CULTIVOS[cultivo]
+        
+        # Determinar los rangos óptimos según el nutriente
+        if nutriente == "NITRÓGENO":
+            min_optimo = params['NITROGENO']['min']
+            max_optimo = params['NITROGENO']['max']
+        elif nutriente == "FÓSFORO":
+            min_optimo = params['FOSFORO']['min']
+            max_optimo = params['FOSFORO']['max']
+        else:  # POTASIO
+            min_optimo = params['POTASIO']['min']
+            max_optimo = params['POTASIO']['max']
+        
+        potenciales = []
+        
+        for rec in recomendaciones_npk:
+            # Normalizar la recomendación al rango óptimo
+            # Si está en el rango óptimo: alto potencial (0.7-1.0)
+            # Si está por debajo: medio-bajo (0.3-0.7)
+            # Si está por encima: medio (0.5-0.8) - riesgo de sobrefertilización
+            
+            if rec < min_optimo * 0.8:
+                # Muy deficiente
+                factor = rec / (min_optimo * 0.8)
+                potencial = 0.3 + (factor * 0.3)  # 0.3-0.6
+            elif rec < min_optimo:
+                # Ligeramente deficiente
+                factor = (rec - min_optimo * 0.8) / (min_optimo - min_optimo * 0.8)
+                potencial = 0.6 + (factor * 0.1)  # 0.6-0.7
+            elif rec <= max_optimo:
+                # Óptimo
+                factor = (rec - min_optimo) / (max_optimo - min_optimo)
+                potencial = 0.7 + (factor * 0.3)  # 0.7-1.0
+            elif rec <= max_optimo * 1.2:
+                # Ligeramente excesivo
+                factor = (rec - max_optimo) / (max_optimo * 1.2 - max_optimo)
+                potencial = 0.8 - (factor * 0.2)  # 0.8-0.6
+            else:
+                # Excesivo - riesgo de toxicidad
+                potencial = 0.5 - min(0.2, (rec - max_optimo * 1.2) / (max_optimo * 2))
+            
+            # Ajustar basado en otros índices si están disponibles
+            if 'ndvi' in gdf_analizado.columns:
+                idx = len(potenciales)
+                if idx < len(gdf_analizado):
+                    ndvi_factor = gdf_analizado.iloc[idx]['ndvi'] if idx < len(gdf_analizado) else 0.6
+                    # El NDVI aporta hasta 0.2 al potencial total
+                    ndvi_contrib = max(0, (ndvi_factor - 0.3) / 0.5) * 0.2
+                    potencial = min(1.0, potencial + ndvi_contrib)
+            
+            # Asegurar que esté en el rango 0-1
+            potencial = max(0.1, min(1.0, potencial))
+            potenciales.append(round(potencial, 3))
+        
+        return potenciales
+    except Exception as e:
+        st.error(f"Error calculando potencial de cosecha: {str(e)}")
+        # Valores por defecto
+        return [0.5] * len(recomendaciones_npk)
+
 # ===== FUNCIONES DE TEXTURA DEL SUELO - ACTUALIZADAS CON NUEVA NOMENCLATURA =====
 def clasificar_textura_suelo(arena, limo, arcilla):
     try:
@@ -1421,10 +1497,10 @@ def exportar_a_geojson(gdf, nombre_base="parcela"):
         st.error(f"❌ Error exportando a GeoJSON: {str(e)}")
         return None, None
 
-def generar_resumen_estadisticas(gdf_analizado, analisis_tipo, cultivo, df_power=None):
+def generar_resumen_estadisticas(gdf_analizado, analisis_tipo, cultivo, nutriente=None, df_power=None):
     estadisticas = {}
     try:
-        if analisis_tipo in ["FERTILIDAD ACTUAL", "RECOMENDACIONES NPK"]:
+        if analisis_tipo in ["FERTILIDAD ACTUAL", "RECOMENDACIONES NPK", "POTENCIAL DE COSECHA (NPK)"]:
             if 'npk_actual' in gdf_analizado.columns:
                 estadisticas['Índice NPK Promedio'] = f"{gdf_analizado['npk_actual'].mean():.3f}"
             if 'ndvi' in gdf_analizado.columns:
@@ -1433,6 +1509,18 @@ def generar_resumen_estadisticas(gdf_analizado, analisis_tipo, cultivo, df_power
                 estadisticas['NDWI Promedio'] = f"{gdf_analizado['ndwi'].mean():.3f}"
             if 'materia_organica' in gdf_analizado.columns:
                 estadisticas['Materia Orgánica Promedio'] = f"{gdf_analizado['materia_organica'].mean():.1f}%"
+            
+            # Estadísticas específicas para POTENCIAL DE COSECHA (NPK)
+            if analisis_tipo == "POTENCIAL DE COSECHA (NPK)":
+                if 'potencial_cosecha_npk' in gdf_analizado.columns:
+                    estadisticas['Potencial Promedio'] = f"{gdf_analizado['potencial_cosecha_npk'].mean():.3f}"
+                    estadisticas['Potencial Máximo'] = f"{gdf_analizado['potencial_cosecha_npk'].max():.3f}"
+                    estadisticas['Potencial Mínimo'] = f"{gdf_analizado['potencial_cosecha_npk'].min():.3f}"
+                    zonas_altas = sum(gdf_analizado['potencial_cosecha_npk'] > 0.7)
+                    estadisticas['Zonas Altas (>0.7)'] = f"{zonas_altas}/{len(gdf_analizado)}"
+                if 'valor_recomendado' in gdf_analizado.columns and nutriente:
+                    estadisticas[f'{nutriente} Promedio'] = f"{gdf_analizado['valor_recomendado'].mean():.1f} kg/ha"
+            
             # Datos de NASA POWER
             if df_power is not None:
                 estadisticas['Radiación Solar Promedio'] = f"{df_power['radiacion_solar'].mean():.1f} kWh/m²/día"
@@ -1454,7 +1542,7 @@ def generar_resumen_estadisticas(gdf_analizado, analisis_tipo, cultivo, df_power
         st.warning(f"No se pudieron calcular algunas estadísticas: {str(e)}")
     return estadisticas
 
-def generar_recomendaciones_generales(gdf_analizado, analisis_tipo, cultivo):
+def generar_recomendaciones_generales(gdf_analizado, analisis_tipo, cultivo, nutriente=None):
     recomendaciones = []
     try:
         if analisis_tipo == "FERTILIDAD ACTUAL":
@@ -1469,6 +1557,28 @@ def generar_recomendaciones_generales(gdf_analizado, analisis_tipo, cultivo):
                     recomendaciones.append("Fertilidad ADECUADA: Mantener prácticas de manejo actuales")
                 else:
                     recomendaciones.append("Fertilidad ÓPTIMA: Excelente condición, continuar con manejo actual")
+        
+        elif analisis_tipo == "POTENCIAL DE COSECHA (NPK)":
+            if 'potencial_cosecha_npk' in gdf_analizado.columns:
+                potencial_promedio = gdf_analizado['potencial_cosecha_npk'].mean()
+                if potencial_promedio < 0.4:
+                    recomendaciones.append("POTENCIAL MUY BAJO: Se requieren acciones correctivas inmediatas")
+                    recomendaciones.append("Implementar programa intensivo de fertilización y manejo")
+                elif potencial_promedio < 0.6:
+                    recomendaciones.append("POTENCIAL MODERADO: Ajustar prácticas de manejo para mejorar rendimiento")
+                elif potencial_promedio < 0.8:
+                    recomendaciones.append("POTENCIAL BUENO: Mantener prácticas actuales, pequeños ajustes")
+                else:
+                    recomendaciones.append("POTENCIAL EXCELENTE: Condiciones óptimas para alta productividad")
+                
+                # Recomendaciones específicas por nutriente
+                if nutriente == "NITRÓGENO":
+                    recomendaciones.append("Para mejorar potencial de N: aplicar fertilizante nitrogenado en etapas críticas")
+                elif nutriente == "FÓSFORO":
+                    recomendaciones.append("Para mejorar potencial de P: aplicar fósforo al momento de siembra")
+                else:
+                    recomendaciones.append("Para mejorar potencial de K: aplicar potasio en etapas de crecimiento activo")
+        
         elif analisis_tipo == "ANÁLISIS DE TEXTURA":
             if 'textura_suelo' in gdf_analizado.columns:
                 textura_predominante = gdf_analizado['textura_suelo'].mode()[0] if len(gdf_analizado) > 0 else "N/D"
@@ -1478,6 +1588,7 @@ def generar_recomendaciones_generales(gdf_analizado, analisis_tipo, cultivo):
                     recomendaciones.append("Suelo franco arenoso-arcilloso: Aumentar materia orgánica y considerar riego frecuente")
                 elif textura_predominante == "Franco":
                     recomendaciones.append("Textura franca: Condiciones óptimas, mantener prácticas de conservación")
+        
         # === RECOMENDACIONES POR CULTIVO ===
         if cultivo == "MAÍZ":
             recomendaciones.append("Para maíz: Priorizar aplicación de nitrógeno en etapas de crecimiento vegetativo.")
@@ -1491,6 +1602,7 @@ def generar_recomendaciones_generales(gdf_analizado, analisis_tipo, cultivo):
         elif cultivo == "GIRASOL":
             recomendaciones.append("Para girasol: Aplicar potasio para mejorar calidad de semilla.")
             recomendaciones.append("Mantener buen drenaje, sensible a encharcamiento.")
+        
         recomendaciones.append("Realizar análisis de suelo de laboratorio para validar resultados satelitales")
         recomendaciones.append("Considerar agricultura de precisión para aplicación variable de insumos")
     except Exception as e:
@@ -1582,6 +1694,8 @@ Tipo de Análisis: {analisis_tipo}"""
                 columnas_mostrar.append('npk_actual')
             if 'valor_recomendado' in gdf_analizado.columns:
                 columnas_mostrar.append('valor_recomendado')
+            if 'potencial_cosecha_npk' in gdf_analizado.columns:  # NUEVA COLUMNA
+                columnas_mostrar.append('potencial_cosecha_npk')
             if 'textura_suelo' in gdf_analizado.columns:
                 columnas_mostrar.append('textura_suelo')
             if 'ndwi' in gdf_analizado.columns:
@@ -1595,7 +1709,7 @@ Tipo de Análisis: {analisis_tipo}"""
                         if col in gdf_analizado.columns:
                             valor = row[col]
                             if isinstance(valor, float):
-                                if col in ['npk_actual', 'ndwi']:
+                                if col in ['npk_actual', 'ndwi', 'potencial_cosecha_npk']:
                                     fila.append(f"{valor:.3f}")
                                 else:
                                     fila.append(f"{valor:.2f}")
@@ -1707,6 +1821,8 @@ def generar_reporte_docx(gdf_analizado, cultivo, analisis_tipo, area_total,
                 columnas_mostrar.append('npk_actual')
             if 'valor_recomendado' in gdf_analizado.columns:
                 columnas_mostrar.append('valor_recomendado')
+            if 'potencial_cosecha_npk' in gdf_analizado.columns:  # NUEVA COLUMNA
+                columnas_mostrar.append('potencial_cosecha_npk')
             if 'textura_suelo' in gdf_analizado.columns:
                 columnas_mostrar.append('textura_suelo')
             if 'ndwi' in gdf_analizado.columns:
@@ -1723,7 +1839,7 @@ def generar_reporte_docx(gdf_analizado, cultivo, analisis_tipo, area_total,
                         if col in gdf_analizado.columns:
                             valor = row[col]
                             if isinstance(valor, float):
-                                if col in ['npk_actual', 'ndwi']:
+                                if col in ['npk_actual', 'ndwi', 'potencial_cosecha_npk']:
                                     row_cells[i].text = f"{valor:.3f}"
                                 else:
                                     row_cells[i].text = f"{valor:.2f}"
@@ -2100,6 +2216,189 @@ def crear_mapa_potencial_cosecha_calor(gdf_analizado, cultivo):
         st.error(f"Detalle: {traceback.format_exc()}")
         return None
 
+# ===== FUNCIÓN NUEVA PARA MAPA DE POTENCIAL DE COSECHA BASADO EN NPK =====
+def crear_mapa_potencial_cosecha_npk(gdf_analizado, cultivo, nutriente):
+    """Crea mapa de calor para potencial de cosecha basado en NPK"""
+    try:
+        # Convertir a Web Mercator
+        gdf_plot = gdf_analizado.to_crs(epsg=3857)
+        
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 8))
+        
+        # Configurar fondo oscuro
+        fig.patch.set_facecolor('#0f172a')
+        ax1.set_facecolor('#0f172a')
+        ax2.set_facecolor('#0f172a')
+        
+        # --- Mapa de calor ---
+        # Obtener centroides y valores
+        centroids = gdf_plot.geometry.centroid
+        x = [c.x for c in centroids]
+        y = [c.y for c in centroids]
+        z = gdf_plot['potencial_cosecha_npk'].values
+        
+        # Crear triangulación
+        triang = Triangulation(x, y)
+        
+        # Mapa de calor
+        levels = np.linspace(0, 1, 50)
+        contour = ax1.tricontourf(
+            triang, z, 
+            levels=levels, 
+            cmap='RdYlGn',  # Rojo-amarillo-verde
+            alpha=0.85,
+            antialiased=True
+        )
+        
+        # Contornos
+        ax1.tricontour(
+            triang, z, 
+            levels=levels[::5],
+            colors='white', 
+            linewidths=0.5, 
+            alpha=0.3
+        )
+        
+        # Dibujar polígonos
+        gdf_plot.plot(
+            ax=ax1, 
+            color='none', 
+            edgecolor='white',
+            linewidth=0.8, 
+            alpha=0.4
+        )
+        
+        # Etiquetas
+        for idx, row in gdf_plot.iterrows():
+            centroid = row.geometry.centroid
+            valor = row['potencial_cosecha_npk']
+            
+            # Color de texto basado en valor
+            text_color = 'white' if valor < 0.7 else 'black'
+            
+            bbox_facecolor = '#1e293b' if valor > 0.5 else '#0f172a'
+            
+            ax1.annotate(
+                f"Z{row['id_zona']}\n{valor:.2f}", 
+                (centroid.x, centroid.y),
+                xytext=(0, 0), 
+                textcoords="offset points",
+                fontsize=8, 
+                color=text_color, 
+                weight='bold',
+                ha='center',
+                va='center',
+                bbox=dict(
+                    boxstyle="round,pad=0.3", 
+                    facecolor=bbox_facecolor,
+                    edgecolor='white',
+                    alpha=0.9
+                )
+            )
+        
+        # Agregar mapa base ESRI
+        try:
+            ctx.add_basemap(
+                ax1, 
+                source=ctx.providers.Esri.WorldImagery, 
+                alpha=0.3
+            )
+        except:
+            pass
+        
+        ax1.set_title(
+            f"🔥 POTENCIAL DE COSECHA BASADO EN {nutriente.upper()} - {cultivo}", 
+            fontsize=16, 
+            fontweight='bold',
+            pad=20,
+            color='white'
+        )
+        ax1.set_xlabel("Longitud", color='white')
+        ax1.set_ylabel("Latitud", color='white')
+        ax1.tick_params(colors='white')
+        ax1.grid(True, alpha=0.2, color='#475569', linestyle='--')
+        
+        # Barra de colores
+        cbar = plt.colorbar(contour, ax=ax1, shrink=0.8, pad=0.02)
+        cbar.set_label("Potencial (0-1)", fontsize=12, fontweight='bold', color='white')
+        cbar.ax.yaxis.set_tick_params(color='white')
+        cbar.outline.set_edgecolor('white')
+        plt.setp(plt.getp(cbar.ax.axes, 'yticklabels'), color='white')
+        
+        # --- Gráfico de barras: Potencial vs Recomendación ---
+        zonas = gdf_plot['id_zona'].values
+        potencial = gdf_plot['potencial_cosecha_npk'].values
+        recomendaciones = gdf_plot['valor_recomendado'].values
+        
+        # Normalizar recomendaciones para gráfico
+        if len(recomendaciones) > 0:
+            rec_norm = (recomendaciones - min(recomendaciones)) / (max(recomendaciones) - min(recomendaciones))
+        else:
+            rec_norm = []
+        
+        x_pos = np.arange(len(zonas))
+        width = 0.35
+        
+        bars1 = ax2.bar(x_pos - width/2, potencial, width, label='Potencial', color='#2ecc71', alpha=0.8)
+        bars2 = ax2.bar(x_pos + width/2, rec_norm if len(rec_norm) > 0 else [0]*len(zonas), width, 
+                       label='Recomendación (norm)', color='#3498db', alpha=0.8)
+        
+        # Colorear barras de potencial según valor
+        for i, bar in enumerate(bars1):
+            if potencial[i] > 0.7:
+                bar.set_color('#27ae60')  # Verde oscuro - alto
+            elif potencial[i] > 0.4:
+                bar.set_color('#f39c12')  # Naranja - medio
+            else:
+                bar.set_color('#e74c3c')  # Rojo - bajo
+        
+        ax2.set_xlabel('Zonas', color='white')
+        ax2.set_ylabel('Valor Normalizado', color='white')
+        ax2.set_title(f'Potencial vs Recomendación de {nutriente}', fontsize=14, fontweight='bold', color='white')
+        ax2.set_xticks(x_pos)
+        ax2.set_xticklabels([f'Z{int(z)}' for z in zonas], rotation=45, color='white')
+        ax2.tick_params(colors='white')
+        ax2.legend(facecolor='#1e293b', edgecolor='white', labelcolor='white')
+        ax2.grid(True, alpha=0.2, color='#475569', linestyle='--')
+        ax2.set_facecolor('#0f172a')
+        
+        # Estadísticas
+        stats_text = f"""
+        Estadísticas Potencial ({nutriente}):
+        • Promedio: {np.mean(potencial):.2f}
+        • Máximo: {np.max(potencial):.2f} (Zona {zonas[np.argmax(potencial)]})
+        • Mínimo: {np.min(potencial):.2f} (Zona {zonas[np.argmin(potencial)]})
+        • Zonas Altas (>0.7): {sum(potencial > 0.7)}/{len(potencial)}
+        • Recomendación Promedio: {np.mean(recomendaciones):.1f} kg/ha
+        """
+        
+        ax2.text(
+            0.02, 0.98, 
+            stats_text,
+            transform=ax2.transAxes,
+            fontsize=9,
+            color='white',
+            verticalalignment='top',
+            bbox=dict(
+                boxstyle="round,pad=0.5", 
+                facecolor='#1e293b', 
+                edgecolor='#3b82f6',
+                alpha=0.95
+            )
+        )
+        
+        plt.tight_layout()
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png', dpi=200, bbox_inches='tight', facecolor='#0f172a')
+        buf.seek(0)
+        plt.close()
+        return buf
+    except Exception as e:
+        st.error(f"Error creando mapa de potencial NPK: {str(e)}")
+        import traceback
+        st.error(f"Detalle: {traceback.format_exc()}")
+        return None
+
 # ===== FUNCIONES DE GRÁFICOS NASA POWER CON ESTILO OSCURO =====
 def crear_grafico_personalizado(series, titulo, ylabel, color_linea, fondo_grafico='#0f172a', color_texto='#ffffff'):
     """Crea gráfico de línea con estilo oscuro"""
@@ -2153,6 +2452,7 @@ def ejecutar_analisis(gdf, nutriente, analisis_tipo, n_divisiones, cultivo,
         gdf = validar_y_corregir_crs(gdf)
         area_total = calcular_superficie(gdf)
         resultados['area_total'] = area_total
+        
         # === ANÁLISIS DE TEXTURA DEL SUELO ===
         if analisis_tipo == "ANÁLISIS DE TEXTURA":
             gdf_dividido = dividir_parcela_en_zonas(gdf, n_divisiones)
@@ -2160,14 +2460,16 @@ def ejecutar_analisis(gdf, nutriente, analisis_tipo, n_divisiones, cultivo,
             resultados['gdf_analizado'] = gdf_analizado
             resultados['exitoso'] = True
             return resultados
+        
         # === ANÁLISIS DE CURVAS DE NIVEL ===
         elif analisis_tipo == "ANÁLISIS DE CURVAS DE NIVEL":
             gdf_dividido = dividir_parcela_en_zonas(gdf, n_divisiones)
             resultados['gdf_analizado'] = gdf_dividido
             resultados['exitoso'] = True
             return resultados
-        # === ANÁLISIS SATELITAL (FERTILIDAD O NPK) ===
-        elif analisis_tipo in ["FERTILIDAD ACTUAL", "RECOMENDACIONES NPK"]:
+        
+        # === ANÁLISIS SATELITAL (FERTILIDAD, NPK O POTENCIAL COSECHA) ===
+        elif analisis_tipo in ["FERTILIDAD ACTUAL", "RECOMENDACIONES NPK", "POTENCIAL DE COSECHA (NPK)"]:
             datos_satelitales = None
             if satelite == "SENTINEL-2":
                 datos_satelitales = descargar_datos_sentinel2(gdf, fecha_inicio, fecha_fin, indice)
@@ -2175,12 +2477,16 @@ def ejecutar_analisis(gdf, nutriente, analisis_tipo, n_divisiones, cultivo,
                 datos_satelitales = descargar_datos_landsat8(gdf, fecha_inicio, fecha_fin, indice)
             else:
                 datos_satelitales = generar_datos_simulados(gdf, cultivo, indice)
+            
             gdf_dividido = dividir_parcela_en_zonas(gdf, n_divisiones)
             indices_gee = calcular_indices_satelitales_gee(gdf_dividido, cultivo, datos_satelitales)
             gdf_analizado = gdf_dividido.copy()
+            
             for idx, indice_data in enumerate(indices_gee):
                 for key, value in indice_data.items():
                     gdf_analizado.loc[gdf_analizado.index[idx], key] = value
+            
+            # Calcular áreas
             areas_ha_list = []
             for idx, row in gdf_analizado.iterrows():
                 area_gdf = gpd.GeoDataFrame({'geometry': [row.geometry]}, crs=gdf_analizado.crs)
@@ -2192,17 +2498,27 @@ def ejecutar_analisis(gdf, nutriente, analisis_tipo, n_divisiones, cultivo,
                 else:
                     area_ha = float(area_ha)
                 areas_ha_list.append(area_ha)
+            
             gdf_analizado['area_ha'] = areas_ha_list
-            if analisis_tipo == "RECOMENDACIONES NPK":
+            
+            if analisis_tipo in ["RECOMENDACIONES NPK", "POTENCIAL DE COSECHA (NPK)"]:
                 recomendaciones_npk = calcular_recomendaciones_npk_gee(indices_gee, nutriente, cultivo)
                 gdf_analizado['valor_recomendado'] = recomendaciones_npk
+                
+                # Si es POTENCIAL DE COSECHA, calcular también el potencial
+                if analisis_tipo == "POTENCIAL DE COSECHA (NPK)":
+                    potenciales = calcular_potencial_cosecha_npk(gdf_analizado, cultivo, nutriente, recomendaciones_npk)
+                    gdf_analizado['potencial_cosecha_npk'] = potenciales
+            
             resultados['gdf_analizado'] = gdf_analizado
             resultados['exitoso'] = True
+            
             # === DATOS DE NASA POWER ===
             if satelite:
                 df_power = obtener_datos_nasa_power(gdf, fecha_inicio, fecha_fin)
                 if df_power is not None:
                     resultados['df_power'] = df_power
+            
             return resultados
         else:
             st.error(f"Tipo de análisis no soportado: {analisis_tipo}")
@@ -2436,7 +2752,7 @@ if uploaded_file:
                     st.write(f"- Cultivo: {ICONOS_CULTIVOS[cultivo]} {cultivo}")
                     st.write(f"- Análisis: {analisis_tipo}")
                     st.write(f"- Zonas: {n_divisiones}")
-                    if analisis_tipo in ["FERTILIDAD ACTUAL", "RECOMENDACIONES NPK"]:
+                    if analisis_tipo in ["FERTILIDAD ACTUAL", "RECOMENDACIONES NPK", "POTENCIAL DE COSECHA (NPK)"]:
                         st.write(f"- Satélite: {SATELITES_DISPONIBLES[satelite_seleccionado]['nombre']}")
                         st.write(f"- Índice: {indice_seleccionado}")
                         st.write(f"- Período: {fecha_inicio} a {fecha_fin}")
@@ -2445,7 +2761,7 @@ if uploaded_file:
                         st.write(f"- Resolución DEM: {resolucion_dem} m")
                 if st.button("🚀 EJECUTAR ANÁLISIS COMPLETO", type="primary"):
                     resultados = None
-                    if analisis_tipo in ["FERTILIDAD ACTUAL", "RECOMENDACIONES NPK"]:
+                    if analisis_tipo in ["FERTILIDAD ACTUAL", "RECOMENDACIONES NPK", "POTENCIAL DE COSECHA (NPK)"]:
                         resultados = ejecutar_analisis(
                             gdf, nutriente, analisis_tipo, n_divisiones,
                             cultivo, satelite_seleccionado, indice_seleccionado,
@@ -2498,22 +2814,122 @@ if uploaded_file:
                                 st.metric("Zonas Analizadas", len(gdf_analizado))
                             with col2:
                                 st.metric("Área Total", f"{resultados['area_total']:.1f} ha")
-                            with col3:
-                                if analisis_tipo == "FERTILIDAD ACTUAL":
+                            
+                            # Métricas específicas por tipo de análisis
+                            if analisis_tipo == "FERTILIDAD ACTUAL":
+                                with col3:
                                     valor_prom = gdf_analizado['npk_actual'].mean()
                                     st.metric("Índice NPK Promedio", f"{valor_prom:.3f}")
-                                else:
+                                with col4:
+                                    if gdf_analizado['npk_actual'].mean() > 0:
+                                        coef_var = (gdf_analizado['npk_actual'].std() / gdf_analizado['npk_actual'].mean() * 100)
+                                        st.metric("Coef. Variación", f"{coef_var:.1f}%")
+                                        
+                            elif analisis_tipo == "RECOMENDACIONES NPK":
+                                with col3:
                                     valor_prom = gdf_analizado['valor_recomendado'].mean()
                                     st.metric(f"{nutriente} Promedio", f"{valor_prom:.1f} kg/ha")
-                            with col4:
-                                if analisis_tipo == "FERTILIDAD ACTUAL" and gdf_analizado['npk_actual'].mean() > 0:
-                                    coef_var = (gdf_analizado['npk_actual'].std() / gdf_analizado['npk_actual'].mean() * 100)
-                                    st.metric("Coef. Variación", f"{coef_var:.1f}%")
-                                elif analisis_tipo == "RECOMENDACIONES NPK" and gdf_analizado['valor_recomendado'].mean() > 0:
-                                    coef_var = (gdf_analizado['valor_recomendado'].std() / gdf_analizado['valor_recomendado'].mean() * 100)
-                                    st.metric("Coef. Variación", f"{coef_var:.1f}%")
+                                with col4:
+                                    if gdf_analizado['valor_recomendado'].mean() > 0:
+                                        coef_var = (gdf_analizado['valor_recomendado'].std() / gdf_analizado['valor_recomendado'].mean() * 100)
+                                        st.metric("Coef. Variación", f"{coef_var:.1f}%")
+                                        
+                            elif analisis_tipo == "POTENCIAL DE COSECHA (NPK)":
+                                with col3:
+                                    valor_prom = gdf_analizado['potencial_cosecha_npk'].mean()
+                                    st.metric("Potencial Promedio", f"{valor_prom:.3f}")
+                                with col4:
+                                    zonas_altas = sum(gdf_analizado['potencial_cosecha_npk'] > 0.7)
+                                    st.metric("Zonas Altas (>0.7)", f"{zonas_altas}/{len(gdf_analizado)}")
+                            
+                            # ===== VISUALIZACIÓN ESPECÍFICA POR TIPO DE ANÁLISIS =====
+                            
+                            if analisis_tipo == "POTENCIAL DE COSECHA (NPK)":
+                                st.subheader(f"🔥 MAPA DE POTENCIAL DE COSECHA BASADO EN {nutriente}")
+                                
+                                # Crear mapa específico para potencial NPK
+                                mapa_potencial_npk = crear_mapa_potencial_cosecha_npk(gdf_analizado, cultivo, nutriente)
+                                if mapa_potencial_npk:
+                                    st.image(mapa_potencial_npk, use_container_width=True)
+                                    st.session_state['resultados_guardados']['mapa_buffer'] = mapa_potencial_npk
+                                    
+                                    st.download_button(
+                                        "📥 Descargar Mapa de Potencial NPK",
+                                        mapa_potencial_npk,
+                                        f"potencial_cosecha_npk_{cultivo}_{nutriente}_{datetime.now().strftime('%Y%m%d_%H%M')}.png",
+                                        "image/png"
+                                    )
+                                
+                                # Mostrar tabla con resultados
+                                st.subheader("📊 RESULTADOS POR ZONA")
+                                columnas_potencial = ['id_zona', 'area_ha', 'valor_recomendado', 'potencial_cosecha_npk']
+                                if 'ndvi' in gdf_analizado.columns:
+                                    columnas_potencial.append('ndvi')
+                                if 'ndwi' in gdf_analizado.columns:
+                                    columnas_potencial.append('ndwi')
+                                    
+                                columnas_potencial = [col for col in columnas_potencial if col in gdf_analizado.columns]
+                                tabla_potencial = gdf_analizado[columnas_potencial].copy()
+                                
+                                # Renombrar columnas
+                                rename_dict = {
+                                    'id_zona': 'Zona',
+                                    'area_ha': 'Área (ha)',
+                                    'valor_recomendado': f'{nutriente} (kg/ha)',
+                                    'potencial_cosecha_npk': 'Potencial',
+                                    'ndvi': 'NDVI',
+                                    'ndwi': 'NDWI'
+                                }
+                                tabla_potencial = tabla_potencial.rename(
+                                    columns={k: v for k, v in rename_dict.items() if k in tabla_potencial.columns}
+                                )
+                                
+                                # Formatear números
+                                if 'Potencial' in tabla_potencial.columns:
+                                    tabla_potencial['Potencial'] = tabla_potencial['Potencial'].apply(lambda x: f"{x:.3f}")
+                                    
+                                st.dataframe(tabla_potencial)
+                                
+                                # Recomendaciones específicas
+                                st.subheader("💡 RECOMENDACIONES POR NIVEL DE POTENCIAL")
+                                
+                                # Clasificar zonas
+                                zonas_bajas = gdf_analizado[gdf_analizado['potencial_cosecha_npk'] < 0.4]
+                                zonas_medias = gdf_analizado[(gdf_analizado['potencial_cosecha_npk'] >= 0.4) & 
+                                                           (gdf_analizado['potencial_cosecha_npk'] <= 0.7)]
+                                zonas_altas = gdf_analizado[gdf_analizado['potencial_cosecha_npk'] > 0.7]
+                                
+                                col_rec1, col_rec2, col_rec3 = st.columns(3)
+                                
+                                with col_rec1:
+                                    st.markdown(f"**🔴 BAJO POTENCIAL (<0.4): {len(zonas_bajas)} zonas**")
+                                    if not zonas_bajas.empty:
+                                        st.write(f"- Área total: {zonas_bajas['area_ha'].sum():.2f} ha")
+                                        st.write("- **Acciones urgentes:**")
+                                        st.write("  • Aplicar dosis completa de fertilizante")
+                                        st.write("  • Mejorar drenaje si hay encharcamiento")
+                                        st.write("  • Considerar análisis de suelo detallado")
+                                        
+                                with col_rec2:
+                                    st.markdown(f"**🟡 MEDIO POTENCIAL (0.4-0.7): {len(zonas_medias)} zonas**")
+                                    if not zonas_medias.empty:
+                                        st.write(f"- Área total: {zonas_medias['area_ha'].sum():.2f} ha")
+                                        st.write("- **Acciones recomendadas:**")
+                                        st.write("  • Aplicar dosis moderada de fertilizante")
+                                        st.write("  • Monitorear crecimiento")
+                                        st.write("  • Mantener prácticas actuales")
+                                        
+                                with col_rec3:
+                                    st.markdown(f"**🟢 ALTO POTENCIAL (>0.7): {len(zonas_altas)} zonas**")
+                                    if not zonas_altas.empty:
+                                        st.write(f"- Área total: {zonas_altas['area_ha'].sum():.2f} ha")
+                                        st.write("- **Acciones de mantenimiento:**")
+                                        st.write("  • Dosis mínima de fertilizante")
+                                        st.write("  • Priorizar estas zonas en cosecha")
+                                        st.write("  • Mantener prácticas óptimas")
+                            
                             # === DATOS DE NASA POWER ===
-                            if resultados.get('df_power') is not None:
+                            if resultados.get('df_power') is not None and analisis_tipo != "POTENCIAL DE COSECHA (NPK)":
                                 df_power = resultados['df_power']
                                 st.subheader("🌤️ DATOS METEOROLÓGICOS (NASA POWER)")
                                 col5, col6, col7 = st.columns(3)
@@ -2570,7 +2986,7 @@ if uploaded_file:
                                     if prom_viento < 2.0:
                                         interpretacion = "🍃 **Viento suave**: Bajo riesgo de estrés mecánico o deshidratación."
                                     elif prom_viento < 4.0:
-                                        interpretacion = "🌬️ **Viento moderado**: Aceptable; monitorear en etapas sensibles."
+                                        interpretacion = "🌬️ **Viento moderado**: Aceptable; monitorear en etapas sensibles.")
                                     else:
                                         interpretacion = "💨 **Viento fuerte**: Alto riesgo de daño mecánico, aumento de evapotranspiración."
 
@@ -2712,8 +3128,8 @@ if uploaded_file:
                                         - ✅ **Priorizar cosecha** temprana en estas áreas
                                         - ✅ **Monitoreo intensivo** para mantener altos rendimientos
                                         """)
-
-                            # Crear mapa estático con ESRI para análisis GEE
+                            
+                            # Crear mapa estático con ESRI para análisis GEE (excepto POTENCIAL DE COSECHA NPK que ya tiene su propio mapa)
                             if analisis_tipo in ["FERTILIDAD ACTUAL", "RECOMENDACIONES NPK"]:
                                 columna_valor = 'valor_recomendado' if analisis_tipo == "RECOMENDACIONES NPK" else 'npk_actual'
                                 mapa_buffer = crear_mapa_estatico_con_esri(gdf_analizado, 
@@ -2733,7 +3149,9 @@ if uploaded_file:
                                         f"mapa_gee_esri_{cultivo}_{satelite_seleccionado}_{analisis_tipo.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M')}.png",
                                         "image/png"
                                     )
-                                
+                            
+                            # Mostrar tabla de índices satelitales (excepto para POTENCIAL DE COSECHA NPK que ya mostró su tabla)
+                            if analisis_tipo != "POTENCIAL DE COSECHA (NPK)":
                                 st.subheader("🔬 ÍNDICES SATELITALES GEE POR ZONA")
                                 columnas_indices = ['id_zona', 'npk_actual', 'materia_organica', 'ndvi', 'ndre', 'humedad_suelo', 'ndwi']
                                 if analisis_tipo == "RECOMENDACIONES NPK":
@@ -2783,9 +3201,10 @@ if 'resultados_guardados' in st.session_state:
                     res['gdf_analizado'],
                     res['analisis_tipo'],
                     res['cultivo'],
+                    res.get('nutriente'),
                     res.get('df_power')
                 )
-                recomendaciones = generar_recomendaciones_generales(res['gdf_analizado'], res['analisis_tipo'], res['cultivo'])
+                recomendaciones = generar_recomendaciones_generales(res['gdf_analizado'], res['analisis_tipo'], res['cultivo'], res.get('nutriente'))
                 mapa_buffer = res.get('mapa_buffer')
                 pdf_buffer = generar_reporte_pdf(
                     res['gdf_analizado'], res['cultivo'], res['analisis_tipo'], res['area_total'],
@@ -2809,9 +3228,10 @@ if 'resultados_guardados' in st.session_state:
                     res['gdf_analizado'],
                     res['analisis_tipo'],
                     res['cultivo'],
+                    res.get('nutriente'),
                     res.get('df_power')
                 )
-                recomendaciones = generar_recomendaciones_generales(res['gdf_analizado'], res['analisis_tipo'], res['cultivo'])
+                recomendaciones = generar_recomendaciones_generales(res['gdf_analizado'], res['analisis_tipo'], res['cultivo'], res.get('nutriente'))
                 mapa_buffer = res.get('mapa_buffer')
                 docx_buffer = generar_reporte_docx(
                     res['gdf_analizado'], res['cultivo'], res['analisis_tipo'], res['area_total'],
@@ -2890,13 +3310,14 @@ with st.expander("ℹ️ INFORMACIÓN SOBRE LA METODOLOGÍA"):
     - **🌻 GIRASOL:** Oleaginosa, tolerante a sequía moderada
     **🚀 FUNCIONALIDADES MEJORADAS:**
     - **🌱 Fertilidad Actual:** Estado NPK del suelo usando índices satelitales
+    - **💊 Recomendaciones NPK:** Dosis específicas por cultivo
+    - **🔥 Potencial de Cosecha (NPK):** Índice de potencial basado en recomendaciones de fertilización
+    - **🔥 Potencial de Cosecha (Integral):** Índice que integra fertilidad, radiación, humedad y viento
     - **🗺️ Mapas ESRI Satellite:** Mapas base de alta resolución
-    - **🔥 Mapas de Calor Oscuros:** Identificación de puntos calientes con fondo oscuro y texto blanco
     - **💧 NDWI (Humedad):** Índice de Agua en Vegetación/Suelo
     - **☀️ Radiación Solar:** Datos de NASA POWER (kWh/m²/día)
     - **💨 Velocidad del Viento:** Datos de NASA POWER (m/s)
     - **💧 Precipitación:** Datos de NASA POWER (mm/día)
-    - **💊 Recomendaciones NPK:** Dosis específicas por cultivo
     - **🏗️ Análisis de Textura:** Composición del suelo (nomenclatura Venezuela/Colombia)
     - **🏔️ Curvas de Nivel:** Análisis topográfico con mapa de calor de pendientes
     **🔬 METODOLOGÍA CIENTÍFICA:**
