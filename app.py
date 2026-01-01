@@ -686,12 +686,11 @@ PALETAS_GEE = {
     'PENDIENTE': ['#4daf4a', '#a6d96a', '#ffffbf', '#fdae61', '#f46d43', '#d73027']
 }
 
-# URLs de imágenes ilustradas con IA - estilo limpio, agrícola, sin fotos reales
 IMAGENES_CULTIVOS = {
-    'MAÍZ': 'https://raw.githubusercontent.com/mawucano/agri-icons/main/maiz_ia.png',
-    'SOYA': 'https://raw.githubusercontent.com/mawucano/agri-icons/main/soya_ia.png',
-    'TRIGO': 'https://raw.githubusercontent.com/mawucano/agri-icons/main/trigo_ia.png',
-    'GIRASOL': 'https://raw.githubusercontent.com/mawucano/agri-icons/main/girasol_ia.png'
+    'MAÍZ': 'https://thumbs.dreamstime.com/b/cartoon-corn-field-background-agriculture-farm-crop-food-summer-ai-generated-illustration-depicting-vibrant-cornfield-386115880.jpg',
+    'SOYA': 'https://img.freepik.com/premium-vector/views-plantations-farms-are-decorated-with-backdrop-hills-with-bright-clouds-summer_175103-1247.jpg',
+    'TRIGO': 'https://thumbs.dreamstime.com/b/agricultural-crops-rye-rice-maize-wheat-soybean-plant-vector-illustration-secale-cereale-agriculture-cultivated-green-leaves-144102338.jpg',
+    'GIRASOL': 'https://thumbs.dreamstime.com/b/cartoon-landscape-showcasing-vibrant-field-sunflowers-full-bloom-set-against-cheerful-blue-sky-fluffy-white-clouds-398818152.jpg'
 }
 
 # ===== INICIALIZACIÓN SEGURA DE VARIABLES DE CONFIGURACIÓN =====
