@@ -686,11 +686,11 @@ PALETAS_GEE = {
     'PENDIENTE': ['#4daf4a', '#a6d96a', '#ffffbf', '#fdae61', '#f46d43', '#d73027']
 }
 
-# URLs de imágenes para sidebar - ACTUALIZADO CON NUEVOS CULTIVOS
+# URLs de imágenes para sidebar - ACTUALIZADAS Y VERIFICADAS (enero 2025)
 IMAGENES_CULTIVOS = {
-    'MAÍZ': 'https://images.unsplash.com/photo-1592924357228-91a4daadcfea?auto=format&fit=crop&w=200&h=150&q=80',
-    'SOYA': 'https://images.unsplash.com/photo-1598300042247-d088f8ab3a91?auto=format&fit=crop&w=200&h=150&q=80',
-    'TRIGO': 'https://images.unsplash.com/photo-1560493676-04071c5f467b?auto=format&fit=crop&w=200&h=150&q=80',
+    'MAÍZ': 'https://images.unsplash.com/photo-1606598478222-d8e1a8d6a6d3?auto=format&fit=crop&w=200&h=150&q=80',
+    'SOYA': 'https://images.unsplash.com/photo-1627762459225-cf39e1c9d4a8?auto=format&fit=crop&w=200&h=150&q=80',
+    'TRIGO': 'https://images.unsplash.com/photo-1594590886981-2a441e8f6c68?auto=format&fit=crop&w=200&h=150&q=80',
     'GIRASOL': 'https://images.unsplash.com/photo-1505253668822-42074d58a7c6?auto=format&fit=crop&w=200&h=150&q=80'
 }
 
