@@ -724,10 +724,10 @@ PALETAS_GEE = {
 }
 
 IMAGENES_CULTIVOS = {
-    'MAÍZ': 'https://images.unsplash.com/photo-1560493676-04071c5f467b?auto=format&fit=crop&w=200&h=150&q=80',
-    'SOYA': 'https://images.unsplash.com/photo-1560493676-04071c5f467b?auto=format&fit=crop&w=200&h=150&q=80',
-    'TRIGO': 'https://images.unsplash.com/photo-1560493676-04071c5f467b?auto=format&fit=crop&w=200&h=150&q=80',
-    'GIRASOL': 'https://images.unsplash.com/photo-1560493676-04071c5f467b?auto=format&fit=crop&w=200&h=150&q=80',
+    'MAÍZ': 'https://via.placeholder.com/200x150/FFD700/000000?text=MAÍZ',
+    'SOYA': 'https://via.placeholder.com/200x150/90EE90/000000?text=SOYA',
+    'TRIGO': 'https://via.placeholder.com/200x150/DAA520/000000?text=TRIGO',
+    'GIRASOL': 'https://via.placeholder.com/200x150/FFA500/000000?text=GIRASOL',
 }
 
 # ===== INICIALIZACIÓN DE PRECIOS =====
