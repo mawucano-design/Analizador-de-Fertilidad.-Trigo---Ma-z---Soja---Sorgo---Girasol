@@ -30,6 +30,13 @@ import yfinance as yf
 import plotly.graph_objects as go
 warnings.filterwarnings('ignore')
 
+# === ESTA DEBE SER LA PRIMERA LLAMADA A STREAMLIT ===
+st.set_page_config(
+    page_title="Analizador Multi-Cultivo Satellital",
+    page_icon="🌱",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
 # === ESTILOS PERSONALIZADOS - VERSIÓN PREMIUM MODERNA ===
 st.markdown("""
