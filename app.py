@@ -2100,6 +2100,46 @@ def crear_mapa_potencial_cosecha_calor(gdf_analizado, cultivo):
         st.error(f"Detalle: {traceback.format_exc()}")
         return None
 
+def calcular_potencial_mejorado(gdf_analizado, cultivo, nutriente, w_fertilidad=0.40, w_solar=0.25, w_humedad=0.20, w_viento=0.15):
+    """
+    Calcula un nuevo potencial de cosecha simulando la aplicación de las recomendaciones NPK.
+    """
+    # 1. Simular mejora del índice npk_actual basado en valor_recomendado
+    params = PARAMETROS_CULTIVOS[cultivo]
+    if nutriente == "NITRÓGENO":
+        rango_min, rango_max = params['NITROGENO']['min'], params['NITROGENO']['max']
+    elif nutriente == "FÓSFORO":
+        rango_min, rango_max = params['FOSFORO']['min'], params['FOSFORO']['max']
+    else:
+        rango_min, rango_max = params['POTASIO']['min'], params['POTASIO']['max']
+
+    def simular_npk_mejorado(row):
+        recomendado = row['valor_recomendado']
+        # Normalizar recomendación al rango óptimo
+        rel = (recomendado - rango_min) / (rango_max - rango_min) if (rango_max != rango_min) else 0.5
+        rel = np.clip(rel, 0, 1)
+        # Mejorar npk_actual proporcionalmente
+        mejora = 0.1 + 0.3 * rel  # mejora entre 0.1 y 0.4
+        npk_mejorado = row['npk_actual'] + mejora
+        return np.clip(npk_mejorado, 0, 1)
+
+    gdf_analizado['npk_mejorado'] = gdf_analizado.apply(simular_npk_mejorado, axis=1)
+
+    # 2. Reusar normalizaciones ya calculadas: solar_norm, humedad_norm, viento_norm
+    gdf_analizado['potencial_cosecha_mejorado'] = (
+        w_fertilidad * gdf_analizado['npk_mejorado'] +
+        w_solar * gdf_analizado['solar_norm'] +
+        w_humedad * gdf_analizado['humedad_norm'] +
+        w_viento * gdf_analizado['viento_norm']
+    ).clip(0, 1)
+
+    # 3. Producción estimada mejorada
+    produccion_base = {'MAÍZ': 8.0, 'SOYA': 3.5, 'TRIGO': 4.5, 'GIRASOL': 2.5}
+    base = produccion_base.get(cultivo, 5.0)
+    gdf_analizado['produccion_estimada_mejorada'] = gdf_analizado['potencial_cosecha_mejorado'] * base
+
+    return gdf_analizado
+
 # ===== FUNCIONES DE GRÁFICOS NASA POWER CON ESTILO OSCURO =====
 def crear_grafico_personalizado(series, titulo, ylabel, color_linea, fondo_grafico='#0f172a', color_texto='#ffffff'):
     """Crea gráfico de línea con estilo oscuro"""
