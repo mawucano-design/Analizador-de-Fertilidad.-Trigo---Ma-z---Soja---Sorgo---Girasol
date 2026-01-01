@@ -1,6 +1,6 @@
-# 🌱 Analizador Multi-Cultivo Tropical
+# 🌱 Analizador Multi-Cultivo 
 
-> 🌴🍫🍌☕ Sistema de análisis satelital y geoespacial para **palma aceitera, cacao, banano y café**
+> 🌴🍫🍌☕ Sistema de análisis satelital y geoespacial para **trigo, maiz, soja y girasol**
 
 [![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://your-app-url)
 
