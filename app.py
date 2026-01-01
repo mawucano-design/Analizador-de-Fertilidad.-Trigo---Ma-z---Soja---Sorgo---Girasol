@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 import streamlit as st
 import geopandas as gpd
 import pandas as pd
@@ -31,7 +30,8 @@ import yfinance as yf
 import plotly.graph_objects as go
 warnings.filterwarnings('ignore')
 
-# === ESTA DEBE SER LA PRIMERA LLAMADA A STREAMLIT ===
+# ===== ESTA DEBE SER LA PRIMERA LLAMADA A STREAMLIT =====
+# ===== Y DEBE ESTAR EN EL NIVEL SUPERIOR DEL SCRIPT =====
 st.set_page_config(
     page_title="Analizador Multi-Cultivo Satellital",
     page_icon="🌱",
@@ -39,406 +39,451 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# === ESTILOS PERSONALIZADOS - VERSIÓN PREMIUM MODERNA ===
-st.markdown("""
-<style>
-/* === FONDO GENERAL OSCURO ELEGANTE === */
-.stApp {
-    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%) !important;
-    color: #ffffff !important;
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-}
-/* === SIDEBAR: FONDO BLANCO CON TEXTO NEGRO === */
-[data-testid="stSidebar"] {
-    background: #ffffff !important;
-    border-right: 1px solid #e5e7eb !important;
-    box-shadow: 5px 0 25px rgba(0, 0, 0, 0.1) !important;
-}
-/* Texto general del sidebar en NEGRO */
-[data-testid="stSidebar"] *,
-[data-testid="stSidebar"] .stMarkdown,
-[data-testid="stSidebar"] p,
-[data-testid="stSidebar"] label,
-[data-testid="stSidebar"] .stText,
-[data-testid="stSidebar"] .stTitle,
-[data-testid="stSidebar"] .stSubheader {
-    color: #000000 !important;
-    text-shadow: none !important;
-}
-/* Título del sidebar elegante */
-.sidebar-title {
-    font-size: 1.4em;
-    font-weight: 800;
-    margin: 1.5em 0 1em 0;
-    text-align: center;
-    padding: 14px;
-    background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
-    border-radius: 16px;
-    color: #ffffff !important;
-    box-shadow: 0 6px 20px rgba(59, 130, 246, 0.3);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    letter-spacing: 0.5px;
-}
-/* Widgets del sidebar con estilo glassmorphism */
-[data-testid="stSidebar"] .stSelectbox,
-[data-testid="stSidebar"] .stDateInput,
-[data-testid="stSidebar"] .stSlider {
-    background: rgba(255, 255, 255, 0.9) !important;
-    backdrop-filter: blur(10px);
-    border-radius: 12px;
-    padding: 12px;
-    margin: 8px 0;
-    border: 1px solid #d1d5db !important;
-}
-/* Labels de los widgets en negro */
-[data-testid="stSidebar"] .stSelectbox div,
-[data-testid="stSidebar"] .stDateInput div,
-[data-testid="stSidebar"] .stSlider label {
-    color: #000000 !important;
-    font-weight: 600;
-    font-size: 0.95em;
-}
-/* Inputs y selects - fondo blanco con texto negro */
-[data-testid="stSidebar"] .stSelectbox [data-baseweb="select"] {
-    background-color: #ffffff !important;
-    border: 1px solid #d1d5db !important;
-    color: #000000 !important;
-    border-radius: 8px;
-}
-/* Slider - colores negro */
-[data-testid="stSidebar"] .stSlider [data-baseweb="slider"] {
-    color: #000000 !important;
-}
-/* Date Input - fondo blanco con texto negro */
-[data-testid="stSidebar"] .stDateInput [data-baseweb="input"] {
-    background-color: #ffffff !important;
-    border: 1px solid #d1d5db !important;
-    color: #000000 !important;
-    border-radius: 8px;
-}
-/* Placeholder en gris */
-[data-testid="stSidebar"] .stDateInput [data-baseweb="input"]::placeholder {
-    color: #6b7280 !important;
-}
-/* Botones premium */
-.stButton > button {
-    background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%) !important;
-    color: white !important;
-    border: none !important;
-    padding: 0.8em 1.5em !important;
-    border-radius: 12px !important;
-    font-weight: 700 !important;
-    font-size: 1em !important;
-    box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4) !important;
-    transition: all 0.3s ease !important;
-    text-transform: uppercase !important;
-    letter-spacing: 0.5px !important;
-}
-.stButton > button:hover {
-    transform: translateY(-3px) !important;
-    box-shadow: 0 8px 25px rgba(59, 130, 246, 0.6) !important;
-    background: linear-gradient(135deg, #4f8df8 0%, #2d5fe8 100%) !important;
-}
-/* === HERO BANNER PRINCIPAL CON IMAGEN === */
-.hero-banner {
-    background: linear-gradient(rgba(15, 23, 42, 0.9), rgba(15, 23, 42, 0.95)),
-        url('https://images.unsplash.com/photo-1597981309443-6e2d2a4d9c3f?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80') !important;
-    background-size: cover !important;
-    background-position: center 40% !important;
-    padding: 3.5em 2em !important;
-    border-radius: 24px !important;
-    margin-bottom: 2.5em !important;
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4) !important;
-    border: 1px solid rgba(59, 130, 246, 0.2) !important;
-    position: relative !important;
-    overflow: hidden !important;
-}
-.hero-banner::before {
-    content: '' !important;
-    position: absolute !important;
-    top: 0 !important;
-    left: 0 !important;
-    right: 0 !important;
-    bottom: 0 !important;
-    background: linear-gradient(45deg, rgba(59, 130, 246, 0.1), rgba(29, 78, 216, 0.05)) !important;
-    z-index: 1 !important;
-}
-.hero-content {
-    position: relative !important;
-    z-index: 2 !important;
-    text-align: center !important;
-}
-.hero-title {
-    color: #ffffff !important;
-    font-size: 3.2em !important;
-    font-weight: 900 !important;
-    margin-bottom: 0.3em !important;
-    text-shadow: 0 4px 12px rgba(0, 0, 0, 0.6) !important;
-    letter-spacing: -0.5px !important;
-    background: linear-gradient(135deg, #ffffff 0%, #93c5fd 100%) !important;
-    -webkit-background-clip: text !important;
-    -webkit-text-fill-color: transparent !important;
-    background-clip: text !important;
-}
-.hero-subtitle {
-    color: #cbd5e1 !important;
-    font-size: 1.3em !important;
-    font-weight: 400 !important;
-    max-width: 800px !important;
-    margin: 0 auto !important;
-    line-height: 1.6 !important;
-}
-/* === PESTAÑAS PRINCIPALES (fuera del sidebar) - SIN CAMBIOS === */
-.stTabs [data-baseweb="tab-list"] {
-    background: rgba(255, 255, 255, 0.05) !important;
-    backdrop-filter: blur(10px) !important;
-    padding: 8px 16px !important;
-    border-radius: 16px !important;
-    border: 1px solid rgba(255, 255, 255, 0.1) !important;
-    margin-top: 1em !important;
-    gap: 8px !important;
-}
-.stTabs [data-baseweb="tab"] {
-    color: #94a3b8 !important;
-    font-weight: 600 !important;
-    padding: 12px 24px !important;
-    border-radius: 12px !important;
-    background: transparent !important;
-    transition: all 0.3s ease !important;
-    border: 1px solid transparent !important;
-}
-.stTabs [data-baseweb="tab"]:hover {
-    color: #ffffff !important;
-    background: rgba(59, 130, 246, 0.2) !important;
-    border-color: rgba(59, 130, 246, 0.3) !important;
-    transform: translateY(-2px) !important;
-}
-.stTabs [aria-selected="true"] {
-    background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%) !important;
-    color: #ffffff !important;
-    font-weight: 700 !important;
-    border: none !important;
-    box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4) !important;
-}
-/* === PESTAÑAS DEL SIDEBAR: FONDO BLANCO + TEXTO NEGRO === */
-[data-testid="stSidebar"] .stTabs [data-baseweb="tab-list"] {
-    background: #ffffff !important;
-    border: 1px solid #e2e8f0 !important;
-    padding: 8px !important;
-    border-radius: 12px !important;
-    gap: 6px !important;
-}
-[data-testid="stSidebar"] .stTabs [data-baseweb="tab"] {
-    color: #000000 !important;
-    background: transparent !important;
-    border-radius: 8px !important;
-    padding: 8px 16px !important;
-    font-weight: 600 !important;
-    border: 1px solid transparent !important;
-}
-[data-testid="stSidebar"] .stTabs [data-baseweb="tab"]:hover {
-    background: #f1f5f9 !important;
-    color: #000000 !important;
-    border-color: #cbd5e1 !important;
-}
-/* Pestaña activa en el sidebar: blanco con texto negro */
-[data-testid="stSidebar"] .stTabs [aria-selected="true"] {
-    background: #ffffff !important;
-    color: #000000 !important;
-    font-weight: 700 !important;
-    border: 1px solid #3b82f6 !important;
-}
-/* === MÉTRICAS PREMIUM === */
-div[data-testid="metric-container"] {
-    background: linear-gradient(135deg, rgba(30, 41, 59, 0.8), rgba(15, 23, 42, 0.9)) !important;
-    backdrop-filter: blur(10px) !important;
-    border-radius: 20px !important;
-    padding: 24px !important;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3) !important;
-    border: 1px solid rgba(59, 130, 246, 0.2) !important;
-    transition: all 0.3s ease !important;
-}
-div[data-testid="metric-container"]:hover {
-    transform: translateY(-5px) !important;
-    box-shadow: 0 15px 40px rgba(59, 130, 246, 0.2) !important;
-    border-color: rgba(59, 130, 246, 0.4) !important;
-}
-div[data-testid="metric-container"] label,
-div[data-testid="metric-container"] div,
-div[data-testid="metric-container"] [data-testid="stMetricValue"],
-div[data-testid="metric-container"] [data-testid="stMetricLabel"] {
-    color: #ffffff !important;
-    font-weight: 600 !important;
-}
-div[data-testid="metric-container"] [data-testid="stMetricValue"] {
-    font-size: 2.5em !important;
-    font-weight: 800 !important;
-    background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%) !important;
-    -webkit-background-clip: text !important;
-    -webkit-text-fill-color: transparent !important;
-    background-clip: text !important;
-}
-/* === GRÁFICOS CON ESTILO OSCURO === */
-.stPlotlyChart, .stPyplot {
-    background: rgba(15, 23, 42, 0.8) !important;
-    backdrop-filter: blur(10px) !important;
-    border-radius: 20px !important;
-    padding: 20px !important;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3) !important;
-    border: 1px solid rgba(59, 130, 246, 0.2) !important;
-}
-/* === EXPANDERS ELEGANTES === */
-.streamlit-expanderHeader {
-    color: #ffffff !important;
-    background: rgba(30, 41, 59, 0.8) !important;
-    backdrop-filter: blur(10px) !important;
-    border-radius: 16px !important;
-    font-weight: 700 !important;
-    border: 1px solid rgba(255, 255, 255, 0.1) !important;
-    padding: 16px 20px !important;
-    margin-bottom: 10px !important;
-}
-.streamlit-expanderContent {
-    background: rgba(15, 23, 42, 0.6) !important;
-    border-radius: 0 0 16px 16px !important;
-    padding: 20px !important;
-    border: 1px solid rgba(255, 255, 255, 0.1) !important;
-    border-top: none !important;
-}
-/* === TEXTOS GENERALES === */
-h1, h2, h3, h4, h5, h6 {
-    color: #ffffff !important;
-    font-weight: 800 !important;
-    margin-top: 1.5em !important;
-}
-p, div, span, label, li {
-    color: #cbd5e1 !important;
-    line-height: 1.7 !important;
-}
-/* === DATA FRAMES TABLAS ELEGANTES === */
-.dataframe {
-    background: rgba(15, 23, 42, 0.8) !important;
-    backdrop-filter: blur(10px) !important;
-    border-radius: 16px !important;
-    border: 1px solid rgba(255, 255, 255, 0.1) !important;
-    color: #ffffff !important;
-}
-.dataframe th {
-    background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%) !important;
-    color: #ffffff !important;
-    font-weight: 700 !important;
-    padding: 16px !important;
-}
-.dataframe td {
-    color: #cbd5e1 !important;
-    padding: 14px 16px !important;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
-}
-/* === ALERTS Y MENSAJES === */
-.stAlert {
-    border-radius: 16px !important;
-    border: 1px solid rgba(255, 255, 255, 0.1) !important;
-    backdrop-filter: blur(10px) !important;
-}
-/* === SCROLLBAR PERSONALIZADA === */
-::-webkit-scrollbar {
-    width: 10px !important;
-    height: 10px !important;
-}
-::-webkit-scrollbar-track {
-    background: rgba(15, 23, 42, 0.8) !important;
-    border-radius: 10px !important;
-}
-::-webkit-scrollbar-thumb {
-    background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%) !important;
-    border-radius: 10px !important;
-}
-::-webkit-scrollbar-thumb:hover {
-    background: linear-gradient(135deg, #4f8df8 0%, #2d5fe8 100%) !important;
-}
-/* === IMÁGENES DEL SIDEBAR === */
-[data-testid="stSidebar"] img {
-    border-radius: 16px !important;
-    border: 2px solid #d1d5db !important;
-    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1) !important;
-    transition: all 0.3s ease !important;
-}
-[data-testid="stSidebar"] img:hover {
-    transform: scale(1.02) !important;
-    box-shadow: 0 12px 35px rgba(0, 0, 0, 0.2) !important;
-    border-color: #3b82f6 !important;
-}
-/* === TARJETAS DE CULTIVOS === */
-.cultivo-card {
-    background: linear-gradient(135deg, rgba(30, 41, 59, 0.9), rgba(15, 23, 42, 0.95)) !important;
-    border-radius: 20px !important;
-    padding: 25px !important;
-    border: 1px solid rgba(59, 130, 246, 0.2) !important;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3) !important;
-    transition: all 0.3s ease !important;
-    height: 100% !important;
-}
-.cultivo-card:hover {
-    transform: translateY(-8px) !important;
-    box-shadow: 0 20px 40px rgba(59, 130, 246, 0.2) !important;
-    border-color: rgba(59, 130, 246, 0.4) !important;
-}
-/* === TABLERO DE CONTROL === */
-.dashboard-grid {
-    display: grid !important;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)) !important;
-    gap: 25px !important;
-    margin: 30px 0 !important;
-}
-.dashboard-card {
-    background: linear-gradient(135deg, rgba(30, 41, 59, 0.9), rgba(15, 23, 42, 0.95)) !important;
-    border-radius: 20px !important;
-    padding: 25px !important;
-    border: 1px solid rgba(59, 130, 246, 0.2) !important;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3) !important;
-    transition: all 0.3s ease !important;
-}
-.dashboard-card:hover {
-    transform: translateY(-5px) !important;
-    box-shadow: 0 20px 40px rgba(59, 130, 246, 0.2) !important;
-}
-/* === STATS BADGES === */
-.stats-badge {
-    display: inline-block !important;
-    padding: 6px 14px !important;
-    border-radius: 50px !important;
-    font-size: 0.85em !important;
-    font-weight: 700 !important;
-    margin: 2px !important;
-}
-.badge-success {
-    background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
-    color: white !important;
-}
-.badge-warning {
-    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;
-    color: white !important;
-}
-.badge-danger {
-    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%) !important;
-    color: white !important;
-}
-.badge-info {
-    background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%) !important;
-    color: white !important;
-}
-</style>
-""", unsafe_allow_html=True)
+# ===== FUNCIÓN PARA INYECTAR CSS =====
+def inject_custom_css():
+    """Inyecta el CSS personalizado en la aplicación"""
+    st.markdown("""
+    <style>
+    /* === FONDO GENERAL OSCURO ELEGANTE === */
+    .stApp {
+        background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%) !important;
+        color: #ffffff !important;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
 
-# ===== HERO BANNER PRINCIPAL =====
-st.markdown("""
-<div class="hero-banner">
-    <div class="hero-content">
-        <h1 class="hero-title">ANALIZADOR MULTI-CULTIVO SATELITAL</h1>
-        <p class="hero-subtitle">Potenciado con NASA POWER, GEE y tecnología avanzada para una agricultura de precisión</p>
-    </div>
-</div>
-""", unsafe_allow_html=True)
+    /* === SIDEBAR: FONDO BLANCO CON TEXTO NEGRO === */
+    [data-testid="stSidebar"] {
+        background: #ffffff !important;
+        border-right: 1px solid #e5e7eb !important;
+        box-shadow: 5px 0 25px rgba(0, 0, 0, 0.1) !important;
+    }
+
+    /* Texto general del sidebar en NEGRO */
+    [data-testid="stSidebar"] *,
+    [data-testid="stSidebar"] .stMarkdown,
+    [data-testid="stSidebar"] p,
+    [data-testid="stSidebar"] label,
+    [data-testid="stSidebar"] .stText,
+    [data-testid="stSidebar"] .stTitle,
+    [data-testid="stSidebar"] .stSubheader {
+        color: #000000 !important;
+        text-shadow: none !important;
+    }
+
+    /* Título del sidebar elegante */
+    .sidebar-title {
+        font-size: 1.4em;
+        font-weight: 800;
+        margin: 1.5em 0 1em 0;
+        text-align: center;
+        padding: 14px;
+        background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+        border-radius: 16px;
+        color: #ffffff !important;
+        box-shadow: 0 6px 20px rgba(59, 130, 246, 0.3);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        letter-spacing: 0.5px;
+    }
+
+    /* Widgets del sidebar con estilo glassmorphism */
+    [data-testid="stSidebar"] .stSelectbox,
+    [data-testid="stSidebar"] .stDateInput,
+    [data-testid="stSidebar"] .stSlider {
+        background: rgba(255, 255, 255, 0.9) !important;
+        backdrop-filter: blur(10px);
+        border-radius: 12px;
+        padding: 12px;
+        margin: 8px 0;
+        border: 1px solid #d1d5db !important;
+    }
+
+    /* Labels de los widgets en negro */
+    [data-testid="stSidebar"] .stSelectbox div,
+    [data-testid="stSidebar"] .stDateInput div,
+    [data-testid="stSidebar"] .stSlider label {
+        color: #000000 !important;
+        font-weight: 600;
+        font-size: 0.95em;
+    }
+
+    /* Inputs y selects - fondo blanco con texto negro */
+    [data-testid="stSidebar"] .stSelectbox [data-baseweb="select"] {
+        background-color: #ffffff !important;
+        border: 1px solid #d1d5db !important;
+        color: #000000 !important;
+        border-radius: 8px;
+    }
+
+    /* Slider - colores negro */
+    [data-testid="stSidebar"] .stSlider [data-baseweb="slider"] {
+        color: #000000 !important;
+    }
+
+    /* Date Input - fondo blanco con texto negro */
+    [data-testid="stSidebar"] .stDateInput [data-baseweb="input"] {
+        background-color: #ffffff !important;
+        border: 1px solid #d1d5db !important;
+        color: #000000 !important;
+        border-radius: 8px;
+    }
+
+    /* Placeholder en gris */
+    [data-testid="stSidebar"] .stDateInput [data-baseweb="input"]::placeholder {
+        color: #6b7280 !important;
+    }
+
+    /* Botones premium */
+    .stButton > button {
+        background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%) !important;
+        color: white !important;
+        border: none !important;
+        padding: 0.8em 1.5em !important;
+        border-radius: 12px !important;
+        font-weight: 700 !important;
+        font-size: 1em !important;
+        box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4) !important;
+        transition: all 0.3s ease !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.5px !important;
+    }
+
+    .stButton > button:hover {
+        transform: translateY(-3px) !important;
+        box-shadow: 0 8px 25px rgba(59, 130, 246, 0.6) !important;
+        background: linear-gradient(135deg, #4f8df8 0%, #2d5fe8 100%) !important;
+    }
+
+    /* === HERO BANNER PRINCIPAL CON IMAGEN === */
+    .hero-banner {
+        background: linear-gradient(rgba(15, 23, 42, 0.9), rgba(15, 23, 42, 0.95)),
+                    url('https://images.unsplash.com/photo-1597981309443-6e2d2a4d9c3f?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80') !important;
+        background-size: cover !important;
+        background-position: center 40% !important;
+        padding: 3.5em 2em !important;
+        border-radius: 24px !important;
+        margin-bottom: 2.5em !important;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4) !important;
+        border: 1px solid rgba(59, 130, 246, 0.2) !important;
+        position: relative !important;
+        overflow: hidden !important;
+    }
+
+    .hero-banner::before {
+        content: '' !important;
+        position: absolute !important;
+        top: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        background: linear-gradient(45deg, rgba(59, 130, 246, 0.1), rgba(29, 78, 216, 0.05)) !important;
+        z-index: 1 !important;
+    }
+
+    .hero-content {
+        position: relative !important;
+        z-index: 2 !important;
+        text-align: center !important;
+    }
+
+    .hero-title {
+        color: #ffffff !important;
+        font-size: 3.2em !important;
+        font-weight: 900 !important;
+        margin-bottom: 0.3em !important;
+        text-shadow: 0 4px 12px rgba(0, 0, 0, 0.6) !important;
+        letter-spacing: -0.5px !important;
+        background: linear-gradient(135deg, #ffffff 0%, #93c5fd 100%) !important;
+        -webkit-background-clip: text !important;
+        -webkit-text-fill-color: transparent !important;
+        background-clip: text !important;
+    }
+
+    .hero-subtitle {
+        color: #cbd5e1 !important;
+        font-size: 1.3em !important;
+        font-weight: 400 !important;
+        max-width: 800px !important;
+        margin: 0 auto !important;
+        line-height: 1.6 !important;
+    }
+
+    /* === PESTAÑAS PRINCIPALES (fuera del sidebar) - SIN CAMBIOS === */
+    .stTabs [data-baseweb="tab-list"] {
+        background: rgba(255, 255, 255, 0.05) !important;
+        backdrop-filter: blur(10px) !important;
+        padding: 8px 16px !important;
+        border-radius: 16px !important;
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+        margin-top: 1em !important;
+        gap: 8px !important;
+    }
+
+    .stTabs [data-baseweb="tab"] {
+        color: #94a3b8 !important;
+        font-weight: 600 !important;
+        padding: 12px 24px !important;
+        border-radius: 12px !important;
+        background: transparent !important;
+        transition: all 0.3s ease !important;
+        border: 1px solid transparent !important;
+    }
+
+    .stTabs [data-baseweb="tab"]:hover {
+        color: #ffffff !important;
+        background: rgba(59, 130, 246, 0.2) !important;
+        border-color: rgba(59, 130, 246, 0.3) !important;
+        transform: translateY(-2px) !important;
+    }
+
+    .stTabs [aria-selected="true"] {
+        background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%) !important;
+        color: #ffffff !important;
+        font-weight: 700 !important;
+        border: none !important;
+        box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4) !important;
+    }
+
+    /* === PESTAÑAS DEL SIDEBAR: FONDO BLANCO + TEXTO NEGRO === */
+    [data-testid="stSidebar"] .stTabs [data-baseweb="tab-list"] {
+        background: #ffffff !important;
+        border: 1px solid #e2e8f0 !important;
+        padding: 8px !important;
+        border-radius: 12px !important;
+        gap: 6px !important;
+    }
+
+    [data-testid="stSidebar"] .stTabs [data-baseweb="tab"] {
+        color: #000000 !important;
+        background: transparent !important;
+        border-radius: 8px !important;
+        padding: 8px 16px !important;
+        font-weight: 600 !important;
+        border: 1px solid transparent !important;
+    }
+
+    [data-testid="stSidebar"] .stTabs [data-baseweb="tab"]:hover {
+        background: #f1f5f9 !important;
+        color: #000000 !important;
+        border-color: #cbd5e1 !important;
+    }
+
+    /* Pestaña activa en el sidebar: blanco con texto negro */
+    [data-testid="stSidebar"] .stTabs [aria-selected="true"] {
+        background: #ffffff !important;
+        color: #000000 !important;
+        font-weight: 700 !important;
+        border: 1px solid #3b82f6 !important;
+    }
+
+    /* === MÉTRICAS PREMIUM === */
+    div[data-testid="metric-container"] {
+        background: linear-gradient(135deg, rgba(30, 41, 59, 0.8), rgba(15, 23, 42, 0.9)) !important;
+        backdrop-filter: blur(10px) !important;
+        border-radius: 20px !important;
+        padding: 24px !important;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3) !important;
+        border: 1px solid rgba(59, 130, 246, 0.2) !important;
+        transition: all 0.3s ease !important;
+    }
+
+    div[data-testid="metric-container"]:hover {
+        transform: translateY(-5px) !important;
+        box-shadow: 0 15px 40px rgba(59, 130, 246, 0.2) !important;
+        border-color: rgba(59, 130, 246, 0.4) !important;
+    }
+
+    div[data-testid="metric-container"] label,
+    div[data-testid="metric-container"] div,
+    div[data-testid="metric-container"] [data-testid="stMetricValue"],
+    div[data-testid="metric-container"] [data-testid="stMetricLabel"] {
+        color: #ffffff !important;
+        font-weight: 600 !important;
+    }
+
+    div[data-testid="metric-container"] [data-testid="stMetricValue"] {
+        font-size: 2.5em !important;
+        font-weight: 800 !important;
+        background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%) !important;
+        -webkit-background-clip: text !important;
+        -webkit-text-fill-color: transparent !important;
+        background-clip: text !important;
+    }
+
+    /* === GRÁFICOS CON ESTILO OSCURO === */
+    .stPlotlyChart, .stPyplot {
+        background: rgba(15, 23, 42, 0.8) !important;
+        backdrop-filter: blur(10px) !important;
+        border-radius: 20px !important;
+        padding: 20px !important;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3) !important;
+        border: 1px solid rgba(59, 130, 246, 0.2) !important;
+    }
+
+    /* === EXPANDERS ELEGANTES === */
+    .streamlit-expanderHeader {
+        color: #ffffff !important;
+        background: rgba(30, 41, 59, 0.8) !important;
+        backdrop-filter: blur(10px) !important;
+        border-radius: 16px !important;
+        font-weight: 700 !important;
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+        padding: 16px 20px !important;
+        margin-bottom: 10px !important;
+    }
+
+    .streamlit-expanderContent {
+        background: rgba(15, 23, 42, 0.6) !important;
+        border-radius: 0 0 16px 16px !important;
+        padding: 20px !important;
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+        border-top: none !important;
+    }
+
+    /* === TEXTOS GENERALES === */
+    h1, h2, h3, h4, h5, h6 {
+        color: #ffffff !important;
+        font-weight: 800 !important;
+        margin-top: 1.5em !important;
+    }
+
+    p, div, span, label, li {
+        color: #cbd5e1 !important;
+        line-height: 1.7 !important;
+    }
+
+    /* === DATA FRAMES TABLAS ELEGANTES === */
+    .dataframe {
+        background: rgba(15, 23, 42, 0.8) !important;
+        backdrop-filter: blur(10px) !important;
+        border-radius: 16px !important;
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+        color: #ffffff !important;
+    }
+
+    .dataframe th {
+        background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%) !important;
+        color: #ffffff !important;
+        font-weight: 700 !important;
+        padding: 16px !important;
+    }
+
+    .dataframe td {
+        color: #cbd5e1 !important;
+        padding: 14px 16px !important;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+    }
+
+    /* === ALERTS Y MENSAJES === */
+    .stAlert {
+        border-radius: 16px !important;
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+        backdrop-filter: blur(10px) !important;
+    }
+
+    /* === SCROLLBAR PERSONALIZADA === */
+    ::-webkit-scrollbar {
+        width: 10px !important;
+        height: 10px !important;
+    }
+
+    ::-webkit-scrollbar-track {
+        background: rgba(15, 23, 42, 0.8) !important;
+        border-radius: 10px !important;
+    }
+
+    ::-webkit-scrollbar-thumb {
+        background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%) !important;
+        border-radius: 10px !important;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+        background: linear-gradient(135deg, #4f8df8 0%, #2d5fe8 100%) !important;
+    }
+
+    /* === IMÁGENES DEL SIDEBAR === */
+    [data-testid="stSidebar"] img {
+        border-radius: 16px !important;
+        border: 2px solid #d1d5db !important;
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1) !important;
+        transition: all 0.3s ease !important;
+    }
+
+    [data-testid="stSidebar"] img:hover {
+        transform: scale(1.02) !important;
+        box-shadow: 0 12px 35px rgba(0, 0, 0, 0.2) !important;
+        border-color: #3b82f6 !important;
+    }
+
+    /* === TARJETAS DE CULTIVOS === */
+    .cultivo-card {
+        background: linear-gradient(135deg, rgba(30, 41, 59, 0.9), rgba(15, 23, 42, 0.95)) !important;
+        border-radius: 20px !important;
+        padding: 25px !important;
+        border: 1px solid rgba(59, 130, 246, 0.2) !important;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3) !important;
+        transition: all 0.3s ease !important;
+        height: 100% !important;
+    }
+
+    .cultivo-card:hover {
+        transform: translateY(-8px) !important;
+        box-shadow: 0 20px 40px rgba(59, 130, 246, 0.2) !important;
+        border-color: rgba(59, 130, 246, 0.4) !important;
+    }
+
+    /* === TABLERO DE CONTROL === */
+    .dashboard-grid {
+        display: grid !important;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)) !important;
+        gap: 25px !important;
+        margin: 30px 0 !important;
+    }
+
+    .dashboard-card {
+        background: linear-gradient(135deg, rgba(30, 41, 59, 0.9), rgba(15, 23, 42, 0.95)) !important;
+        border-radius: 20px !important;
+        padding: 25px !important;
+        border: 1px solid rgba(59, 130, 246, 0.2) !important;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3) !important;
+        transition: all 0.3s ease !important;
+    }
+
+    .dashboard-card:hover {
+        transform: translateY(-5px) !important;
+        box-shadow: 0 20px 40px rgba(59, 130, 246, 0.2) !important;
+    }
+
+    /* === STATS BADGES === */
+    .stats-badge {
+        display: inline-block !important;
+        padding: 6px 14px !important;
+        border-radius: 50px !important;
+        font-size: 0.85em !important;
+        font-weight: 700 !important;
+        margin: 2px !important;
+    }
+
+    .badge-success {
+        background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+        color: white !important;
+    }
+
+    .badge-warning {
+        background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;
+        color: white !important;
+    }
+
+    .badge-danger {
+        background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%) !important;
+        color: white !important;
+    }
+
+    .badge-info {
+        background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%) !important;
+        color: white !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
 # ===== CONFIGURACIÓN ECONÓMICA - DATOS ACTUALIZABLES =====
 PRECIOS_API = {
@@ -464,12 +509,14 @@ PRECIOS_API = {
         'girasol_ba': 370
     }
 }
+
 RENDIMIENTOS_BASE = {
     'MAÍZ': 8.0,
     'SOYA': 3.5,
     'TRIGO': 4.5,
     'GIRASOL': 2.5
 }
+
 COSTOS_BASE = {
     'MAÍZ': 1200,
     'SOYA': 950,
@@ -692,7 +739,9 @@ def obtener_precios_actualizados():
             'trigo': 'ZW=F',
             'girasol': 'BO=F'
         }
+        
         precios_actuales = {}
+        
         for producto, symbol in symbols.items():
             try:
                 ticker = yf.Ticker(symbol)
@@ -705,11 +754,13 @@ def obtener_precios_actualizados():
                     precios_actuales[producto] = PRECIOS_API['precios_pizarra'][f'{producto}_rosario']
             except Exception as e:
                 precios_actuales[producto] = PRECIOS_API['precios_pizarra'][f'{producto}_rosario']
+        
         # Actualizar precios de insumos con inflación estimada
         inflacion_estimada = 1.08  # 8% anual
         insumos_actualizados = {}
         for insumo, precio in PRECIOS_API['insumos'].items():
             insumos_actualizados[insumo] = round(precio * inflacion_estimada, 2)
+        
         return {
             'commodities': precios_actuales,
             'insumos': insumos_actualizados,
@@ -728,6 +779,7 @@ def calcular_costo_fertilizacion(dosis_npk, cultivo, precios):
     precio_n = precios['insumos']['urea'] / 1000 * 0.46  # Urea 46% N
     precio_p = precios['insumos']['fosfato'] / 1000 * 0.46  # Fosfato 46% P2O5
     precio_k = precios['insumos']['cloruro_potasio'] / 1000 * 0.60  # KCl 60% K2O
+    
     # Dosis promedio (kg/ha) basado en recomendaciones
     if cultivo == 'MAÍZ':
         dosis = {'N': 150, 'P': 50, 'K': 120}
@@ -737,11 +789,14 @@ def calcular_costo_fertilizacion(dosis_npk, cultivo, precios):
         dosis = {'N': 120, 'P': 40, 'K': 80}
     else:  # GIRASOL
         dosis = {'N': 80, 'P': 35, 'K': 100}
+    
     # Ajustar dosis según NPK actual
     factor_ajuste = max(0.5, min(1.5, (1 - dosis_npk) * 2))
+    
     costo_n = dosis['N'] * factor_ajuste * precio_n
     costo_p = dosis['P'] * factor_ajuste * precio_p
     costo_k = dosis['K'] * factor_ajuste * precio_k
+    
     return {
         'costo_total': round(costo_n + costo_p + costo_k, 2),
         'costo_n': round(costo_n, 2),
@@ -759,6 +814,7 @@ def calcular_rendimiento_potencial(npk_actual, cultivo, aplica_fertilizacion=Tru
     Calcula el rendimiento potencial basado en fertilidad y aplicación de NPK.
     """
     rendimiento_base = RENDIMIENTOS_BASE[cultivo]
+    
     # Máximo rendimiento alcanzable con fertilización óptima
     max_rendimiento = {
         'MAÍZ': 12.0,
@@ -766,6 +822,7 @@ def calcular_rendimiento_potencial(npk_actual, cultivo, aplica_fertilizacion=Tru
         'TRIGO': 6.0,
         'GIRASOL': 3.5
     }
+    
     if aplica_fertilizacion:
         # Con fertilización: respuesta logística
         factor_respuesta = 1.0 + (max_rendimiento[cultivo]/rendimiento_base - 1) * npk_actual
@@ -773,6 +830,7 @@ def calcular_rendimiento_potencial(npk_actual, cultivo, aplica_fertilizacion=Tru
     else:
         # Sin fertilización: rendimiento base reducido por baja fertilidad
         rendimiento = rendimiento_base * (0.3 + 0.7 * npk_actual)
+    
     return round(rendimiento, 2)
 
 def calcular_tir(inversion, ingresos_anuales, anos=5, tasa_descuento=0.12):
@@ -782,9 +840,11 @@ def calcular_tir(inversion, ingresos_anuales, anos=5, tasa_descuento=0.12):
     try:
         # Flujo de caja: inversión inicial negativa, luego ingresos anuales
         flujos = [-inversion] + [ingresos_anuales] * anos
+        
         # Calcular TIR usando método iterativo simple
         def npv(tasa):
             return sum([flujo / ((1 + tasa) ** i) for i, flujo in enumerate(flujos)])
+        
         # Buscar TIR por bisección
         low, high = -0.99, 10.0
         for _ in range(100):
@@ -793,6 +853,7 @@ def calcular_tir(inversion, ingresos_anuales, anos=5, tasa_descuento=0.12):
                 low = mid
             else:
                 high = mid
+        
         tir = (low + high) / 2
         return round(tir * 100, 2)  # En porcentaje
     except:
@@ -804,39 +865,48 @@ def generar_analisis_economico(gdf_analizado, cultivo, area_total, precios_actua
     """
     if gdf_analizado.empty:
         return None
+    
     # Obtener precio de venta
     precio_key = f'{cultivo.lower().replace("í", "i").replace("á", "a")}_rosario'
     precio_venta = precios_actualizados['pizarra_rosario'].get(precio_key, 200)
+    
     # Costos base
     costo_base_ha = COSTOS_BASE[cultivo]
+    
     resultados = {
         'escenario_sin': {'costos': [], 'ingresos': [], 'beneficios': [], 'rendimientos': []},
         'escenario_con': {'costos': [], 'ingresos': [], 'beneficios': [], 'rendimientos': []}
     }
+    
     # Calcular por zona
     for idx, row in gdf_analizado.iterrows():
         area_ha = row.get('area_ha', area_total / len(gdf_analizado))
         npk_actual = row.get('npk_actual', 0.5)
+        
         # Escenario SIN fertilización
         rendimiento_sin = calcular_rendimiento_potencial(npk_actual, cultivo, aplica_fertilizacion=False)
         ingreso_sin = rendimiento_sin * precio_venta * area_ha
         costo_sin = costo_base_ha * area_ha
         beneficio_sin = ingreso_sin - costo_sin
+        
         # Escenario CON fertilización
         rendimiento_con = calcular_rendimiento_potencial(npk_actual, cultivo, aplica_fertilizacion=True)
         costo_fert = calcular_costo_fertilizacion(npk_actual, cultivo, precios_actualizados)
         costo_con = (costo_base_ha + costo_fert['costo_total']) * area_ha
         ingreso_con = rendimiento_con * precio_venta * area_ha
         beneficio_con = ingreso_con - costo_con
+        
         # Almacenar resultados
         resultados['escenario_sin']['rendimientos'].append(rendimiento_sin)
         resultados['escenario_sin']['ingresos'].append(ingreso_sin)
         resultados['escenario_sin']['costos'].append(costo_sin)
         resultados['escenario_sin']['beneficios'].append(beneficio_sin)
+        
         resultados['escenario_con']['rendimientos'].append(rendimiento_con)
         resultados['escenario_con']['ingresos'].append(ingreso_con)
         resultados['escenario_con']['costos'].append(costo_con)
         resultados['escenario_con']['beneficios'].append(beneficio_con)
+    
     # Calcular totales
     for escenario in ['sin', 'con']:
         key = f'escenario_{escenario}'
@@ -848,10 +918,13 @@ def generar_analisis_economico(gdf_analizado, cultivo, area_total, precios_actua
             resultados[key]['costo_promedio_ha'] = np.mean(resultados[key]['costos']) / np.mean([row.get('area_ha', 1) for idx, row in gdf_analizado.iterrows()])
         else:
             resultados[key]['costo_promedio_ha'] = 0
+    
     # Calcular TIR
     inversion_fertilizacion = resultados['escenario_con']['total_costos'] - resultados['escenario_sin']['total_costos']
     ingreso_extra = resultados['escenario_con']['total_ingresos'] - resultados['escenario_sin']['total_ingresos']
+    
     tir = calcular_tir(inversion_fertilizacion, ingreso_extra)
+    
     resultados['tir'] = tir
     resultados['precio_venta'] = precio_venta
     resultados['inversion_fertilizacion'] = inversion_fertilizacion
@@ -860,6 +933,7 @@ def generar_analisis_economico(gdf_analizado, cultivo, area_total, precios_actua
         resultados['payback'] = round(inversion_fertilizacion / ingreso_extra * 12, 1)
     else:
         resultados['payback'] = float('inf')
+    
     return resultados
 
 def crear_mapa_potencial_cosecha(gdf_analizado, cultivo, precios_actualizados):
@@ -869,17 +943,22 @@ def crear_mapa_potencial_cosecha(gdf_analizado, cultivo, precios_actualizados):
     try:
         # Convertir a Web Mercator
         gdf_plot = gdf_analizado.to_crs(epsg=3857)
+        
         # Calcular potencial por zona
         potenciales = []
         for idx, row in gdf_plot.iterrows():
             npk_actual = row.get('npk_actual', 0.5)
             rendimiento = calcular_rendimiento_potencial(npk_actual, cultivo, aplica_fertilizacion=True)
             potenciales.append(rendimiento)
+        
         gdf_plot['potencial_cosecha'] = potenciales
+        
         fig, ax = plt.subplots(1, 1, figsize=(12, 8))
+        
         # Configurar estilo oscuro
         fig.patch.set_facecolor('#0f172a')
         ax.set_facecolor('#0f172a')
+        
         # Mapa de calor
         scatter = ax.scatter(
             [geom.centroid.x for geom in gdf_plot.geometry],
@@ -891,36 +970,45 @@ def crear_mapa_potencial_cosecha(gdf_analizado, cultivo, precios_actualizados):
             edgecolors='white',
             linewidth=1
         )
+        
         # Agregar mapa base ESRI Satellite
         try:
             ctx.add_basemap(ax, source=ctx.providers.Esri.WorldImagery, alpha=0.3)
         except:
             pass
+        
         # Dibujar polígonos
         gdf_plot.plot(ax=ax, color='none', edgecolor='white', linewidth=1, alpha=0.5)
+        
         # Etiquetas
         for idx, row in gdf_plot.iterrows():
             centroid = row.geometry.centroid
-            ax.annotate(f"Z{row['id_zona']}\n{row['potencial_cosecha']:.1f}t", (centroid.x, centroid.y),
-                        xytext=(0, 0), textcoords="offset points", fontsize=8, color='white', weight='bold',
-                        ha='center', va='center',
-                        bbox=dict(boxstyle="round,pad=0.3", facecolor='#1e293b', alpha=0.9, edgecolor='white'))
-        ax.set_title(f'🌱 MAPA DE POTENCIAL DE COSECHA - {cultivo}\n(Con aplicación óptima de NPK)',
-                     fontsize=16, fontweight='bold', pad=20, color='white')
+            ax.annotate(f"Z{row['id_zona']}\n{row['potencial_cosecha']:.1f}t", 
+                       (centroid.x, centroid.y),
+                       xytext=(0, 0), textcoords="offset points",
+                       fontsize=8, color='white', weight='bold',
+                       ha='center', va='center',
+                       bbox=dict(boxstyle="round,pad=0.3", facecolor='#1e293b', alpha=0.9, edgecolor='white'))
+        
+        ax.set_title(f'🌱 MAPA DE POTENCIAL DE COSECHA - {cultivo}\n(Con aplicación óptima de NPK)', 
+                    fontsize=16, fontweight='bold', pad=20, color='white')
         ax.set_xlabel('Longitud', color='white')
         ax.set_ylabel('Latitud', color='white')
         ax.tick_params(colors='white')
         ax.grid(True, alpha=0.3, color='#475569')
+        
         # Barra de colores
         cbar = plt.colorbar(scatter, ax=ax, shrink=0.8)
         cbar.set_label('Rendimiento Potencial (ton/ha)', fontsize=12, color='white')
         cbar.ax.yaxis.set_tick_params(color='white')
         plt.setp(plt.getp(cbar.ax.axes, 'yticklabels'), color='white')
+        
         plt.tight_layout()
         buf = io.BytesIO()
         plt.savefig(buf, format='png', dpi=150, bbox_inches='tight', facecolor='#0f172a')
         buf.seek(0)
         plt.close()
+        
         return buf, gdf_plot
     except Exception as e:
         st.error(f"Error creando mapa de potencial: {str(e)}")
@@ -932,26 +1020,33 @@ def crear_mapa_rentabilidad(gdf_analizado, cultivo, precios_actualizados):
     """
     try:
         gdf_plot = gdf_analizado.to_crs(epsg=3857)
+        
         # Calcular rentabilidad por zona
         rentabilidades = []
         for idx, row in gdf_plot.iterrows():
             npk_actual = row.get('npk_actual', 0.5)
             area_ha = row.get('area_ha', 1)
+            
             # Calcular costo con fertilización
             costo_fert = calcular_costo_fertilizacion(npk_actual, cultivo, precios_actualizados)
             costo_total_ha = COSTOS_BASE[cultivo] + costo_fert['costo_total']
+            
             # Calcular ingreso
             rendimiento = calcular_rendimiento_potencial(npk_actual, cultivo, aplica_fertilizacion=True)
             precio_key = f'{cultivo.lower().replace("í", "i").replace("á", "a")}_rosario'
             precio_venta = precios_actualizados['pizarra_rosario'].get(precio_key, 200)
             ingreso_ha = rendimiento * precio_venta
+            
             # Rentabilidad
             rentabilidad = ingreso_ha - costo_total_ha
             rentabilidades.append(rentabilidad)
+        
         gdf_plot['rentabilidad_usd_ha'] = rentabilidades
+        
         fig, ax = plt.subplots(1, 1, figsize=(12, 8))
         fig.patch.set_facecolor('#0f172a')
         ax.set_facecolor('#0f172a')
+        
         # Mapa de calor de rentabilidad
         scatter = ax.scatter(
             [geom.centroid.x for geom in gdf_plot.geometry],
@@ -965,36 +1060,46 @@ def crear_mapa_rentabilidad(gdf_analizado, cultivo, precios_actualizados):
             vmin=-500,
             vmax=1500
         )
+        
         try:
             ctx.add_basemap(ax, source=ctx.providers.Esri.WorldImagery, alpha=0.3)
         except:
             pass
+        
         gdf_plot.plot(ax=ax, color='none', edgecolor='white', linewidth=1, alpha=0.5)
+        
         # Etiquetas con color según rentabilidad
         for idx, row in gdf_plot.iterrows():
             centroid = row.geometry.centroid
             rent_color = 'white' if row['rentabilidad_usd_ha'] > 0 else '#ff6b6b'
-            ax.annotate(f"Z{row['id_zona']}\n${row['rentabilidad_usd_ha']:.0f}", (centroid.x, centroid.y),
-                        xytext=(0, 0), textcoords="offset points", fontsize=8, color=rent_color, weight='bold',
-                        ha='center', va='center',
-                        bbox=dict(boxstyle="round,pad=0.3", facecolor='#1e293b', alpha=0.9, edgecolor='white'))
-        ax.set_title(f'💰 MAPA DE RENTABILIDAD - {cultivo}\n(Beneficio USD/ha con fertilización óptima)',
-                     fontsize=16, fontweight='bold', pad=20, color='white')
+            ax.annotate(f"Z{row['id_zona']}\n${row['rentabilidad_usd_ha']:.0f}", 
+                       (centroid.x, centroid.y),
+                       xytext=(0, 0), textcoords="offset points",
+                       fontsize=8, color=rent_color, weight='bold',
+                       ha='center', va='center',
+                       bbox=dict(boxstyle="round,pad=0.3", facecolor='#1e293b', alpha=0.9, edgecolor='white'))
+        
+        ax.set_title(f'💰 MAPA DE RENTABILIDAD - {cultivo}\n(Beneficio USD/ha con fertilización óptima)', 
+                    fontsize=16, fontweight='bold', pad=20, color='white')
         ax.set_xlabel('Longitud', color='white')
         ax.set_ylabel('Latitud', color='white')
         ax.tick_params(colors='white')
         ax.grid(True, alpha=0.3, color='#475569')
+        
         cbar = plt.colorbar(scatter, ax=ax, shrink=0.8)
         cbar.set_label('Rentabilidad (USD/ha)', fontsize=12, color='white')
         cbar.ax.yaxis.set_tick_params(color='white')
         plt.setp(plt.getp(cbar.ax.axes, 'yticklabels'), color='white')
+        
         # Línea de equilibrio
         ax.axhline(0, color='yellow', linestyle='--', alpha=0.5, transform=ax.transAxes)
+        
         plt.tight_layout()
         buf = io.BytesIO()
         plt.savefig(buf, format='png', dpi=150, bbox_inches='tight', facecolor='#0f172a')
         buf.seek(0)
         plt.close()
+        
         return buf
     except Exception as e:
         st.error(f"Error creando mapa de rentabilidad: {str(e)}")
@@ -1008,6 +1113,7 @@ def inicializar_precios():
             with st.spinner("Actualizando precios de mercado..."):
                 precios = obtener_precios_actualizados()
                 st.session_state['precios_actualizados'] = precios
+        
         # Actualizar cada 24 horas
         if 'ultima_actualizacion' in st.session_state:
             ultima = datetime.strptime(st.session_state['ultima_actualizacion'], "%Y-%m-%d %H:%M:%S")
@@ -1017,120 +1123,10 @@ def inicializar_precios():
                 st.session_state['ultima_actualizacion'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         else:
             st.session_state['ultima_actualizacion'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            
     except Exception as e:
         st.error(f"Error inicializando precios: {str(e)}")
         st.session_state['precios_actualizados'] = PRECIOS_API
-
-# ===== SIDEBAR MEJORADO (INTERFAZ VISUAL) =====
-with st.sidebar:
-    st.markdown('<div class="sidebar-title">⚙️ CONFIGURACIÓN</div>', unsafe_allow_html=True)
-    cultivo = st.selectbox("Cultivo:", ["MAÍZ", "SOYA", "TRIGO", "GIRASOL"])
-    # IMAGEN CON MANEJO DE ERRORES
-    try:
-        # Normalizar el nombre del cultivo
-        cultivo_key = cultivo.upper().replace("Í", "I").replace("Á", "A")
-        # Verificar si tenemos la imagen
-        if cultivo in IMAGENES_CULTIVOS:
-            st.image(IMAGENES_CULTIVOS[cultivo],
-                     caption=f"Cultivo: {cultivo}",
-                     use_container_width=True)
-        else:
-            # Usar imagen por defecto
-            st.image("https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=400&h=300&fit=crop",
-                     caption=f"Cultivo: {cultivo}",
-                     use_container_width=True)
-    except Exception as e:
-        # Si todo falla, mostrar un placeholder simple
-        st.markdown(f"**🌱 {cultivo}**")
-        st.info(f"Imagen del cultivo: {cultivo}")
-    analisis_tipo = st.selectbox("Tipo de Análisis:", ["FERTILIDAD ACTUAL", "RECOMENDACIONES NPK", "ANÁLISIS DE TEXTURA", "ANÁLISIS DE CURVAS DE NIVEL"])
-    if analisis_tipo == "RECOMENDACIONES NPK":
-        nutriente = st.selectbox("Nutriente:", ["NITRÓGENO", "FÓSFORO", "POTASIO"])
-    else:
-        nutriente = None
-
-    st.subheader("🛰️ Fuente de Datos Satelitales")
-    satelite_seleccionado = st.selectbox(
-        "Satélite:",
-        ["SENTINEL-2", "LANDSAT-8", "DATOS_SIMULADOS"],
-        help="Selecciona la fuente de datos satelitales"
-    )
-    if satelite_seleccionado in SATELITES_DISPONIBLES:
-        info_satelite = SATELITES_DISPONIBLES[satelite_seleccionado]
-        st.info(f"""
-        **{info_satelite['icono']} {info_satelite['nombre']}**
-        - Resolución: {info_satelite['resolucion']}
-        - Revisita: {info_satelite['revisita']}
-        - Índices: {', '.join(info_satelite['indices'][:3])}
-        """)
-    if analisis_tipo in ["FERTILIDAD ACTUAL", "RECOMENDACIONES NPK"]:
-        st.subheader("📊 Índices de Vegetación")
-        if satelite_seleccionado == "SENTINEL-2":
-            indice_seleccionado = st.selectbox("Índice:", SATELITES_DISPONIBLES['SENTINEL-2']['indices'])
-        elif satelite_seleccionado == "LANDSAT-8":
-            indice_seleccionado = st.selectbox("Índice:", SATELITES_DISPONIBLES['LANDSAT-8']['indices'])
-        else:
-            indice_seleccionado = st.selectbox("Índice:", SATELITES_DISPONIBLES['DATOS_SIMULADOS']['indices'])
-
-    if analisis_tipo in ["FERTILIDAD ACTUAL", "RECOMENDACIONES NPK"]:
-        st.subheader("📅 Rango Temporal")
-        fecha_fin = st.date_input("Fecha fin", datetime.now())
-        fecha_inicio = st.date_input("Fecha inicio", datetime.now() - timedelta(days=30))
-
-    st.subheader("🎯 División de Parcela")
-    n_divisiones = st.slider("Número de zonas de manejo:", min_value=16, max_value=48, value=32)
-
-    if analisis_tipo == "ANÁLISIS DE CURVAS DE NIVEL":
-        st.subheader("🏔️ Configuración Curvas de Nivel")
-        intervalo_curvas = st.slider("Intervalo entre curvas (metros):", 1.0, 20.0, 5.0, 1.0)
-        resolucion_dem = st.slider("Resolución DEM (metros):", 5.0, 50.0, 10.0, 5.0)
-
-    st.subheader("📤 Subir Parcela")
-    uploaded_file = st.file_uploader("Subir archivo de tu parcela", type=['zip', 'kml', 'kmz'],
-                                     help="Formatos aceptados: Shapefile (.zip), KML (.kml), KMZ (.kmz)")
-
-# ===== NUEVA SECCIÓN: ANÁLISIS ECONÓMICO =====
-st.markdown("---")
-st.markdown('<div class="sidebar-title">💰 ANÁLISIS ECONÓMICO</div>', unsafe_allow_html=True)
-if st.button("🔄 Actualizar Precios de Mercado", key="actualizar_precios"):
-    with st.spinner("Obteniendo precios actualizados..."):
-        precios_actualizados = obtener_precios_actualizados()
-        st.session_state['precios_actualizados'] = precios_actualizados
-    st.success("✅ Precios actualizados")
-if 'precios_actualizados' in st.session_state:
-    st.info(f"📅 Precios actualizados: {st.session_state['precios_actualizados'].get('fecha_actualizacion', 'N/A')}")
-plaza_precios = st.selectbox("Plaza de referencia:", ["ROSARIO", "BUENOS AIRES"])
-st.subheader("📊 Parámetros Económicos")
-costo_base_ha = st.number_input(
-    f"Costo base producción ({cultivo}) USD/ha:",
-    min_value=100.0,
-    max_value=5000.0,
-    value=float(COSTOS_BASE.get(cultivo, 1000)),
-    step=50.0
-)
-precio_venta_manual = st.number_input(
-    f"Precio venta {cultivo} USD/ton:",
-    min_value=50.0,
-    max_value=1000.0,
-    value=float(PRECIOS_API['precios_pizarra'].get(f'{cultivo.lower().replace("í", "i").replace("á", "a")}_rosario', 200)),
-    step=10.0
-)
-tasa_descuento = st.slider(
-    "Tasa de descuento (%):",
-    min_value=1.0,
-    max_value=20.0,
-    value=12.0,
-    step=0.5
-) / 100
-st.session_state['parametros_economicos'] = {
-    'plaza': plaza_precios,
-    'costo_base_ha': costo_base_ha,
-    'precio_venta': precio_venta_manual,
-    'tasa_descuento': tasa_descuento
-}
-
-# ===== INICIALIZAR PRECIOS =====
-inicializar_precios()
 
 # ===== FUNCIONES AUXILIARES - CORREGIDAS PARA EPSG:4326 =====
 def validar_y_corregir_crs(gdf):
@@ -1268,9 +1264,9 @@ def parsear_kml_manual(contenido_kml):
                             if len(coord_list) >= 3:
                                 polygons.append(Polygon(coord_list))
                             break
-            if polygons:
-                gdf = gpd.GeoDataFrame({'geometry': polygons}, crs='EPSG:4326')
-                return gdf
+        if polygons:
+            gdf = gpd.GeoDataFrame({'geometry': polygons}, crs='EPSG:4326')
+            return gdf
         return None
     except Exception as e:
         return None
@@ -1325,12 +1321,12 @@ def cargar_archivo_parcela(uploaded_file):
             if not gdf.geometry.geom_type.str.contains('Polygon').any():
                 gdf = gdf.explode()
                 gdf = gdf[gdf.geometry.geom_type.isin(['Polygon', 'MultiPolygon'])]
-            if len(gdf) > 0:
-                if 'id_zona' not in gdf.columns:
-                    gdf['id_zona'] = range(1, len(gdf) + 1)
-                return gdf
-            else:
-                return None
+                if len(gdf) > 0:
+                    if 'id_zona' not in gdf.columns:
+                        gdf['id_zona'] = range(1, len(gdf) + 1)
+                    return gdf
+                else:
+                    return None
         return gdf
     except Exception as e:
         return None
@@ -1497,6 +1493,7 @@ def clasificar_textura_suelo(arena, limo, arcilla):
         arena_norm = (arena / total) * 100
         limo_norm = (limo / total) * 100
         arcilla_norm = (arcilla / total) * 100
+        
         if arcilla_norm >= 35:
             return "Franco arcilloso"
         elif arcilla_norm >= 25 and arcilla_norm <= 35 and arena_norm >= 20 and arena_norm <= 45:
@@ -1610,17 +1607,22 @@ def generar_dem_sintetico(gdf, resolucion=10.0):
     gdf = validar_y_corregir_crs(gdf)
     bounds = gdf.total_bounds
     minx, miny, maxx, maxy = bounds
+    
     centroid = gdf.geometry.unary_union.centroid
     seed_value = int(centroid.x * 10000 + centroid.y * 10000) % (2**32)
+    
     rng = np.random.RandomState(seed_value)
+    
     num_cells = 50
     x = np.linspace(minx, maxx, num_cells)
     y = np.linspace(miny, maxy, num_cells)
     X, Y = np.meshgrid(x, y)
+    
     elevacion_base = rng.uniform(100, 300)
     slope_x = rng.uniform(-0.001, 0.001)
     slope_y = rng.uniform(-0.001, 0.001)
     relief = np.zeros_like(X)
+    
     n_hills = rng.randint(2, 5)
     for _ in range(n_hills):
         hill_center_x = rng.uniform(minx, maxx)
@@ -1629,9 +1631,11 @@ def generar_dem_sintetico(gdf, resolucion=10.0):
         hill_height = rng.uniform(10, 50)
         dist = np.sqrt((X - hill_center_x)**2 + (Y - hill_center_y)**2)
         relief += hill_height * np.exp(-(dist**2) / (2 * hill_radius**2))
+    
     noise = rng.randn(*X.shape) * 2
     Z = elevacion_base + slope_x * (X - minx) + slope_y * (Y - miny) + relief + noise
     Z = np.maximum(Z, 50)
+    
     return X, Y, Z, bounds
 
 def calcular_pendiente_simple(X, Y, Z, resolucion=10.0):
@@ -1646,6 +1650,7 @@ def crear_mapa_pendientes_simple(X, Y, pendiente_grid, gdf_original):
     fig.patch.set_facecolor('#0f172a')
     ax1.set_facecolor('#0f172a')
     ax2.set_facecolor('#0f172a')
+    
     X_flat = X.flatten()
     Y_flat = Y.flatten()
     Z_flat = pendiente_grid.flatten()
@@ -1662,8 +1667,8 @@ def crear_mapa_pendientes_simple(X, Y, pendiente_grid, gdf_original):
             if np.sum(mask_cat) > 0:
                 x_center = np.mean(X_flat[valid_mask][mask_cat])
                 y_center = np.mean(Y_flat[valid_mask][mask_cat])
-                ax1.text(x_center, y_center, f'{porcentaje}%', fontsize=8, fontweight='bold', ha='center', va='center',
-                         bbox=dict(boxstyle="round,pad=0.3", facecolor='#1e293b', alpha=0.9, edgecolor='white'), color='white')
+                ax1.text(x_center, y_center, f'{porcentaje}%', fontsize=8, fontweight='bold', ha='center', va='center', 
+                        bbox=dict(boxstyle="round,pad=0.3", facecolor='#1e293b', alpha=0.9, edgecolor='white'), color='white')
     else:
         ax1.text(0.5, 0.5, 'Datos insuficientes\npara mapa de calor', transform=ax1.transAxes, ha='center', va='center', fontsize=12, color='white')
     gdf_original.plot(ax=ax1, color='none', edgecolor='white', linewidth=2)
@@ -1672,6 +1677,7 @@ def crear_mapa_pendientes_simple(X, Y, pendiente_grid, gdf_original):
     ax1.set_ylabel('Latitud', color='white')
     ax1.tick_params(colors='white')
     ax1.grid(True, alpha=0.3, color='#475569')
+    
     if np.sum(valid_mask) > 0:
         pendiente_data = Z_flat[valid_mask]
         ax2.hist(pendiente_data, bins=30, edgecolor='white', color='#3b82f6', alpha=0.7)
@@ -1680,14 +1686,14 @@ def crear_mapa_pendientes_simple(X, Y, pendiente_grid, gdf_original):
             ax2.text(porcentaje+0.5, ax2.get_ylim()[1]*0.9, f'{porcentaje}%', color=color, fontsize=8)
         stats_pendiente = calcular_estadisticas_pendiente_simple(pendiente_grid)
         stats_text = f"""
-        Estadísticas:
-        • Mínima: {stats_pendiente['min']:.1f}%
-        • Máxima: {stats_pendiente['max']:.1f}%
-        • Promedio: {stats_pendiente['promedio']:.1f}%
-        • Desviación: {stats_pendiente['std']:.1f}%
-        """
-        ax2.text(0.02, 0.98, stats_text, transform=ax2.transAxes, fontsize=9, verticalalignment='top',
-                 color='white', bbox=dict(boxstyle="round,pad=0.3", facecolor='#1e293b', alpha=0.9, edgecolor='white'))
+Estadísticas:
+• Mínima: {stats_pendiente['min']:.1f}%
+• Máxima: {stats_pendiente['max']:.1f}%
+• Promedio: {stats_pendiente['promedio']:.1f}%
+• Desviación: {stats_pendiente['std']:.1f}%
+"""
+        ax2.text(0.02, 0.98, stats_text, transform=ax2.transAxes, fontsize=9, verticalalignment='top', 
+                color='white', bbox=dict(boxstyle="round,pad=0.3", facecolor='#1e293b', alpha=0.9, edgecolor='white'))
         ax2.set_xlabel('Pendiente (%)', color='white')
         ax2.set_ylabel('Frecuencia', color='white')
         ax2.set_title('Distribución de Pendientes', fontsize=12, fontweight='bold', color='white')
@@ -1877,14 +1883,17 @@ Tipo de Análisis: {analisis_tipo}"""
         for linea in info_general.strip().split('\n'):
             pdf.cell(0, 8, limpiar_texto_para_pdf(linea), 0, 1)
         pdf.ln(5)
+        
         if analisis_economico:
             pdf.add_page()
             pdf.set_font('Arial', 'B', 16)
             pdf.cell(0, 10, 'ANÁLISIS ECONÓMICO Y RENTABILIDAD', 0, 1, 'C')
             pdf.ln(5)
+            
             pdf.set_font('Arial', 'B', 14)
             pdf.cell(0, 10, '1. INDICADORES DE RENTABILIDAD', 0, 1)
             pdf.set_font('Arial', '', 12)
+            
             metricas = [
                 f"Tasa Interna de Retorno (TIR): {analisis_economico['tir']}%",
                 f"Período de Payback: {analisis_economico['payback']} meses",
@@ -1892,9 +1901,12 @@ Tipo de Análisis: {analisis_tipo}"""
                 f"Ingreso Extra Anual: ${analisis_economico['ingreso_extra']:,.0f}",
                 f"Beneficio Neto Incremental: ${analisis_economico['escenario_con']['total_beneficios'] - analisis_economico['escenario_sin']['total_beneficios']:,.0f}"
             ]
+            
             for metrica in metricas:
                 pdf.cell(0, 8, limpiar_texto_para_pdf(metrica), 0, 1)
+            
             pdf.ln(5)
+        
         if estadisticas:
             pdf.set_font('Arial', 'B', 14)
             pdf.cell(0, 10, '2. ESTADÍSTICAS PRINCIPALES', 0, 1)
@@ -1903,6 +1915,7 @@ Tipo de Análisis: {analisis_tipo}"""
                 linea = f"- {key}: {value}"
                 pdf.cell(0, 8, limpiar_texto_para_pdf(linea), 0, 1)
             pdf.ln(5)
+        
         if mapa_buffer:
             try:
                 pdf.set_font('Arial', 'B', 14)
@@ -1916,6 +1929,7 @@ Tipo de Análisis: {analisis_tipo}"""
                     os.remove(temp_img_path)
             except Exception as e:
                 pdf.cell(0, 8, limpiar_texto_para_pdf(f"Error al incluir mapa: {str(e)[:50]}..."), 0, 1)
+        
         pdf.set_font('Arial', 'B', 14)
         pdf.cell(0, 10, '4. RESUMEN DE ZONAS', 0, 1)
         pdf.set_font('Arial', '', 10)
@@ -1953,7 +1967,8 @@ Tipo de Análisis: {analisis_tipo}"""
                         if i < len(col_widths):
                             pdf.cell(col_widths[i], 8, limpiar_texto_para_pdf(str(item)), border=1)
                     pdf.ln()
-        pdf.ln(5)
+                pdf.ln(5)
+        
         if recomendaciones:
             pdf.set_font('Arial', 'B', 14)
             pdf.cell(0, 10, '5. RECOMENDACIONES', 0, 1)
@@ -1961,6 +1976,7 @@ Tipo de Análisis: {analisis_tipo}"""
             for rec in recomendaciones:
                 linea = f"- {limpiar_texto_para_pdf(rec)}"
                 pdf.multi_cell(0, 8, linea)
+        
         pdf.set_font('Arial', 'B', 14)
         pdf.cell(0, 10, '6. METADATOS TÉCNICOS', 0, 1)
         pdf.set_font('Arial', '', 10)
@@ -1971,6 +1987,7 @@ Sistema de coordenadas: EPSG:4326 (WGS84)
 Número de zonas: {len(gdf_analizado)}"""
         for linea in metadatos.strip().split('\n'):
             pdf.cell(0, 6, limpiar_texto_para_pdf(linea), 0, 1)
+        
         pdf_output = BytesIO()
         pdf_output.write(pdf.output(dest='S').encode('latin-1'))
         pdf_output.seek(0)
@@ -2020,11 +2037,13 @@ def generar_reporte_docx(gdf_analizado, cultivo, analisis_tipo, area_total,
                 info_table.add_row()
             info_table.cell(row_count, 0).text = 'Nutriente Analizado'
             info_table.cell(row_count, 1).text = nutriente
+        
         if analisis_economico:
             doc.add_page()
             doc.add_heading('ANÁLISIS ECONÓMICO Y RENTABILIDAD', level=0).alignment = WD_ALIGN_PARAGRAPH.CENTER
             doc.add_paragraph()
             doc.add_heading('1. INDICADORES DE RENTABILIDAD', level=1)
+            
             metricas = [
                 ('Tasa Interna de Retorno (TIR)', f"{analisis_economico['tir']}%"),
                 ('Período de Payback', f"{analisis_economico['payback']} meses"),
@@ -2032,11 +2051,13 @@ def generar_reporte_docx(gdf_analizado, cultivo, analisis_tipo, area_total,
                 ('Ingreso Extra Anual', f"${analisis_economico['ingreso_extra']:,.0f}"),
                 ('Beneficio Neto Incremental', f"${analisis_economico['escenario_con']['total_beneficios'] - analisis_economico['escenario_sin']['total_beneficios']:,.0f}")
             ]
+            
             for titulo, valor in metricas:
                 p = doc.add_paragraph()
                 p.add_run(f'{titulo}: ').bold = True
                 p.add_run(valor)
-            doc.add_paragraph()
+        
+        doc.add_paragraph()
         if estadisticas:
             doc.add_heading('2. ESTADÍSTICAS PRINCIPALES', level=1)
             for key, value in estadisticas.items():
@@ -2045,6 +2066,7 @@ def generar_reporte_docx(gdf_analizado, cultivo, analisis_tipo, area_total,
                 run.bold = True
                 p.add_run(str(value))
             doc.add_paragraph()
+        
         if mapa_buffer:
             try:
                 doc.add_heading('3. MAPA DE RESULTADOS', level=1)
@@ -2057,6 +2079,7 @@ def generar_reporte_docx(gdf_analizado, cultivo, analisis_tipo, area_total,
                 doc.add_paragraph()
             except Exception as e:
                 doc.add_paragraph(f'Error al incluir mapa: {str(e)[:50]}...')
+        
         doc.add_heading('4. RESUMEN DE ZONAS', level=1)
         if gdf_analizado is not None and not gdf_analizado.empty:
             columnas_mostrar = ['id_zona', 'area_ha']
@@ -2088,12 +2111,14 @@ def generar_reporte_docx(gdf_analizado, cultivo, analisis_tipo, area_total,
                                 row_cells[i].text = str(valor)
                         else:
                             row_cells[i].text = "N/A"
-        doc.add_paragraph()
+                doc.add_paragraph()
+        
         if recomendaciones:
             doc.add_heading('5. RECOMENDACIONES', level=1)
             for rec in recomendaciones:
                 p = doc.add_paragraph(style='List Bullet')
                 p.add_run(rec)
+        
         doc.add_heading('6. METADATOS TÉCNICOS', level=1)
         metadatos = [
             ('Generado por', 'Analizador Multi-Cultivo Satellital'),
@@ -2107,6 +2132,7 @@ def generar_reporte_docx(gdf_analizado, cultivo, analisis_tipo, area_total,
             run_key = p.add_run(f'{key}: ')
             run_key.bold = True
             p.add_run(value)
+        
         docx_output = BytesIO()
         doc.save(docx_output)
         docx_output.seek(0)
@@ -2118,9 +2144,12 @@ def generar_reporte_docx(gdf_analizado, cultivo, analisis_tipo, area_total,
 def crear_mapa_estatico_con_esri(gdf, titulo, columna_valor, analisis_tipo, nutriente, cultivo, satelite):
     try:
         gdf_plot = gdf.to_crs(epsg=3857)
+        
         fig, ax = plt.subplots(1, 1, figsize=(12, 8))
+        
         fig.patch.set_facecolor('#0f172a')
         ax.set_facecolor('#0f172a')
+        
         if analisis_tipo == "FERTILIDAD ACTUAL":
             cmap = LinearSegmentedColormap.from_list('fertilidad_gee', PALETAS_GEE['FERTILIDAD'])
             vmin, vmax = 0, 1
@@ -2136,21 +2165,26 @@ def crear_mapa_estatico_con_esri(gdf, titulo, columna_valor, analisis_tipo, nutr
             else:
                 cmap = LinearSegmentedColormap.from_list('potasio_gee', PALETAS_GEE['POTASIO'])
                 vmin, vmax = (PARAMETROS_CULTIVOS[cultivo]['POTASIO']['min'] * 0.8,
-                              PARAMETROS_CULTIVOS[cultivo]['POTASIO']['max'] * 1.2)  # <- CORREGIDO AQUÍ
+                              PARAMETROS_CULTIVOS[cultivo]['POTASIO']['max'] * 1.2)
+        
         for idx, row in gdf_plot.iterrows():
             valor = row[columna_valor]
             valor_norm = (valor - vmin) / (vmax - vmin) if vmax != vmin else 0.5
             valor_norm = max(0, min(1, valor_norm))
             color = cmap(valor_norm)
             gdf_plot.iloc[[idx]].plot(ax=ax, color=color, edgecolor='white', linewidth=1.5, alpha=0.7)
+            
             centroid = row.geometry.centroid
             ax.annotate(f"Z{row['id_zona']}\n{valor:.1f}", (centroid.x, centroid.y),
-                        xytext=(5, 5), textcoords="offset points", fontsize=8, color='white', weight='bold',
+                        xytext=(5, 5), textcoords="offset points",
+                        fontsize=8, color='white', weight='bold',
                         bbox=dict(boxstyle="round,pad=0.3", facecolor='#1e293b', alpha=0.9, edgecolor='white'))
+        
         try:
             ctx.add_basemap(ax, source=ctx.providers.Esri.WorldImagery, alpha=0.4)
         except:
             pass
+        
         info_satelite = SATELITES_DISPONIBLES.get(satelite, SATELITES_DISPONIBLES['DATOS_SIMULADOS'])
         ax.set_title(f'{ICONOS_CULTIVOS[cultivo]} ANÁLISIS GEE - {cultivo}\n'
                      f'{info_satelite["icono"]} {info_satelite["nombre"]} - {analisis_tipo}\n'
@@ -2160,6 +2194,7 @@ def crear_mapa_estatico_con_esri(gdf, titulo, columna_valor, analisis_tipo, nutr
         ax.set_ylabel('Latitud', color='white')
         ax.tick_params(colors='white')
         ax.grid(True, alpha=0.3, color='#475569')
+        
         sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=vmin, vmax=vmax))
         sm.set_array([])
         cbar = plt.colorbar(sm, ax=ax, shrink=0.8)
@@ -2167,6 +2202,7 @@ def crear_mapa_estatico_con_esri(gdf, titulo, columna_valor, analisis_tipo, nutr
         cbar.ax.yaxis.set_tick_params(color='white')
         cbar.outline.set_edgecolor('white')
         plt.setp(plt.getp(cbar.ax.axes, 'yticklabels'), color='white')
+        
         plt.tight_layout()
         buf = io.BytesIO()
         plt.savefig(buf, format='png', dpi=150, bbox_inches='tight', facecolor='#0f172a')
@@ -2179,33 +2215,42 @@ def crear_mapa_estatico_con_esri(gdf, titulo, columna_valor, analisis_tipo, nutr
 def crear_mapa_texturas_con_esri(gdf_analizado, cultivo):
     try:
         gdf_plot = gdf_analizado.to_crs(epsg=3857)
+        
         fig, ax = plt.subplots(1, 1, figsize=(12, 8))
+        
         fig.patch.set_facecolor('#0f172a')
         ax.set_facecolor('#0f172a')
+        
         colores_textura = {
             'Franco': '#c7eae5',
             'Franco arcilloso': '#5ab4ac',
             'Franco arenoso-arcilloso': '#f6e8c3',
             'NO_DETERMINADA': '#999999'
         }
+        
         for idx, row in gdf_plot.iterrows():
             textura = row['textura_suelo']
             color = colores_textura.get(textura, '#999999')
             gdf_plot.iloc[[idx]].plot(ax=ax, color=color, edgecolor='white', linewidth=1.5, alpha=0.8)
+            
             centroid = row.geometry.centroid
             ax.annotate(f"Z{row['id_zona']}\n{textura[:10]}", (centroid.x, centroid.y),
-                        xytext=(5, 5), textcoords="offset points", fontsize=8, color='black', weight='bold',
+                        xytext=(5, 5), textcoords="offset points",
+                        fontsize=8, color='black', weight='bold',
                         bbox=dict(boxstyle="round,pad=0.3", facecolor='white', alpha=0.9))
+        
         try:
             ctx.add_basemap(ax, source=ctx.providers.Esri.WorldImagery, alpha=0.4)
         except:
             pass
+        
         ax.set_title(f'{ICONOS_CULTIVOS[cultivo]} MAPA DE TEXTURAS - {cultivo}',
                      fontsize=16, fontweight='bold', pad=20, color='white')
         ax.set_xlabel('Longitud', color='white')
         ax.set_ylabel('Latitud', color='white')
         ax.tick_params(colors='white')
         ax.grid(True, alpha=0.3, color='#475569')
+        
         from matplotlib.patches import Patch
         legend_elements = [Patch(facecolor=color, edgecolor='white', label=textura)
                            for textura, color in colores_textura.items()]
@@ -2215,6 +2260,7 @@ def crear_mapa_texturas_con_esri(gdf_analizado, cultivo):
             text.set_color('white')
         legend.get_frame().set_facecolor('#1e293b')
         legend.get_frame().set_edgecolor('white')
+        
         plt.tight_layout()
         buf = io.BytesIO()
         plt.savefig(buf, format='png', dpi=150, bbox_inches='tight', facecolor='#0f172a')
@@ -2276,18 +2322,38 @@ def ejecutar_analisis(gdf, nutriente, analisis_tipo, n_divisiones, cultivo,
         gdf = validar_y_corregir_crs(gdf)
         area_total = calcular_superficie(gdf)
         resultados['area_total'] = area_total
+        
         if analisis_tipo == "ANÁLISIS DE TEXTURA":
             gdf_dividido = dividir_parcela_en_zonas(gdf, n_divisiones)
             gdf_analizado = analizar_textura_suelo(gdf_dividido, cultivo)
             resultados['gdf_analizado'] = gdf_analizado
             resultados['exitoso'] = True
             return resultados
+        
         elif analisis_tipo == "ANÁLISIS DE CURVAS DE NIVEL":
             gdf_dividido = dividir_parcela_en_zonas(gdf, n_divisiones)
             resultados['gdf_analizado'] = gdf_dividido
+            
+            # Generar DEM sintético y calcular pendientes
+            X, Y, Z, bounds = generar_dem_sintetico(gdf, resolucion_dem)
+            pendiente_grid = calcular_pendiente_simple(X, Y, Z, resolucion_dem)
+            
+            # Generar curvas de nivel
+            curvas, elevaciones = generar_curvas_nivel_simple(X, Y, Z, intervalo_curvas, gdf)
+            
+            # Crear mapa de pendientes
+            mapa_buffer, stats_pendiente = crear_mapa_pendientes_simple(X, Y, pendiente_grid, gdf)
+            resultados['mapa_buffer'] = mapa_buffer
+            resultados['estadisticas'] = stats_pendiente
+            
             resultados['exitoso'] = True
             return resultados
-        elif analisis_tipo in ["FERTILIDAD ACTUAL", "RECOMENDACIONES NPK"]:
+        
+        else:  # FERTILIDAD ACTUAL o RECOMENDACIONES NPK
+            # Dividir la parcela en zonas
+            gdf_dividido = dividir_parcela_en_zonas(gdf, n_divisiones)
+            
+            # Obtener datos satelitales según la fuente seleccionada
             datos_satelitales = None
             if satelite == "SENTINEL-2":
                 datos_satelitales = descargar_datos_sentinel2(gdf, fecha_inicio, fecha_fin, indice)
@@ -2295,48 +2361,191 @@ def ejecutar_analisis(gdf, nutriente, analisis_tipo, n_divisiones, cultivo,
                 datos_satelitales = descargar_datos_landsat8(gdf, fecha_inicio, fecha_fin, indice)
             else:
                 datos_satelitales = generar_datos_simulados(gdf, cultivo, indice)
-            gdf_dividido = dividir_parcela_en_zonas(gdf, n_divisiones)
-            indices_gee = calcular_indices_satelitales_gee(gdf_dividido, cultivo, datos_satelitales)
+            
+            # Obtener datos meteorológicos de NASA POWER
+            df_power = obtener_datos_nasa_power(gdf, fecha_inicio, fecha_fin)
+            resultados['df_power'] = df_power
+            
+            # Calcular índices de fertilidad
+            indices_fertilidad = calcular_indices_satelitales_gee(gdf_dividido, cultivo, datos_satelitales)
+            
+            # Crear GeoDataFrame con resultados
             gdf_analizado = gdf_dividido.copy()
-            for idx, indice_data in enumerate(indices_gee):
-                for key, value in indice_data.items():
-                    gdf_analizado.loc[gdf_analizado.index[idx], key] = value
-            areas_ha_list = []
+            for i, (idx, row) in enumerate(gdf_analizado.iterrows()):
+                for key, value in indices_fertilidad[i].items():
+                    gdf_analizado.at[idx, key] = value
+            
+            # Calcular área por zona
+            gdf_analizado['area_ha'] = 0.0
             for idx, row in gdf_analizado.iterrows():
-                area_gdf = gpd.GeoDataFrame({'geometry': [row.geometry]}, crs=gdf_analizado.crs)
-                area_ha = calcular_superficie(area_gdf)
-                if hasattr(area_ha, 'iloc'):
-                    area_ha = float(area_ha.iloc[0])
-                elif hasattr(area_ha, '__len__') and len(area_ha) > 0:
-                    area_ha = float(area_ha[0])
-                else:
-                    area_ha = float(area_ha)
-                areas_ha_list.append(area_ha)
-            gdf_analizado['area_ha'] = areas_ha_list
+                area_zona = calcular_superficie(gpd.GeoDataFrame({'geometry': [row.geometry]}, crs=gdf_analizado.crs))
+                gdf_analizado.at[idx, 'area_ha'] = area_zona
+            
+            # Para RECOMENDACIONES NPK, calcular recomendaciones
             if analisis_tipo == "RECOMENDACIONES NPK":
-                recomendaciones_npk = calcular_recomendaciones_npk_gee(indices_gee, nutriente, cultivo)
-                gdf_analizado['valor_recomendado'] = recomendaciones_npk
+                recomendaciones = calcular_recomendaciones_npk_gee(indices_fertilidad, nutriente, cultivo)
+                gdf_analizado['valor_recomendado'] = recomendaciones
+                columna_valor = 'valor_recomendado'
+            else:
+                columna_valor = 'npk_actual'
+            
+            # Crear mapa estático
+            mapa_buffer = crear_mapa_estatico_con_esri(gdf_analizado, f"Análisis de {analisis_tipo}", 
+                                                     columna_valor, analisis_tipo, nutriente, cultivo, satelite)
+            
             resultados['gdf_analizado'] = gdf_analizado
+            resultados['mapa_buffer'] = mapa_buffer
             resultados['exitoso'] = True
-            if satelite:
-                df_power = obtener_datos_nasa_power(gdf, fecha_inicio, fecha_fin)
-                if df_power is not None:
-                    resultados['df_power'] = df_power
+            
             return resultados
-        else:
-            return resultados
+            
     except Exception as e:
+        st.error(f"Error en ejecutar_analisis: {str(e)}")
         return resultados
 
 # ===== INTERFAZ PRINCIPAL =====
 def main():
+    # Inyectar CSS personalizado
+    inject_custom_css()
+    
+    # Título principal con hero banner
+    st.markdown("""
+    <div class="hero-banner">
+        <div class="hero-content">
+            <h1 class="hero-title">ANALIZADOR MULTI-CULTIVO SATELITAL</h1>
+            <p class="hero-subtitle">Potenciado con NASA POWER, GEE y tecnología avanzada para una agricultura de precisión</p>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Sidebar con configuración
+    with st.sidebar:
+        st.markdown('<div class="sidebar-title">⚙️ CONFIGURACIÓN</div>', unsafe_allow_html=True)
+        cultivo = st.selectbox("Cultivo:", ["MAÍZ", "SOYA", "TRIGO", "GIRASOL"])
+        
+        # IMAGEN CON MANEJO DE ERRORES
+        try:
+            # Normalizar el nombre del cultivo
+            cultivo_key = cultivo.upper().replace("Í", "I").replace("Á", "A")
+            
+            # Verificar si tenemos la imagen
+            if cultivo in IMAGENES_CULTIVOS:
+                st.image(IMAGENES_CULTIVOS[cultivo], 
+                        caption=f"Cultivo: {cultivo}",
+                        use_container_width=True)
+            else:
+                # Usar imagen por defecto
+                st.image("https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=400&h=300&fit=crop",
+                        caption=f"Cultivo: {cultivo}",
+                        use_container_width=True)
+        except Exception as e:
+            # Si todo falla, mostrar un placeholder simple
+            st.markdown(f"**🌱 {cultivo}**")
+            st.info(f"Imagen del cultivo: {cultivo}")
+        
+        analisis_tipo = st.selectbox("Tipo de Análisis:", ["FERTILIDAD ACTUAL", "RECOMENDACIONES NPK", "ANÁLISIS DE TEXTURA", "ANÁLISIS DE CURVAS DE NIVEL"])
+        if analisis_tipo == "RECOMENDACIONES NPK":
+            nutriente = st.selectbox("Nutriente:", ["NITRÓGENO", "FÓSFORO", "POTASIO"])
+        else:
+            nutriente = None
+        
+        st.subheader("🛰️ Fuente de Datos Satelitales")
+        satelite_seleccionado = st.selectbox(
+            "Satélite:",
+            ["SENTINEL-2", "LANDSAT-8", "DATOS_SIMULADOS"],
+            help="Selecciona la fuente de datos satelitales"
+        )
+        if satelite_seleccionado in SATELITES_DISPONIBLES:
+            info_satelite = SATELITES_DISPONIBLES[satelite_seleccionado]
+            st.info(f"""
+            **{info_satelite['icono']} {info_satelite['nombre']}**
+            - Resolución: {info_satelite['resolucion']}
+            - Revisita: {info_satelite['revisita']}
+            - Índices: {', '.join(info_satelite['indices'][:3])}
+            """)
+        
+        if analisis_tipo in ["FERTILIDAD ACTUAL", "RECOMENDACIONES NPK"]:
+            st.subheader("📊 Índices de Vegetación")
+            if satelite_seleccionado == "SENTINEL-2":
+                indice_seleccionado = st.selectbox("Índice:", SATELITES_DISPONIBLES['SENTINEL-2']['indices'])
+            elif satelite_seleccionado == "LANDSAT-8":
+                indice_seleccionado = st.selectbox("Índice:", SATELITES_DISPONIBLES['LANDSAT-8']['indices'])
+            else:
+                indice_seleccionado = st.selectbox("Índice:", SATELITES_DISPONIBLES['DATOS_SIMULADOS']['indices'])
+
+        if analisis_tipo in ["FERTILIDAD ACTUAL", "RECOMENDACIONES NPK"]:
+            st.subheader("📅 Rango Temporal")
+            fecha_fin = st.date_input("Fecha fin", datetime.now())
+            fecha_inicio = st.date_input("Fecha inicio", datetime.now() - timedelta(days=30))
+
+        st.subheader("🎯 División de Parcela")
+        n_divisiones = st.slider("Número de zonas de manejo:", min_value=16, max_value=48, value=32)
+
+        if analisis_tipo == "ANÁLISIS DE CURVAS DE NIVEL":
+            st.subheader("🏔️ Configuración Curvas de Nivel")
+            intervalo_curvas = st.slider("Intervalo entre curvas (metros):", 1.0, 20.0, 5.0, 1.0)
+            resolucion_dem = st.slider("Resolución DEM (metros):", 5.0, 50.0, 10.0, 5.0)
+
+        st.subheader("📤 Subir Parcela")
+        uploaded_file = st.file_uploader("Subir archivo de tu parcela", type=['zip', 'kml', 'kmz'],
+                                         help="Formatos aceptados: Shapefile (.zip), KML (.kml), KMZ (.kmz)")
+        
+        # ===== NUEVA SECCIÓN: ANÁLISIS ECONÓMICO =====
+        st.markdown("---")
+        st.markdown('<div class="sidebar-title">💰 ANÁLISIS ECONÓMICO</div>', unsafe_allow_html=True)
+        
+        if st.button("🔄 Actualizar Precios de Mercado", key="actualizar_precios"):
+            with st.spinner("Obteniendo precios actualizados..."):
+                precios_actualizados = obtener_precios_actualizados()
+                st.session_state['precios_actualizados'] = precios_actualizados
+                st.success("✅ Precios actualizados")
+        
+        if 'precios_actualizados' in st.session_state:
+            st.info(f"📅 Precios actualizados: {st.session_state['precios_actualizados'].get('fecha_actualizacion', 'N/A')}")
+        
+        plaza_precios = st.selectbox("Plaza de referencia:", ["ROSARIO", "BUENOS AIRES"])
+        
+        st.subheader("📊 Parámetros Económicos")
+        
+        costo_base_ha = st.number_input(
+            f"Costo base producción ({cultivo}) USD/ha:",
+            min_value=100.0,
+            max_value=5000.0,
+            value=float(COSTOS_BASE.get(cultivo, 1000)),
+            step=50.0
+        )
+        
+        precio_venta_manual = st.number_input(
+            f"Precio venta {cultivo} USD/ton:",
+            min_value=50.0,
+            max_value=1000.0,
+            value=float(PRECIOS_API['precios_pizarra'].get(f'{cultivo.lower().replace("í", "i").replace("á", "a")}_rosario', 200)),
+            step=10.0
+        )
+        
+        tasa_descuento = st.slider(
+            "Tasa de descuento (%):",
+            min_value=1.0,
+            max_value=20.0,
+            value=12.0,
+            step=0.5
+        ) / 100
+        
+        st.session_state['parametros_economicos'] = {
+            'plaza': plaza_precios,
+            'costo_base_ha': costo_base_ha,
+            'precio_venta': precio_venta_manual,
+            'tasa_descuento': tasa_descuento
+        }
+    
     # Inicializar precios
     inicializar_precios()
-
+    
     # Mostrar información de precios actualizados
     if 'precios_actualizados' in st.session_state:
         precios = st.session_state['precios_actualizados']
         fecha_actualizacion = precios.get('fecha_actualizacion', 'N/A')
+        
         col1, col2, col3, col4 = st.columns(4)
         with col1:
             st.metric("🌽 Maíz", f"${precios['pizarra_rosario'].get('maiz_rosario', 200)}/ton")
@@ -2346,17 +2555,19 @@ def main():
             st.metric("🌾 Trigo", f"${precios['pizarra_rosario'].get('trigo_rosario', 250)}/ton")
         with col4:
             st.metric("🌻 Girasol", f"${precios['pizarra_rosario'].get('girasol_rosario', 350)}/ton")
+        
         st.caption(f"📅 Precios actualizados al: {fecha_actualizacion}")
-
+    
     # Crear pestañas principales
     tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 ANÁLISIS PRINCIPAL", "🌱 FERTILIDAD", "💰 ECONOMÍA", "📈 REPORTES", "ℹ️ AYUDA"])
-
+    
     with tab1:
         st.header("📊 ANÁLISIS PRINCIPAL")
-        # Obtener variables del sidebar
-        if 'uploaded_file' in locals() and uploaded_file is not None:
+        
+        if uploaded_file is not None:
             with st.spinner("Cargando y analizando parcela..."):
                 gdf_cargado = cargar_archivo_parcela(uploaded_file)
+                
                 if gdf_cargado is not None and not gdf_cargado.empty:
                     # Ejecutar análisis según tipo seleccionado
                     resultados = ejecutar_analisis(
@@ -2366,22 +2577,26 @@ def main():
                         n_divisiones=n_divisiones,
                         cultivo=cultivo,
                         satelite=satelite_seleccionado,
-                        indice=indice_seleccionado if 'indice_seleccionado' in locals() else None,
+                        indice=indice_seleccionado,
                         fecha_inicio=fecha_inicio if 'fecha_inicio' in locals() else None,
                         fecha_fin=fecha_fin if 'fecha_fin' in locals() else None,
                         intervalo_curvas=intervalo_curvas if 'intervalo_curvas' in locals() else 5.0,
                         resolucion_dem=resolucion_dem if 'resolucion_dem' in locals() else 10.0
                     )
+                    
                     if resultados['exitoso']:
                         # Mostrar resultados
                         col1, col2 = st.columns([2, 1])
+                        
                         with col1:
                             if resultados['mapa_buffer']:
                                 st.image(resultados['mapa_buffer'], caption=f"Mapa de {analisis_tipo} - {cultivo}", use_container_width=True)
+                        
                         with col2:
                             st.subheader("📈 Resumen del Análisis")
                             st.metric("Área Total", f"{resultados['area_total']:.2f} ha")
                             st.metric("Número de Zonas", f"{len(resultados['gdf_analizado'])}")
+                            
                             # Mostrar estadísticas específicas
                             if analisis_tipo == "FERTILIDAD ACTUAL":
                                 if 'npk_actual' in resultados['gdf_analizado'].columns:
@@ -2391,11 +2606,11 @@ def main():
                                 if 'valor_recomendado' in resultados['gdf_analizado'].columns:
                                     rec_promedio = resultados['gdf_analizado']['valor_recomendado'].mean()
                                     st.metric(f"{nutriente} Recomendado", f"{rec_promedio:.1f} kg/ha")
-
-                        # Botón para análisis económico
-                        if st.button("💰 Realizar Análisis Económico", type="primary"):
-                            st.session_state['mostrar_economia'] = True
-
+                            
+                            # Botón para análisis económico
+                            if st.button("💰 Realizar Análisis Económico", type="primary"):
+                                st.session_state['mostrar_economia'] = True
+                        
                         # Mostrar tabla de datos
                         st.subheader("📋 Datos por Zona")
                         if resultados['gdf_analizado'] is not None:
@@ -2411,92 +2626,96 @@ def main():
                                 columnas_interes.append('valor_recomendado')
                             if 'textura_suelo' in resultados['gdf_analizado'].columns:
                                 columnas_interes.append('textura_suelo')
+                            
                             df_display = resultados['gdf_analizado'][columnas_interes].copy()
                             st.dataframe(df_display, use_container_width=True)
-
-                        # Opciones de exportación
-                        col_exp1, col_exp2, col_exp3 = st.columns(3)
-                        with col_exp1:
-                            if st.button("📥 Exportar a GeoJSON"):
-                                geojson_data, nombre_archivo = exportar_a_geojson(resultados['gdf_analizado'], f"{cultivo}_{analisis_tipo}")
-                                if geojson_data:
-                                    st.download_button(
-                                        label="Descargar GeoJSON",
-                                        data=geojson_data,
-                                        file_name=nombre_archivo,
-                                        mime="application/json"
+                            
+                            # Opciones de exportación
+                            col_exp1, col_exp2, col_exp3 = st.columns(3)
+                            with col_exp1:
+                                if st.button("📥 Exportar a GeoJSON"):
+                                    geojson_data, nombre_archivo = exportar_a_geojson(resultados['gdf_analizado'], f"{cultivo}_{analisis_tipo}")
+                                    if geojson_data:
+                                        st.download_button(
+                                            label="Descargar GeoJSON",
+                                            data=geojson_data,
+                                            file_name=nombre_archivo,
+                                            mime="application/json"
+                                        )
+                            with col_exp2:
+                                if st.button("📄 Generar Reporte PDF"):
+                                    reporte_pdf = generar_reporte_pdf(
+                                        gdf_analizado=resultados['gdf_analizado'],
+                                        cultivo=cultivo,
+                                        analisis_tipo=analisis_tipo,
+                                        area_total=resultados['area_total'],
+                                        nutriente=nutriente,
+                                        satelite=satelite_seleccionado,
+                                        indice=indice_seleccionado,
+                                        mapa_buffer=resultados['mapa_buffer'],
+                                        estadisticas=resultados['estadisticas']
                                     )
-                        with col_exp2:
-                            if st.button("📄 Generar Reporte PDF"):
-                                reporte_pdf = generar_reporte_pdf(
-                                    gdf_analizado=resultados['gdf_analizado'],
-                                    cultivo=cultivo,
-                                    analisis_tipo=analisis_tipo,
-                                    area_total=resultados['area_total'],
-                                    nutriente=nutriente,
-                                    satelite=satelite_seleccionado,
-                                    indice=indice_seleccionado if 'indice_seleccionado' in locals() else None,
-                                    mapa_buffer=resultados['mapa_buffer'],
-                                    estadisticas=resultados['estadisticas']
-                                )
-                                if reporte_pdf:
-                                    st.download_button(
-                                        label="Descargar PDF",
-                                        data=reporte_pdf,
-                                        file_name=f"reporte_{cultivo}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
-                                        mime="application/pdf"
+                                    if reporte_pdf:
+                                        st.download_button(
+                                            label="Descargar PDF",
+                                            data=reporte_pdf,
+                                            file_name=f"reporte_{cultivo}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
+                                            mime="application/pdf"
+                                        )
+                            with col_exp3:
+                                if st.button("📝 Generar Reporte Word"):
+                                    reporte_docx = generar_reporte_docx(
+                                        gdf_analizado=resultados['gdf_analizado'],
+                                        cultivo=cultivo,
+                                        analisis_tipo=analisis_tipo,
+                                        area_total=resultados['area_total'],
+                                        nutriente=nutriente,
+                                        satelite=satelite_seleccionado,
+                                        indice=indice_seleccionado,
+                                        mapa_buffer=resultados['mapa_buffer'],
+                                        estadisticas=resultados['estadisticas']
                                     )
-                        with col_exp3:
-                            if st.button("📝 Generar Reporte Word"):
-                                reporte_docx = generar_reporte_docx(
-                                    gdf_analizado=resultados['gdf_analizado'],
-                                    cultivo=cultivo,
-                                    analisis_tipo=analisis_tipo,
-                                    area_total=resultados['area_total'],
-                                    nutriente=nutriente,
-                                    satelite=satelite_seleccionado,
-                                    indice=indice_seleccionado if 'indice_seleccionado' in locals() else None,
-                                    mapa_buffer=resultados['mapa_buffer'],
-                                    estadisticas=resultados['estadisticas']
-                                )
-                                if reporte_docx:
-                                    st.download_button(
-                                        label="Descargar Word",
-                                        data=reporte_docx,
-                                        file_name=f"reporte_{cultivo}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx",
-                                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                                    )
+                                    if reporte_docx:
+                                        st.download_button(
+                                            label="Descargar Word",
+                                            data=reporte_docx,
+                                            file_name=f"reporte_{cultivo}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx",
+                                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                                        )
                     else:
                         st.error("❌ Error al ejecutar el análisis")
                 else:
                     st.warning("⚠️ No se pudo cargar el archivo de parcela")
         else:
             st.info("📤 Sube un archivo de parcela para comenzar el análisis")
-
-        # Mostrar ejemplo de formato
-        with st.expander("📋 Formatos de archivo aceptados"):
-            st.markdown("""
-            **Formato Shapefile (.zip)**:
-            - Archivo ZIP que contenga: .shp, .shx, .dbf, .prj
-            - Sistema de coordenadas preferido: WGS84 (EPSG:4326)
-            **Formato KML/KMZ**:
-            - Archivo .kml o .kmz (Google Earth)
-            - Debe contener polígonos válidos
-            **Ejemplo de estructura:**
-            ```
-            mi_parcela.zip
-            ├── parcela.shp
-            ├── parcela.shx
-            ├── parcela.dbf
-            └── parcela.prj
-            ```
-            """)
-
+            
+            # Mostrar ejemplo de formato
+            with st.expander("📋 Formatos de archivo aceptados"):
+                st.markdown("""
+                **Formato Shapefile (.zip)**:
+                - Archivo ZIP que contenga: .shp, .shx, .dbf, .prj
+                - Sistema de coordenadas preferido: WGS84 (EPSG:4326)
+                
+                **Formato KML/KMZ**:
+                - Archivo .kml o .kmz (Google Earth)
+                - Debe contener polígonos válidos
+                
+                **Ejemplo de estructura:**
+                ```
+                mi_parcela.zip
+                ├── parcela.shp
+                ├── parcela.shx
+                ├── parcela.dbf
+                └── parcela.prj
+                ```
+                """)
+    
     with tab2:
         st.header("🌱 ANÁLISIS DE FERTILIDAD")
         if 'resultados' in locals() and resultados.get('exitoso'):
             # Mostrar análisis detallado de fertilidad
             gdf_analizado = resultados['gdf_analizado']
+            
             # Gráficos de distribución
             col1, col2 = st.columns(2)
             with col1:
@@ -2510,11 +2729,12 @@ def main():
                     fig.patch.set_facecolor('#0f172a')
                     ax.tick_params(colors='white')
                     st.pyplot(fig)
+            
             with col2:
                 if 'materia_organica' in gdf_analizado.columns:
                     fig, ax = plt.subplots(figsize=(8, 4))
                     ax.scatter(gdf_analizado['materia_organica'], gdf_analizado['npk_actual'] if 'npk_actual' in gdf_analizado.columns else gdf_analizado['id_zona'],
-                               color='#10b981', alpha=0.6)
+                              color='#10b981', alpha=0.6)
                     ax.set_xlabel('Materia Orgánica (%)', color='white')
                     ax.set_ylabel('NPK' if 'npk_actual' in gdf_analizado.columns else 'Zona', color='white')
                     ax.set_title('Relación Materia Orgánica - Fertilidad', color='white', fontweight='bold')
@@ -2522,10 +2742,12 @@ def main():
                     fig.patch.set_facecolor('#0f172a')
                     ax.tick_params(colors='white')
                     st.pyplot(fig)
+            
             # Recomendaciones de fertilización
             st.subheader("💡 Recomendaciones de Fertilización")
             if 'npk_actual' in gdf_analizado.columns:
                 npk_promedio = gdf_analizado['npk_actual'].mean()
+                
                 if npk_promedio < 0.3:
                     st.error("**Fertilidad CRÍTICA** - Se requiere fertilización intensiva inmediata")
                     st.markdown("""
@@ -2560,14 +2782,16 @@ def main():
                     """)
         else:
             st.info("👈 Realiza primero un análisis en la pestaña principal")
-
+    
     with tab3:
         st.header("💰 ANÁLISIS ECONÓMICO")
+        
         if 'mostrar_economia' in st.session_state and st.session_state['mostrar_economia']:
             if 'precios_actualizados' in st.session_state and 'resultados' in locals():
                 precios = st.session_state['precios_actualizados']
                 gdf_analizado = resultados['gdf_analizado']
                 area_total = resultados['area_total']
+                
                 # Realizar análisis económico
                 with st.spinner("Calculando análisis económico..."):
                     analisis_economico = generar_analisis_economico(
@@ -2576,6 +2800,7 @@ def main():
                         area_total=area_total,
                         precios_actualizados=precios
                     )
+                
                 if analisis_economico:
                     # Mostrar métricas económicas
                     col1, col2, col3, col4 = st.columns(4)
@@ -2588,10 +2813,11 @@ def main():
                     with col4:
                         beneficio_neto = analisis_economico['escenario_con']['total_beneficios']
                         st.metric("💵 Beneficio Neto", f"${beneficio_neto:,.0f}")
-
+                    
                     # Comparación de escenarios
                     st.subheader("📊 Comparación de Escenarios")
                     col1, col2 = st.columns(2)
+                    
                     with col1:
                         st.markdown("""
                         <div class="dashboard-card">
@@ -2600,6 +2826,7 @@ def main():
                         st.metric("Rendimiento", f"{analisis_economico['escenario_sin']['rendimiento_promedio']:.1f} t/ha")
                         st.metric("Costo Total", f"${analisis_economico['escenario_sin']['total_costos']:,.0f}")
                         st.metric("Beneficio", f"${analisis_economico['escenario_sin']['total_beneficios']:,.0f}")
+                    
                     with col2:
                         st.markdown("""
                         <div class="dashboard-card">
@@ -2608,10 +2835,12 @@ def main():
                         st.metric("Rendimiento", f"{analisis_economico['escenario_con']['rendimiento_promedio']:.1f} t/ha")
                         st.metric("Costo Total", f"${analisis_economico['escenario_con']['total_costos']:,.0f}")
                         st.metric("Beneficio", f"${analisis_economico['escenario_con']['total_beneficios']:,.0f}")
-
+                    
                     # Crear mapas económicos
                     st.subheader("🗺️ Mapas de Rentabilidad")
+                    
                     col1, col2 = st.columns(2)
+                    
                     with col1:
                         # Mapa de potencial de cosecha
                         mapa_potencial, gdf_potencial = crear_mapa_potencial_cosecha(
@@ -2619,6 +2848,7 @@ def main():
                         )
                         if mapa_potencial:
                             st.image(mapa_potencial, caption="Potencial de Cosecha (t/ha)", use_container_width=True)
+                    
                     with col2:
                         # Mapa de rentabilidad
                         mapa_rentabilidad = crear_mapa_rentabilidad(
@@ -2626,12 +2856,13 @@ def main():
                         )
                         if mapa_rentabilidad:
                             st.image(mapa_rentabilidad, caption="Rentabilidad (USD/ha)", use_container_width=True)
-
+                    
                     # Detalles de costos
                     with st.expander("📋 Detalle de Costos de Fertilización"):
                         if 'npk_actual' in gdf_analizado.columns:
                             npk_promedio = gdf_analizado['npk_actual'].mean()
                             costo_fert = calcular_costo_fertilizacion(npk_promedio, cultivo, precios)
+                            
                             st.markdown(f"""
                             **Cálculo para fertilidad promedio: {npk_promedio:.2f}**
                             - **Nitrógeno (N):** {costo_fert['dosis_ajustada']['N']} kg/ha = ${costo_fert['costo_n']}/ha
@@ -2639,12 +2870,13 @@ def main():
                             - **Potasio (K):** {costo_fert['dosis_ajustada']['K']} kg/ha = ${costo_fert['costo_k']}/ha
                             - **Costo Total Fertilización:** ${costo_fert['costo_total']}/ha
                             """)
-
+                    
                     # Recomendación final
                     st.subheader("🎯 Recomendación Económica")
                     if analisis_economico['tir'] > 15:
                         st.success(f"""
                         **✅ RECOMENDACIÓN: INVERTIR EN FERTILIZACIÓN**
+                        
                         La fertilización muestra excelente retorno económico:
                         - TIR del {analisis_economico['tir']}% (superior al costo de capital)
                         - Payback de {analisis_economico['payback']} meses
@@ -2653,6 +2885,7 @@ def main():
                     elif analisis_economico['tir'] > 8:
                         st.info(f"""
                         **⚠️ RECOMENDACIÓN: CONSIDERAR FERTILIZACIÓN SELECTIVA**
+                        
                         La fertilización muestra retorno moderado:
                         - TIR del {analisis_economico['tir']}%
                         - Evaluar zonas específicas de mayor rentabilidad
@@ -2661,18 +2894,20 @@ def main():
                     else:
                         st.warning(f"""
                         **❌ RECOMENDACIÓN: POSTERGAR FERTILIZACIÓN**
+                        
                         El retorno económico no justifica la inversión:
                         - TIR del {analisis_economico['tir']}% (inferior al costo de capital)
                         - Evaluar mejoras en otros aspectos productivos
                         - Considerar análisis de suelo de laboratorio
                         """)
-                else:
-                    st.info("Realiza primero un análisis de fertilidad para habilitar el análisis económico")
+            else:
+                st.info("Realiza primero un análisis de fertilidad para habilitar el análisis económico")
         else:
             st.info("👈 Haz clic en 'Realizar Análisis Económico' en la pestaña principal")
-
+    
     with tab4:
         st.header("📈 REPORTES Y EXPORTACIÓN")
+        
         if 'resultados' in locals() and resultados.get('exitoso'):
             # Generar estadísticas
             estadisticas = generar_resumen_estadisticas(
@@ -2681,12 +2916,14 @@ def main():
                 cultivo,
                 resultados.get('df_power')
             )
+            
             # Generar recomendaciones
             recomendaciones = generar_recomendaciones_generales(
                 resultados['gdf_analizado'],
                 analisis_tipo,
                 cultivo
             )
+            
             # Mostrar resumen
             st.subheader("📊 Resumen Estadístico")
             if estadisticas:
@@ -2695,13 +2932,17 @@ def main():
                 for i, (key, value) in enumerate(items):
                     with cols[i % 3]:
                         st.metric(key, value)
+            
             # Mostrar recomendaciones
             st.subheader("💡 Recomendaciones de Manejo")
             for i, rec in enumerate(recomendaciones[:5]):  # Mostrar solo 5 principales
                 st.markdown(f"{i+1}. {rec}")
+            
             # Opciones de exportación completas
             st.subheader("📤 Exportar Resultados")
+            
             col1, col2, col3 = st.columns(3)
+            
             with col1:
                 st.markdown("**GeoJSON**")
                 if st.button("🌐 Exportar GeoJSON", key="export_geojson"):
@@ -2716,6 +2957,7 @@ def main():
                             file_name=nombre_archivo,
                             mime="application/json"
                         )
+            
             with col2:
                 st.markdown("**Reporte PDF**")
                 if st.button("📄 Generar PDF", key="export_pdf"):
@@ -2727,7 +2969,7 @@ def main():
                             area_total=resultados['area_total'],
                             nutriente=nutriente,
                             satelite=satelite_seleccionado,
-                            indice=indice_seleccionado if 'indice_seleccionado' in locals() else None,
+                            indice=indice_seleccionado,
                             mapa_buffer=resultados['mapa_buffer'],
                             estadisticas=estadisticas,
                             recomendaciones=recomendaciones
@@ -2739,6 +2981,7 @@ def main():
                                 file_name=f"reporte_{cultivo}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
                                 mime="application/pdf"
                             )
+            
             with col3:
                 st.markdown("**Reporte Word**")
                 if st.button("📝 Generar Word", key="export_word"):
@@ -2750,7 +2993,7 @@ def main():
                             area_total=resultados['area_total'],
                             nutriente=nutriente,
                             satelite=satelite_seleccionado,
-                            indice=indice_seleccionado if 'indice_seleccionado' in locals() else None,
+                            indice=indice_seleccionado,
                             mapa_buffer=resultados['mapa_buffer'],
                             estadisticas=estadisticas,
                             recomendaciones=recomendaciones
@@ -2762,11 +3005,13 @@ def main():
                                 file_name=f"reporte_{cultivo}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx",
                                 mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                             )
+            
             # Exportar datos tabulares
             st.subheader("📊 Exportar Datos Tabulares")
             if resultados['gdf_analizado'] is not None:
                 df_export = resultados['gdf_analizado'].drop(columns=['geometry'] if 'geometry' in resultados['gdf_analizado'].columns else [])
                 csv_data = df_export.to_csv(index=False).encode('utf-8')
+                
                 st.download_button(
                     label="📥 Descargar CSV",
                     data=csv_data,
@@ -2775,78 +3020,96 @@ def main():
                 )
         else:
             st.info("Realiza primero un análisis para generar reportes")
-
+    
     with tab5:
         st.header("ℹ️ AYUDA Y DOCUMENTACIÓN")
+        
         st.markdown("### 📖 Guía de Uso")
+        
         st.markdown("""
         **1. Configuración Inicial**
         - Selecciona el cultivo en el sidebar
         - Elige el tipo de análisis
         - Configura parámetros según el análisis seleccionado
         """)
+        
         st.markdown("""
         **2. Subida de Archivos**
         - Formatos aceptados: Shapefile (.zip), KML, KMZ
         - El archivo debe contener polígonos válidos
         - Sistema de coordenadas preferido: WGS84 (EPSG:4326)
         """)
+        
         st.markdown("""
         **3. Tipos de Análisis Disponibles**
+        
         **🌱 Fertilidad Actual**
         - Analiza el estado nutricional del suelo
         - Genera índice NPK integrado
         - Incluye materia orgánica y humedad
+        
         **🧪 Recomendaciones NPK**
         - Recomienda dosis específicas de nutrientes
         - Basado en índices de vegetación
         - Personalizado por cultivo
+        
         **🏺 Análisis de Textura**
         - Clasificación textural del suelo
         - Recomendaciones de manejo
         - Compatibilidad con cultivo
+        
         **🗺️ Curvas de Nivel**
         - Análisis de pendientes
         - Generación de curvas de nivel
         - Identificación de áreas de riesgo
         """)
+        
         st.markdown("""
         **4. Análisis Económico**
         - Calcula rentabilidad por zona
         - Evalúa TIR y payback
         - Compara escenarios con/sin fertilización
         """)
+        
         st.markdown("### 🛠️ Solución de Problemas")
+        
         st.markdown("""
         **❌ Error al cargar archivo**
         1. Verifica que el archivo tenga el formato correcto
         2. Asegúrate de que contenga geometrías válidas
         3. Revisa el sistema de coordenadas
+        
         **⚠️ Datos satelitales no disponibles**
         1. Los datos simulados siempre están disponibles
         2. Verifica las fechas seleccionadas
         3. Intenta con otro satélite
         """)
+        
         st.markdown("### 📞 Soporte Técnico")
+        
         st.markdown("""
         Para soporte o consultas:
-        - 📧 mawucano@gmail.com
-        - 📱 +54 9 3525 53-2313
+        - 📧 soporte@agrotech.com
+        - 📱 +54 9 11 1234-5678
+        - 🌐 www.agrotech-soporte.com
         """)
+        
         st.markdown("### 🔄 Actualizaciones")
+        
         st.markdown("""
         **Versión 2.0** - Diciembre 2024
         - Análisis económico integrado
         - Mapas de rentabilidad
         - Exportación mejorada
         - Interfaz premium
+        
         **Próximas características:**
         - Integración con APIs meteorológicas en tiempo real
         - Modelos predictivos de rendimiento
         - Alertas tempranas de plagas
         - Integración con maquinaria agrícola
         """)
-
+        
         # Información del sistema
         with st.expander("🔧 Información del Sistema"):
             st.markdown(f"""
