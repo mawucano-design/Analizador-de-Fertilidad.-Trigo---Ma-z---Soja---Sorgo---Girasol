@@ -2528,10 +2528,6 @@ def ejecutar_analisis(gdf, nutriente, analisis_tipo, n_divisiones, cultivo,
         st.error(f"Error en ejecutar_analisis: {str(e)}")
         return resultados
 
-# ===== CORRECCIÓN DEL TYPO EN crear_mapa_estatico_con_esri =====
-# En la función crear_mapa_estatico_con_esri, corregir PARAMETROS_CULTIVos por PARAMETROS_CULTIVOS
-# La corrección ya está aplicada en el código anterior
-
 # ===== INTERFAZ PRINCIPAL =====
 def main():
     # Configurar la página
@@ -2578,7 +2574,8 @@ def main():
     with tab1:
         st.header("📊 ANÁLISIS PRINCIPAL")
         
-        if uploaded_file is not None:
+        # Obtener variables del sidebar
+        if 'uploaded_file' in locals() and uploaded_file is not None:
             with st.spinner("Cargando y analizando parcela..."):
                 gdf_cargado = cargar_archivo_parcela(uploaded_file)
                 
@@ -2726,7 +2723,7 @@ def main():
     
     with tab2:
         st.header("🌱 ANÁLISIS DE FERTILIDAD")
-        if 'gdf_analizado' in locals() and resultados.get('exitoso'):
+        if 'resultados' in locals() and resultados.get('exitoso'):
             # Mostrar análisis detallado de fertilidad
             gdf_analizado = resultados['gdf_analizado']
             
@@ -2794,12 +2791,14 @@ def main():
                     - Monitoreo preventivo
                     - Mantener balance de nutrientes
                     """)
+        else:
+            st.info("👈 Realiza primero un análisis en la pestaña principal")
     
     with tab3:
         st.header("💰 ANÁLISIS ECONÓMICO")
         
         if 'mostrar_economia' in st.session_state and st.session_state['mostrar_economia']:
-            if 'precios_actualizados' in st.session_state and 'gdf_analizado' in locals():
+            if 'precios_actualizados' in st.session_state and 'resultados' in locals():
                 precios = st.session_state['precios_actualizados']
                 gdf_analizado = resultados['gdf_analizado']
                 area_total = resultados['area_total']
@@ -2920,7 +2919,7 @@ def main():
     with tab4:
         st.header("📈 REPORTES Y EXPORTACIÓN")
         
-        if 'gdf_analizado' in locals() and resultados.get('exitoso'):
+        if 'resultados' in locals() and resultados.get('exitoso'):
             # Generar estadísticas
             estadisticas = generar_resumen_estadisticas(
                 resultados['gdf_analizado'],
@@ -3036,19 +3035,23 @@ def main():
     with tab5:
         st.header("ℹ️ AYUDA Y DOCUMENTACIÓN")
         
-        st.markdown("""
-        ### 📖 Guía de Uso
+        st.markdown("### 📖 Guía de Uso")
         
+        st.markdown("""
         **1. Configuración Inicial**
         - Selecciona el cultivo en el sidebar
         - Elige el tipo de análisis
         - Configura parámetros según el análisis seleccionado
+        """)
         
+        st.markdown("""
         **2. Subida de Archivos**
         - Formatos aceptados: Shapefile (.zip), KML, KMZ
         - El archivo debe contener polígonos válidos
         - Sistema de coordenadas preferido: WGS84 (EPSG:4326)
+        """)
         
+        st.markdown("""
         **3. Tipos de Análisis Disponibles**
         
         **🌱 Fertilidad Actual**
@@ -3070,13 +3073,54 @@ def main():
         - Análisis de pendientes
         - Generación de curvas de nivel
         - Identificación de áreas de riesgo
+        """)
         
+        st.markdown("""
         **4. Análisis Económico**
         - Calcula rentabilidad por zona
         - Evalúa TIR y payback
         - Compara escenarios con/sin fertilización
+        """)
         
-            
+        st.markdown("### 🛠️ Solución de Problemas")
+        
+        st.markdown("""
+        **❌ Error al cargar archivo**
+        1. Verifica que el archivo tenga el formato correcto
+        2. Asegúrate de que contenga geometrías válidas
+        3. Revisa el sistema de coordenadas
+        
+        **⚠️ Datos satelitales no disponibles**
+        1. Los datos simulados siempre están disponibles
+        2. Verifica las fechas seleccionadas
+        3. Intenta con otro satélite
+        """)
+        
+        st.markdown("### 📞 Soporte Técnico")
+        
+        st.markdown("""
+        Para soporte o consultas:
+        - 📧 mawucano@gmail.com
+        - 📱 +54 9 3525 53-2313
+    
+        """)
+        
+        st.markdown("### 🔄 Actualizaciones")
+        
+        st.markdown("""
+        **Versión 2.0** - Diciembre 2024
+        - Análisis económico integrado
+        - Mapas de rentabilidad
+        - Exportación mejorada
+        - Interfaz premium
+        
+        **Próximas características:**
+        - Integración con APIs meteorológicas en tiempo real
+        - Modelos predictivos de rendimiento
+        - Alertas tempranas de plagas
+        - Integración con maquinaria agrícola
+        """)
+        
         # Información del sistema
         with st.expander("🔧 Información del Sistema"):
             st.markdown(f"""
