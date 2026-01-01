@@ -1141,260 +1141,6 @@ def calcular_recomendaciones_npk_gee(indices, nutriente, cultivo):
             recomendaciones.append(round(k_recomendado, 1))
     return recomendaciones
 
-# ===== NUEVA FUNCIÓN PARA CALCULAR POTENCIAL DE COSECHA CON ENMIENDAS NPK =====
-def calcular_potencial_cosecha_con_enmiendas(gdf_analizado, cultivo, nutriente=None):
-    """
-    Calcula el potencial de cosecha integrando las recomendaciones de enmiendas NPK.
-    Considera múltiples factores: fertilidad actual, recomendaciones NPK, humedad, materia orgánica, etc.
-    """
-    try:
-        # Factor base según cultivo
-        factores_base = {
-            'MAÍZ': 0.85,
-            'SOYA': 0.80,
-            'TRIGO': 0.75,
-            'GIRASOL': 0.70
-        }
-        
-        base = factores_base.get(cultivo, 0.75)
-        
-        # Inicializar lista para resultados
-        potencial_list = []
-        
-        for idx, row in gdf_analizado.iterrows():
-            # Obtener valores base
-            npk_actual = row.get('npk_actual', 0.5)
-            ndvi = row.get('ndvi', 0.6)
-            ndre = row.get('ndre', 0.4)
-            ndwi = row.get('ndwi', 0.3)
-            materia_organica = row.get('materia_organica', 3.0)
-            
-            # Normalizar materia orgánica (0-1)
-            mo_norm = min(materia_organica / 8.0, 1.0)
-            
-            # Si hay recomendaciones NPK, calcular impacto de enmiendas
-            impacto_enmiendas = 0
-            if 'valor_recomendado' in row and nutriente:
-                valor_rec = row['valor_recomendado']
-                params = PARAMETROS_CULTIVOS[cultivo]
-                
-                # Calcular deficiencia relativa
-                if nutriente == "NITRÓGENO":
-                    rango = params['NITROGENO']['max'] - params['NITROGENO']['min']
-                    deficiencia = (valor_rec - params['NITROGENO']['min']) / rango if rango > 0 else 0.5
-                elif nutriente == "FÓSFORO":
-                    rango = params['FOSFORO']['max'] - params['FOSFORO']['min']
-                    deficiencia = (valor_rec - params['FOSFORO']['min']) / rango if rango > 0 else 0.5
-                else:  # POTASIO
-                    rango = params['POTASIO']['max'] - params['POTASIO']['min']
-                    deficiencia = (valor_rec - params['POTASIO']['min']) / rango if rango > 0 else 0.5
-                
-                # Impacto de aplicar enmiendas (cuanto más deficiencia, mayor el impacto potencial)
-                impacto_enmiendas = deficiencia * 0.3  # Hasta 30% de mejora
-            
-            # Factores de ponderación
-            w_npk = 0.35
-            w_ndvi = 0.25
-            w_ndwi = 0.20
-            w_mo = 0.10
-            w_enmiendas = 0.10
-            
-            # Calcular potencial base
-            potencial_base = (
-                w_npk * npk_actual +
-                w_ndvi * ndvi +
-                w_ndwi * ndwi +
-                w_mo * mo_norm
-            )
-            
-            # Aplicar factor de cultivo y enmiendas
-            potencial_final = (potencial_base * base) + impacto_enmiendas
-            
-            # Limitar entre 0 y 1
-            potencial_final = max(0.1, min(0.95, potencial_final))
-            
-            # Convertir a toneladas/hectárea estimadas
-            rendimiento_base = {
-                'MAÍZ': 8.0,  # ton/ha
-                'SOYA': 3.5,
-                'TRIGO': 4.5,
-                'GIRASOL': 2.5
-            }
-            
-            rendimiento_estimado = potencial_final * rendimiento_base.get(cultivo, 5.0)
-            
-            potencial_list.append({
-                'potencial_cosecha': round(potencial_final, 3),
-                'rendimiento_estimado': round(rendimiento_estimado, 2),
-                'impacto_enmiendas': round(impacto_enmiendas, 3),
-                'clasificacion': 'ALTO' if potencial_final > 0.7 else 'MEDIO' if potencial_final > 0.5 else 'BAJO'
-            })
-        
-        return potencial_list
-    
-    except Exception as e:
-        st.error(f"Error calculando potencial de cosecha: {str(e)}")
-        return None
-
-# ===== NUEVA FUNCIÓN PARA CREAR MAPA DE CALOR DE POTENCIAL DE COSECHA =====
-def crear_mapa_calor_potencial_cosecha(gdf_analizado, cultivo, nutriente=None):
-    """
-    Crea un mapa de calor del potencial de cosecha integrando recomendaciones NPK.
-    """
-    try:
-        # Convertir a Web Mercator para el mapa base
-        gdf_plot = gdf_analizado.to_crs(epsg=3857)
-        
-        fig, ax = plt.subplots(1, 1, figsize=(14, 10))
-        
-        # Configurar estilo oscuro
-        fig.patch.set_facecolor('#0f172a')
-        ax.set_facecolor('#0f172a')
-        
-        # Crear colormap personalizado (rojo-amarillo-verde)
-        colors = ['#d73027', '#f46d43', '#fdae61', '#fee08b', '#d9ef8b', '#a6d96a', '#66bd63', '#1a9850']
-        n_bins = 100
-        cmap = LinearSegmentedColormap.from_list('potencial_cosecha', colors, N=n_bins)
-        
-        # Plot de cada zona con color según potencial
-        for idx, row in gdf_plot.iterrows():
-            potencial = row.get('potencial_cosecha', 0.5)
-            color = cmap(potencial)
-            
-            # Dibujar polígono
-            gdf_plot.iloc[[idx]].plot(
-                ax=ax, 
-                color=color, 
-                edgecolor='white', 
-                linewidth=1.5, 
-                alpha=0.8
-            )
-            
-            # Etiqueta con información
-            centroid = row.geometry.centroid
-            rendimiento = row.get('rendimiento_estimado', 0)
-            
-            # Color de texto según contraste
-            text_color = 'white' if potencial < 0.7 else 'black'
-            
-            ax.annotate(
-                f"Z{row['id_zona']}\n{potencial:.2f}\n{rendimiento:.1f}t", 
-                (centroid.x, centroid.y),
-                xytext=(0, 0), 
-                textcoords="offset points",
-                fontsize=8, 
-                color=text_color, 
-                weight='bold',
-                ha='center',
-                va='center',
-                bbox=dict(
-                    boxstyle="round,pad=0.3", 
-                    facecolor='#1e293b' if potencial < 0.7 else '#fef3c7',
-                    alpha=0.9,
-                    edgecolor='white'
-                )
-            )
-        
-        # Agregar mapa base ESRI Satellite con transparencia
-        try:
-            ctx.add_basemap(
-                ax, 
-                source=ctx.providers.Esri.WorldImagery, 
-                alpha=0.3
-            )
-        except:
-            st.warning("⚠️ No se pudo cargar el mapa base ESRI.")
-        
-        # Título
-        titulo = f"🔥 MAPA DE CALOR - POTENCIAL DE COSECHA - {cultivo}"
-        if nutriente:
-            titulo += f"\nCON ENMIENDAS DE {nutriente}"
-        
-        ax.set_title(
-            titulo,
-            fontsize=16, 
-            fontweight='bold',
-            pad=20,
-            color='white'
-        )
-        
-        ax.set_xlabel("Longitud", fontsize=12, color='white')
-        ax.set_ylabel("Latitud", fontsize=12, color='white')
-        ax.tick_params(colors='white')
-        ax.grid(True, alpha=0.2, color='#475569', linestyle='--')
-        
-        # Barra de colores
-        sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=0, vmax=1))
-        sm.set_array([])
-        cbar = plt.colorbar(sm, ax=ax, shrink=0.8, pad=0.02)
-        cbar.set_label("Potencial de Cosecha (0-1)", fontsize=12, fontweight='bold', color='white')
-        cbar.ax.yaxis.set_tick_params(color='white')
-        cbar.outline.set_edgecolor('white')
-        plt.setp(plt.getp(cbar.ax.axes, 'yticklabels'), color='white')
-        
-        # Leyenda de clasificación
-        from matplotlib.patches import Patch
-        legend_elements = [
-            Patch(facecolor='#1a9850', edgecolor='white', alpha=0.8, label='ALTO (>0.7)'),
-            Patch(facecolor='#d9ef8b', edgecolor='white', alpha=0.8, label='MEDIO (0.5-0.7)'),
-            Patch(facecolor='#d73027', edgecolor='white', alpha=0.8, label='BAJO (<0.5)')
-        ]
-        
-        legend = ax.legend(
-            handles=legend_elements, 
-            title='Clasificación',
-            loc='upper left',
-            bbox_to_anchor=(1.02, 1),
-            framealpha=0.9
-        )
-        legend.get_title().set_color('white')
-        legend.get_frame().set_facecolor('#1e293b')
-        legend.get_frame().set_edgecolor('white')
-        for text in legend.get_texts():
-            text.set_color('white')
-        
-        # Añadir estadísticas
-        if 'potencial_cosecha' in gdf_plot.columns:
-            potencial_prom = gdf_plot['potencial_cosecha'].mean()
-            rendimiento_prom = gdf_plot['rendimiento_estimado'].mean() if 'rendimiento_estimado' in gdf_plot.columns else 0
-            zonas_altas = len(gdf_plot[gdf_plot['potencial_cosecha'] > 0.7])
-            
-            stats_text = f"""
-            Estadísticas:
-            • Potencial Promedio: {potencial_prom:.2f}
-            • Rendimiento Estimado: {rendimiento_prom:.1f} t/ha
-            • Zonas de Alto Potencial: {zonas_altas}/{len(gdf_plot)}
-            • Impacto Enmiendas: +{(gdf_plot['impacto_enmiendas'].mean()*100 if 'impacto_enmiendas' in gdf_plot.columns else 0):.1f}%
-            """
-            
-            ax.text(
-                0.02, 0.98, 
-                stats_text,
-                transform=ax.transAxes,
-                fontsize=9,
-                color='white',
-                verticalalignment='top',
-                bbox=dict(
-                    boxstyle="round,pad=0.5", 
-                    facecolor='#1e293b', 
-                    edgecolor='#3b82f6',
-                    alpha=0.95
-                )
-            )
-        
-        plt.tight_layout()
-        buf = io.BytesIO()
-        plt.savefig(buf, format='png', dpi=150, bbox_inches='tight', facecolor='#0f172a')
-        buf.seek(0)
-        plt.close()
-        return buf
-    
-    except Exception as e:
-        st.error(f"Error creando mapa de calor de potencial: {str(e)}")
-        import traceback
-        st.error(traceback.format_exc())
-        return None
-
 # ===== FUNCIONES DE TEXTURA DEL SUELO - ACTUALIZADAS CON NUEVA NOMENCLATURA =====
 def clasificar_textura_suelo(arena, limo, arcilla):
     try:
@@ -2160,6 +1906,200 @@ def crear_mapa_texturas_con_esri(gdf_analizado, cultivo):
         st.error(f"Error creando mapa de texturas: {str(e)}")
         return None
 
+def crear_mapa_potencial_cosecha_calor(gdf_analizado, cultivo):
+    """Crea mapa de calor moderno tipo Dazzet con fondo oscuro y texto blanco"""
+    try:
+        # Convertir a Web Mercator
+        gdf_plot = gdf_analizado.to_crs(epsg=3857)
+        
+        fig, ax = plt.subplots(1, 1, figsize=(14, 10))
+        
+        # Configurar fondo oscuro
+        fig.patch.set_facecolor('#0f172a')
+        ax.set_facecolor('#0f172a')
+        
+        # Obtener centroides y valores
+        centroids = gdf_plot.geometry.centroid
+        x = [c.x for c in centroids]
+        y = [c.y for c in centroids]
+        z = gdf_plot['potencial_cosecha'].values
+        
+        # Crear triangulación para mapa de calor continuo
+        triang = Triangulation(x, y)
+        
+        # Crear mapa de calor con degradado suave
+        levels = np.linspace(0, 1, 50)
+        contour = ax.tricontourf(
+            triang, z, 
+            levels=levels, 
+            cmap='RdYlGn',  # Colores rojo-amarillo-verde
+            alpha=0.85,
+            antialiased=True
+        )
+        
+        # Añadir contornos para mejor definición
+        ax.tricontour(
+            triang, z, 
+            levels=levels[::5],  # Cada 5 niveles
+            colors='white', 
+            linewidths=0.5, 
+            alpha=0.3
+        )
+        
+        # Dibujar polígonos de las zonas con borde blanco
+        gdf_plot.plot(
+            ax=ax, 
+            color='none', 
+            edgecolor='white',
+            linewidth=0.8, 
+            alpha=0.4
+        )
+        
+        # Etiquetas modernas para zonas con texto blanco
+        for idx, row in gdf_plot.iterrows():
+            centroid = row.geometry.centroid
+            valor = row['potencial_cosecha']
+            
+            # Color de texto basado en valor (blanco para mejor contraste en fondo oscuro)
+            text_color = 'white' if valor < 0.7 else 'black'
+            
+            bbox_facecolor = '#1e293b' if valor > 0.5 else '#0f172a'
+            bbox_alpha = 0.9
+            
+            ax.annotate(
+                f"Z{row['id_zona']}\n{valor:.2f}", 
+                (centroid.x, centroid.y),
+                xytext=(0, 0), 
+                textcoords="offset points",
+                fontsize=8, 
+                color=text_color, 
+                weight='bold',
+                ha='center',
+                va='center',
+                bbox=dict(
+                    boxstyle="round,pad=0.3", 
+                    facecolor=bbox_facecolor,
+                    edgecolor='white',
+                    alpha=bbox_alpha
+                )
+            )
+        
+        # Agregar mapa base ESRI Satellite con transparencia
+        try:
+            ctx.add_basemap(
+                ax, 
+                source=ctx.providers.Esri.WorldImagery, 
+                alpha=0.3
+            )
+        except:
+            # Fondo degradado si falla ESRI
+            ax.set_facecolor('#0f172a')
+        
+        # Título estilizado con texto blanco
+        ax.set_title(
+            f"🔥 MAPA DE CALOR - POTENCIAL DE COSECHA - {cultivo}", 
+            fontsize=18, 
+            fontweight='bold',
+            pad=20,
+            color='white'
+        )
+        
+        ax.set_xlabel("Longitud", fontsize=12, fontweight='medium', color='white')
+        ax.set_ylabel("Latitud", fontsize=12, fontweight='medium', color='white')
+        ax.tick_params(colors='white')
+        ax.grid(True, alpha=0.2, color='#475569', linestyle='--')
+        
+        # Barra de colores moderna con texto blanco
+        cbar = plt.colorbar(
+            contour, 
+            ax=ax, 
+            shrink=0.8,
+            pad=0.02
+        )
+        cbar.set_label(
+            "Potencial de Cosecha (0-1)", 
+            fontsize=12, 
+            fontweight='bold',
+            color='white'
+        )
+        cbar.ax.yaxis.set_tick_params(color='white')
+        cbar.outline.set_edgecolor('white')
+        plt.setp(plt.getp(cbar.ax.axes, 'yticklabels'), color='white')
+        
+        # Leyenda para puntos calientes
+        zonas_calientes = gdf_plot[gdf_plot['potencial_cosecha'] > 0.7]
+        if not zonas_calientes.empty:
+            # Puntos amarillos brillantes para zonas calientes
+            for idx, row in zonas_calientes.iterrows():
+                centroid = row.geometry.centroid
+                ax.plot(
+                    centroid.x, centroid.y, 
+                    'o',
+                    markersize=12, 
+                    markeredgecolor='#f1c40f',
+                    markeredgewidth=2,
+                    markerfacecolor='#f39c12',
+                    alpha=0.8
+                )
+            
+            # Añadir leyenda con texto blanco
+            from matplotlib.lines import Line2D
+            hot_spot = Line2D(
+                [0], [0], 
+                marker='o', 
+                color='w',
+                markerfacecolor='#f39c12', 
+                markeredgecolor='#f1c40f',
+                markersize=10, 
+                markeredgewidth=2,
+                label='Zona Caliente (Potencial > 0.7)'
+            )
+            legend = ax.legend(
+                handles=[hot_spot], 
+                loc='upper right',
+                framealpha=0.9,
+                facecolor='#1e293b'
+            )
+            legend.get_frame().set_edgecolor('white')
+            for text in legend.get_texts():
+                text.set_color('white')
+        
+        # Añadir estadísticas en esquina con texto blanco
+        stats_text = f"""
+        Estadísticas:
+        • Promedio: {gdf_plot['potencial_cosecha'].mean():.2f}
+        • Máximo: {gdf_plot['potencial_cosecha'].max():.2f}
+        • Mínimo: {gdf_plot['potencial_cosecha'].min():.2f}
+        • Zonas Calientes: {len(zonas_calientes)}/{len(gdf_plot)}
+        """
+        
+        ax.text(
+            0.02, 0.98, 
+            stats_text,
+            transform=ax.transAxes,
+            fontsize=9,
+            color='white',
+            verticalalignment='top',
+            bbox=dict(
+                boxstyle="round,pad=0.5", 
+                facecolor='#1e293b', 
+                edgecolor='#3b82f6',
+                alpha=0.95
+            )
+        )
+        
+        plt.tight_layout()
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png', dpi=200, bbox_inches='tight', facecolor='#0f172a')
+        buf.seek(0)
+        plt.close()
+        return buf
+    except Exception as e:
+        st.error(f"Error creando mapa de calor mejorado: {str(e)}")
+        import traceback
+        st.error(f"Detalle: {traceback.format_exc()}")
+        return None
+
 # ===== FUNCIONES DE GRÁFICOS NASA POWER CON ESTILO OSCURO =====
 def crear_grafico_personalizado(series, titulo, ylabel, color_linea, fondo_grafico='#0f172a', color_texto='#ffffff'):
     """Crea gráfico de línea con estilo oscuro"""
@@ -2256,14 +2196,6 @@ def ejecutar_analisis(gdf, nutriente, analisis_tipo, n_divisiones, cultivo,
             if analisis_tipo == "RECOMENDACIONES NPK":
                 recomendaciones_npk = calcular_recomendaciones_npk_gee(indices_gee, nutriente, cultivo)
                 gdf_analizado['valor_recomendado'] = recomendaciones_npk
-            
-            # === CALCULAR POTENCIAL DE COSECHA CON ENMIENDAS NPK ===
-            potencial_cosecha = calcular_potencial_cosecha_con_enmiendas(gdf_analizado, cultivo, nutriente)
-            if potencial_cosecha:
-                for idx, potencial_data in enumerate(potencial_cosecha):
-                    for key, value in potencial_data.items():
-                        gdf_analizado.loc[gdf_analizado.index[idx], key] = value
-            
             resultados['gdf_analizado'] = gdf_analizado
             resultados['exitoso'] = True
             # === DATOS DE NASA POWER ===
@@ -2580,78 +2512,6 @@ if uploaded_file:
                                 elif analisis_tipo == "RECOMENDACIONES NPK" and gdf_analizado['valor_recomendado'].mean() > 0:
                                     coef_var = (gdf_analizado['valor_recomendado'].std() / gdf_analizado['valor_recomendado'].mean() * 100)
                                     st.metric("Coef. Variación", f"{coef_var:.1f}%")
-                            
-                            # === NUEVA SECCIÓN: MAPA DE CALOR DE POTENCIAL DE COSECHA CON ENMIENDAS NPK ===
-                            if analisis_tipo == "RECOMENDACIONES NPK" and 'potencial_cosecha' in gdf_analizado.columns:
-                                st.markdown("---")
-                                st.subheader("🔥 MAPA DE CALOR - POTENCIAL DE COSECHA CON ENMIENDAS NPK")
-                                
-                                # Mostrar métricas de potencial
-                                col_p1, col_p2, col_p3, col_p4 = st.columns(4)
-                                with col_p1:
-                                    st.metric("Potencial Promedio", f"{gdf_analizado['potencial_cosecha'].mean():.2f}")
-                                with col_p2:
-                                    st.metric("Rendimiento Estimado", f"{gdf_analizado['rendimiento_estimado'].mean():.1f} t/ha")
-                                with col_p3:
-                                    impacto_prom = gdf_analizado['impacto_enmiendas'].mean() * 100
-                                    st.metric("Impacto Enmiendas", f"+{impacto_prom:.1f}%")
-                                with col_p4:
-                                    zonas_altas = len(gdf_analizado[gdf_analizado['clasificacion'] == 'ALTO'])
-                                    st.metric("Zonas Alto Potencial", f"{zonas_altas}/{len(gdf_analizado)}")
-                                
-                                # Crear y mostrar mapa de calor
-                                mapa_calor = crear_mapa_calor_potencial_cosecha(gdf_analizado, cultivo, nutriente)
-                                if mapa_calor:
-                                    st.image(mapa_calor, use_container_width=True)
-                                    st.download_button(
-                                        "📥 Descargar Mapa de Calor de Potencial",
-                                        mapa_calor,
-                                        f"potencial_cosecha_{cultivo}_{nutriente}_{datetime.now().strftime('%Y%m%d_%H%M')}.png",
-                                        "image/png"
-                                    )
-                                
-                                # Tabla de resultados detallados
-                                st.subheader("📋 DETALLE DE POTENCIAL POR ZONA")
-                                columnas_potencial = ['id_zona', 'area_ha', 'potencial_cosecha', 'rendimiento_estimado', 
-                                                     'impacto_enmiendas', 'clasificacion', 'valor_recomendado']
-                                columnas_potencial = [col for col in columnas_potencial if col in gdf_analizado.columns]
-                                
-                                if columnas_potencial:
-                                    df_potencial = gdf_analizado[columnas_potencial].copy()
-                                    df_potencial.columns = ['Zona', 'Área (ha)', 'Potencial', 'Rendimiento (t/ha)', 
-                                                          'Impacto Enmiendas', 'Clasificación', f'{nutriente} (kg/ha)']
-                                    st.dataframe(df_potencial)
-                                    
-                                    # Recomendaciones basadas en potencial
-                                    st.subheader("💡 RECOMENDACIONES BASADAS EN POTENCIAL")
-                                    
-                                    zonas_bajas = gdf_analizado[gdf_analizado['clasificacion'] == 'BAJO']
-                                    zonas_medias = gdf_analizado[gdf_analizado['clasificacion'] == 'MEDIO']
-                                    zonas_altas = gdf_analizado[gdf_analizado['clasificacion'] == 'ALTO']
-                                    
-                                    col_r1, col_r2, col_r3 = st.columns(3)
-                                    with col_r1:
-                                        if len(zonas_bajas) > 0:
-                                            st.warning("**ZONAS DE BAJO POTENCIAL**")
-                                            st.write(f"• {len(zonas_bajas)} zonas identificadas")
-                                            st.write("• Priorizar enmiendas NPK recomendadas")
-                                            st.write("• Considerar análisis de suelo detallado")
-                                            st.write("• Evaluar posibles limitantes adicionales")
-                                    with col_r2:
-                                        if len(zonas_medias) > 0:
-                                            st.info("**ZONAS DE MEDIO POTENCIAL**")
-                                            st.write(f"• {len(zonas_medias)} zonas identificadas")
-                                            st.write("• Aplicar enmiendas según recomendaciones")
-                                            st.write("• Monitorear respuesta a fertilización")
-                                            st.write("• Optimizar prácticas de manejo")
-                                    with col_r3:
-                                        if len(zonas_altas) > 0:
-                                            st.success("**ZONAS DE ALTO POTENCIAL**")
-                                            st.write(f"• {len(zonas_altas)} zonas identificadas")
-                                            st.write("• Mantener prácticas actuales")
-                                            st.write("• Continuar monitoreo satelital")
-                                            st.write("• Maximizar producción en estas zonas")
-                            
                             # === DATOS DE NASA POWER ===
                             if resultados.get('df_power') is not None:
                                 df_power = resultados['df_power']
@@ -2664,39 +2524,194 @@ if uploaded_file:
                                 with col7:
                                     st.metric("💧 NDWI Promedio", f"{gdf_analizado['ndwi'].mean():.3f}")
 
-                                # Pestañas con datos meteorológicos
-                                tab_radiacion, tab_viento, tab_precip = st.tabs([
+                                # === PESTAÑAS CON NUEVA PESTAÑA DE POTENCIAL DE COSECHA ===
+                                tab_radiacion, tab_viento, tab_precip, tab_cosecha = st.tabs([
                                     "☀️ Radiación Solar",
                                     "💨 Velocidad del Viento",
-                                    "🌧️ Precipitación"
+                                    "🌧️ Precipitación",
+                                    "🔥 Potencial de Cosecha"
                                 ])
 
+                                # === PESTAÑA: RADIACIÓN SOLAR ===
                                 with tab_radiacion:
                                     serie_rad = df_power.set_index('fecha')['radiacion_solar']
+                                    prom_rad = serie_rad.mean()
+                                    max_rad = serie_rad.max()
+                                    min_rad = serie_rad.min()
+                                    if prom_rad > 5.5:
+                                        interpretacion = "☀️ **Alta radiación**: Condiciones óptimas para fotosíntesis en cultivos."
+                                    elif prom_rad > 4.0:
+                                        interpretacion = "🌤️ **Radiación moderada**: Adecuada para la mayoría de cultivos."
+                                    else:
+                                        interpretacion = "☁️ **Radiación baja**: Puede limitar el crecimiento; vigilar desarrollo vegetativo."
+
+                                    col_r1, col_r2, col_r3 = st.columns(3)
+                                    with col_r1:
+                                        st.metric("Promedio", f"{prom_rad:.1f} kWh/m²/día")
+                                    with col_r2:
+                                        st.metric("Máximo", f"{max_rad:.1f}")
+                                    with col_r3:
+                                        st.metric("Mínimo", f"{min_rad:.1f}")
+
                                     st.pyplot(crear_grafico_personalizado(
                                         serie_rad,
                                         "Evolución Diaria de Radiación Solar",
                                         "Radiación (kWh/m²/día)",
                                         color_linea='#e67e22'
                                     ))
+                                    st.markdown(f"**Interpretación agronómica:** {interpretacion}")
 
+                                # === PESTAÑA: VIENTO ===
                                 with tab_viento:
                                     serie_viento = df_power.set_index('fecha')['viento_2m']
+                                    prom_viento = serie_viento.mean()
+                                    max_viento = serie_viento.max()
+                                    min_viento = serie_viento.min()
+                                    if prom_viento < 2.0:
+                                        interpretacion = "🍃 **Viento suave**: Bajo riesgo de estrés mecánico o deshidratación."
+                                    elif prom_viento < 4.0:
+                                        interpretacion = "🌬️ **Viento moderado**: Aceptable; monitorear en etapas sensibles."
+                                    else:
+                                        interpretacion = "💨 **Viento fuerte**: Alto riesgo de daño mecánico, aumento de evapotranspiración."
+
+                                    col_w1, col_w2, col_w3 = st.columns(3)
+                                    with col_w1:
+                                        st.metric("Promedio", f"{prom_viento:.2f} m/s")
+                                    with col_w2:
+                                        st.metric("Máximo", f"{max_viento:.2f}")
+                                    with col_w3:
+                                        st.metric("Mínimo", f"{min_viento:.2f}")
+
                                     st.pyplot(crear_grafico_personalizado(
                                         serie_viento,
                                         "Evolución Diaria de Velocidad del Viento",
                                         "Viento a 2m (m/s)",
                                         color_linea='#3498db'
                                     ))
+                                    st.markdown(f"**Interpretación agronómica:** {interpretacion}")
 
+                                # === PESTAÑA: PRECIPITACIÓN ===
                                 with tab_precip:
                                     serie_precip = df_power.set_index('fecha')['precipitacion']
+                                    prom_precip = serie_precip.mean()
+                                    total_precip = serie_precip.sum()
+                                    dias_lluvia = (serie_precip > 0.1).sum()
+                                    if prom_precip > 8:
+                                        interpretacion = "🌧️ **Precipitación alta**: Riesgo de encharcamiento y lixiviación de nutrientes."
+                                    elif prom_precip > 3:
+                                        interpretacion = "💧 **Precipitación adecuada**: Condiciones hídricas favorables."
+                                    else:
+                                        interpretacion = "🏜️ **Precipitación baja**: Posible déficit hídrico; considerar riego suplementario."
+
+                                    col_p1, col_p2, col_p3 = st.columns(3)
+                                    with col_p1:
+                                        st.metric("Total", f"{total_precip:.1f} mm")
+                                    with col_p2:
+                                        st.metric("Promedio", f"{prom_precip:.1f} mm/día")
+                                    with col_p3:
+                                        st.metric("Días con lluvia", f"{dias_lluvia}")
+
                                     st.pyplot(crear_grafico_barras_personalizado(
                                         serie_precip,
                                         "Precipitación Diaria",
                                         "Precipitación (mm/día)",
                                         color_barra='#2ecc71'
                                     ))
+                                    st.markdown(f"**Interpretación agronómica:** {interpretacion}")
+
+                                # === PESTAÑA: POTENCIAL DE COSECHA ===
+                                with tab_cosecha:
+                                    st.subheader("🔥 Análisis de Potencial de Cosecha - Puntos Calientes")
+                                    st.markdown("""
+                                    **Metodología:**
+                                    - Se integran datos de fertilidad (NPK), radiación solar, humedad (NDWI) y estrés por viento
+                                    - Las zonas con valores más altos (rojo/amarillo) son los **puntos calientes** para mejor cosecha
+                                    - Los círculos amarillos marcan zonas con potencial >0.7
+                                    """)
+
+                                    # --- Paso 1: Agregar datos meteorológicos promedio a cada zona ---
+                                    rad_prom = df_power['radiacion_solar'].mean()
+                                    viento_prom = df_power['viento_2m'].mean()
+                                    
+                                    # Asignar los mismos valores promedio a todas las zonas
+                                    gdf_analizado['radiacion_solar'] = rad_prom
+                                    gdf_analizado['viento_2m'] = viento_prom
+
+                                    # --- Paso 2: Normalizar cada variable a [0, 1] ---
+                                    def normalizar_solar(valor):
+                                        return np.clip((valor - 3.0) / (7.0 - 3.0), 0, 1)
+
+                                    def normalizar_viento(valor):
+                                        return np.clip(1 - (valor - 1.0) / (5.0 - 1.0), 0, 1)
+
+                                    def normalizar_humedad(ndwi):
+                                        return np.clip((ndwi - 0.1) / (0.4 - 0.1), 0, 1)
+
+                                    gdf_analizado['solar_norm'] = gdf_analizado['radiacion_solar'].apply(normalizar_solar)
+                                    gdf_analizado['viento_norm'] = gdf_analizado['viento_2m'].apply(normalizar_viento)
+                                    gdf_analizado['humedad_norm'] = gdf_analizado['ndwi'].apply(normalizar_humedad)
+
+                                    # --- Paso 3: Calcular índice integrado ---
+                                    w_fertilidad = 0.40
+                                    w_solar = 0.25
+                                    w_humedad = 0.20
+                                    w_viento = 0.15
+
+                                    gdf_analizado['potencial_cosecha'] = (
+                                        w_fertilidad * gdf_analizado['npk_actual'] +
+                                        w_solar * gdf_analizado['solar_norm'] +
+                                        w_humedad * gdf_analizado['humedad_norm'] +
+                                        w_viento * gdf_analizado['viento_norm']
+                                    ).clip(0, 1)
+
+                                    # Escalar a toneladas/ha según cultivo base
+                                    produccion_base = {
+                                        'MAÍZ': 8.0,
+                                        'SOYA': 3.5,
+                                        'TRIGO': 4.5,
+                                        'GIRASOL': 2.5
+                                    }
+                                    base = produccion_base.get(cultivo, 5.0)
+                                    gdf_analizado['produccion_estimada'] = gdf_analizado['potencial_cosecha'] * base
+
+                                    # --- Paso 4: Mostrar métricas resumen ---
+                                    col_c1, col_c2, col_c3, col_c4 = st.columns(4)
+                                    with col_c1:
+                                        st.metric("Potencial Promedio", f"{gdf_analizado['potencial_cosecha'].mean():.2f}")
+                                    with col_c2:
+                                        st.metric("Máximo", f"{gdf_analizado['potencial_cosecha'].max():.2f}")
+                                    with col_c3:
+                                        st.metric("Producción Estimada", f"{gdf_analizado['produccion_estimada'].mean():.1f} t/ha")
+                                    with col_c4:
+                                        total_est = (gdf_analizado['produccion_estimada'] * gdf_analizado['area_ha']).sum()
+                                        st.metric("Total Parcela", f"{total_est:.1f} t")
+
+                                    # --- Paso 5: Crear mapa de calor con ESRI ---
+                                    mapa_calor = crear_mapa_potencial_cosecha_calor(gdf_analizado, cultivo)
+                                    if mapa_calor:
+                                        st.image(mapa_calor, use_container_width=True)
+                                        st.download_button(
+                                            "📥 Descargar Mapa de Calor",
+                                            mapa_calor,
+                                            f"potencial_cosecha_calor_{cultivo}_{datetime.now().strftime('%Y%m%d')}.png",
+                                            "image/png"
+                                        )
+
+                                    # --- Paso 6: Identificar puntos calientes ---
+                                    zonas_calientes = gdf_analizado[gdf_analizado['potencial_cosecha'] > 0.7]
+                                    if not zonas_calientes.empty:
+                                        st.subheader("📍 ZONAS CALIENTES (Potencial > 0.7)")
+                                        st.dataframe(zonas_calientes[['id_zona', 'area_ha', 'potencial_cosecha', 'produccion_estimada']].sort_values('potencial_cosecha', ascending=False))
+                                        
+                                        total_area_caliente = zonas_calientes['area_ha'].sum()
+                                        st.metric(f"Área total de zonas calientes", f"{total_area_caliente:.2f} ha")
+                                        
+                                        st.markdown("**Recomendaciones para zonas calientes:**")
+                                        st.markdown("""
+                                        - ✅ **Maximizar inversión** en estas zonas (fertilización, riego)
+                                        - ✅ **Priorizar cosecha** temprana en estas áreas
+                                        - ✅ **Monitoreo intensivo** para mantener altos rendimientos
+                                        """)
 
                             # Crear mapa estático con ESRI para análisis GEE
                             if analisis_tipo in ["FERTILIDAD ACTUAL", "RECOMENDACIONES NPK"]:
@@ -2875,8 +2890,8 @@ with st.expander("ℹ️ INFORMACIÓN SOBRE LA METODOLOGÍA"):
     - **🌻 GIRASOL:** Oleaginosa, tolerante a sequía moderada
     **🚀 FUNCIONALIDADES MEJORADAS:**
     - **🌱 Fertilidad Actual:** Estado NPK del suelo usando índices satelitales
-    - **🔥 Potencial de Cosecha con Enmiendas:** Mapa de calor que integra recomendaciones NPK
     - **🗺️ Mapas ESRI Satellite:** Mapas base de alta resolución
+    - **🔥 Mapas de Calor Oscuros:** Identificación de puntos calientes con fondo oscuro y texto blanco
     - **💧 NDWI (Humedad):** Índice de Agua en Vegetación/Suelo
     - **☀️ Radiación Solar:** Datos de NASA POWER (kWh/m²/día)
     - **💨 Velocidad del Viento:** Datos de NASA POWER (m/s)
@@ -2884,11 +2899,6 @@ with st.expander("ℹ️ INFORMACIÓN SOBRE LA METODOLOGÍA"):
     - **💊 Recomendaciones NPK:** Dosis específicas por cultivo
     - **🏗️ Análisis de Textura:** Composición del suelo (nomenclatura Venezuela/Colombia)
     - **🏔️ Curvas de Nivel:** Análisis topográfico con mapa de calor de pendientes
-    **🔥 NUEVO: POTENCIAL DE COSECHA CON ENMIENDAS NPK**
-    - Integra recomendaciones de fertilización con índices satelitales
-    - Calcula rendimiento estimado por zona (toneladas/hectárea)
-    - Identifica zonas de alto, medio y bajo potencial
-    - Proporciona recomendaciones específicas por nivel de potencial
     **🔬 METODOLOGÍA CIENTÍFICA:**
     - Análisis basado en imágenes satelitales
     - Integración con datos meteorológicos de NASA POWER
