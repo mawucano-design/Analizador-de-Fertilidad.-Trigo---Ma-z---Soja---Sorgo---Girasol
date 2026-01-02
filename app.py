@@ -1697,6 +1697,8 @@ def ejecutar_analisis(gdf, nutriente, analisis_tipo, n_divisiones, cultivo,
         import traceback
         st.error(f"Detalle: {traceback.format_exc()}")
         return resultados
+
+
 # === MAPAS DE POTENCIAL DE COSECHA ===
 if analisis_tipo == "RECOMENDACIONES NPK":
     st.subheader("🌾 ANÁLISIS DE POTENCIAL DE COSECHA")
