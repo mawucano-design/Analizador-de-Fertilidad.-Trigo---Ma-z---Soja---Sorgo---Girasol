@@ -1603,6 +1603,7 @@ def ejecutar_analisis(gdf, nutriente, analisis_tipo, n_divisiones, cultivo,
         'area_total': 0,
         'df_power': None
     }
+    
     try:
         gdf = validar_y_corregir_crs(gdf)
         area_total = calcular_superficie(gdf)
@@ -1678,7 +1679,23 @@ def ejecutar_analisis(gdf, nutriente, analisis_tipo, n_divisiones, cultivo,
             
             resultados['gdf_analizado'] = gdf_analizado
             resultados['exitoso'] = True
-
+            
+            # === DATOS DE NASA POWER ===
+            if satelite:
+                df_power = obtener_datos_nasa_power(gdf, fecha_inicio, fecha_fin)
+                if df_power is not None:
+                    resultados['df_power'] = df_power
+            
+            return resultados
+        else:
+            st.error(f"Tipo de análisis no soportado: {analisis_tipo}")
+            return resultados
+            
+    except Exception as e:
+        st.error(f"❌ Error en análisis: {str(e)}")
+        import traceback
+        st.error(f"Detalle: {traceback.format_exc()}")
+        return resultados
 # === MAPAS DE POTENCIAL DE COSECHA ===
 if analisis_tipo == "RECOMENDACIONES NPK":
     st.subheader("🌾 ANÁLISIS DE POTENCIAL DE COSECHA")
