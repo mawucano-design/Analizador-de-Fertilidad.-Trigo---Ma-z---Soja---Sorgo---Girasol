@@ -585,7 +585,14 @@ PARAMETROS_CULTIVOS = {
         'NDVI_OPTIMO': 0.85,
         'NDRE_OPTIMO': 0.5,
         'TCARI_OPTIMO': 0.4,
-        'OSAVI_OPTIMO': 0.6
+        'OSAVI_OPTIMO': 0.6,
+        # NUEVOS PARÁMETROS DE RENDIMIENTO (ton/ha)
+        'RENDIMIENTO_BASE': 8.0,  # Rendimiento base sin fertilización
+        'RENDIMIENTO_OPTIMO': 12.0,  # Rendimiento máximo con fertilización óptima
+        'RESPUESTA_N': 0.05,  # Incremento por kg de N (ton/kg)
+        'RESPUESTA_P': 0.08,  # Incremento por kg de P (ton/kg)
+        'RESPUESTA_K': 0.04,  # Incremento por kg de K (ton/kg)
+        'FACTOR_CLIMA': 0.7  # Factor climático (0-1)
     },
     'SOYA': {
         'NITROGENO': {'min': 20, 'max': 40, 'optimo': 30},
@@ -596,7 +603,13 @@ PARAMETROS_CULTIVOS = {
         'NDVI_OPTIMO': 0.8,
         'NDRE_OPTIMO': 0.45,
         'TCARI_OPTIMO': 0.35,
-        'OSAVI_OPTIMO': 0.55
+        'OSAVI_OPTIMO': 0.55,
+        'RENDIMIENTO_BASE': 2.5,
+        'RENDIMIENTO_OPTIMO': 4.0,
+        'RESPUESTA_N': 0.02,
+        'RESPUESTA_P': 0.03,
+        'RESPUESTA_K': 0.025,
+        'FACTOR_CLIMA': 0.75
     },
     'TRIGO': {
         'NITROGENO': {'min': 120, 'max': 180, 'optimo': 150},
@@ -607,7 +620,13 @@ PARAMETROS_CULTIVOS = {
         'NDVI_OPTIMO': 0.75,
         'NDRE_OPTIMO': 0.4,
         'TCARI_OPTIMO': 0.3,
-        'OSAVI_OPTIMO': 0.5
+        'OSAVI_OPTIMO': 0.5,
+        'RENDIMIENTO_BASE': 3.5,
+        'RENDIMIENTO_OPTIMO': 6.0,
+        'RESPUESTA_N': 0.03,
+        'RESPUESTA_P': 0.05,
+        'RESPUESTA_K': 0.035,
+        'FACTOR_CLIMA': 0.8
     },
     'GIRASOL': {
         'NITROGENO': {'min': 80, 'max': 120, 'optimo': 100},
@@ -618,10 +637,15 @@ PARAMETROS_CULTIVOS = {
         'NDVI_OPTIMO': 0.7,
         'NDRE_OPTIMO': 0.35,
         'TCARI_OPTIMO': 0.25,
-        'OSAVI_OPTIMO': 0.45
+        'OSAVI_OPTIMO': 0.45,
+        'RENDIMIENTO_BASE': 2.0,
+        'RENDIMIENTO_OPTIMO': 3.5,
+        'RESPUESTA_N': 0.015,
+        'RESPUESTA_P': 0.02,
+        'RESPUESTA_K': 0.018,
+        'FACTOR_CLIMA': 0.65
     }
 }
-
 # PARÁMETROS DE TEXTURA DEL SUELO POR CULTIVO - ACTUALIZADO
 TEXTURA_SUELO_OPTIMA = {
     'MAÍZ': {
@@ -1183,6 +1207,251 @@ def calcular_indices_npk_avanzados(gdf, cultivo, satelite):
         })
     
     return resultados
+# ===== NUEVAS FUNCIONES PARA CÁLCULO DE RENDIMIENTO =====
+def calcular_rendimiento_potencial(gdf_analizado, cultivo):
+    """Calcula el rendimiento potencial actual basado en fertilidad existente"""
+    params = PARAMETROS_CULTIVOS[cultivo]
+    rendimientos = []
+    
+    for idx, row in gdf_analizado.iterrows():
+        # Factor de fertilidad actual (0-1)
+        factor_fertilidad = row['npk_integrado']
+        
+        # Factor de humedad (NDWI ajustado)
+        factor_humedad = min(1.0, row['ndwi'] / 0.4) if 'ndwi' in row else 0.7
+        
+        # Factor de vigor vegetativo (NDVI)
+        factor_vigor = min(1.0, row['ndvi'] / params['NDVI_OPTIMO'])
+        
+        # Factor climático base
+        factor_clima = params['FACTOR_CLIMA']
+        
+        # Cálculo de rendimiento base
+        rendimiento_base = params['RENDIMIENTO_BASE']
+        
+        # Ajuste por fertilidad actual
+        ajuste_fertilidad = 0.5 + (factor_fertilidad * 0.5)  # Entre 0.5 y 1.0
+        
+        # Rendimiento potencial estimado
+        rendimiento_potencial = (
+            rendimiento_base * 
+            ajuste_fertilidad * 
+            factor_humedad * 
+            factor_vigor * 
+            factor_clima
+        )
+        
+        # Límite máximo por defecto
+        rendimiento_potencial = min(rendimiento_potencial, params['RENDIMIENTO_OPTIMO'])
+        
+        rendimientos.append(round(rendimiento_potencial, 2))
+    
+    return rendimientos
+
+def calcular_rendimiento_con_recomendaciones(gdf_analizado, cultivo):
+    """Calcula el rendimiento proyectado aplicando recomendaciones NPK"""
+    params = PARAMETROS_CULTIVOS[cultivo]
+    rendimientos = []
+    
+    for idx, row in gdf_analizado.iterrows():
+        # Rendimiento base actual
+        factor_fertilidad = row['npk_integrado']
+        factor_humedad = min(1.0, row['ndwi'] / 0.4) if 'ndwi' in row else 0.7
+        factor_vigor = min(1.0, row['ndvi'] / params['NDVI_OPTIMO'])
+        factor_clima = params['FACTOR_CLIMA']
+        
+        rendimiento_base = params['RENDIMIENTO_BASE']
+        ajuste_fertilidad = 0.5 + (factor_fertilidad * 0.5)
+        
+        rendimiento_actual = (
+            rendimiento_base * 
+            ajuste_fertilidad * 
+            factor_humedad * 
+            factor_vigor * 
+            factor_clima
+        )
+        
+        # Calcular incremento por fertilización
+        incremento_total = 0
+        
+        # Incremento por Nitrógeno
+        if 'valor_recomendado' in row and row['valor_recomendado'] > 0:
+            # Solo si hay deficiencia (valor actual < óptimo)
+            n_actual = row['nitrogeno_actual']
+            n_optimo = params['NITROGENO']['optimo']
+            if n_actual < n_optimo * 0.9:  # Si hay deficiencia significativa
+                eficiencia_n = params['RESPUESTA_N'] * 0.7  # 70% de eficiencia
+                incremento_n = row['valor_recomendado'] * eficiencia_n
+                incremento_total += min(incremento_n, n_optimo * params['RESPUESTA_N'])
+        
+        # Incremento por Fósforo
+        p_actual = row['fosforo_actual']
+        p_optimo = params['FOSFORO']['optimo']
+        if p_actual < p_optimo * 0.85:
+            deficiencia_p = max(0, p_optimo - p_actual)
+            eficiencia_p = params['RESPUESTA_P'] * 0.5  # 50% de eficiencia
+            incremento_p = deficiencia_p * eficiencia_p
+            incremento_total += incremento_p
+        
+        # Incremento por Potasio
+        k_actual = row['potasio_actual']
+        k_optimo = params['POTASIO']['optimo']
+        if k_actual < k_optimo * 0.85:
+            deficiencia_k = max(0, k_optimo - k_actual)
+            eficiencia_k = params['RESPUESTA_K'] * 0.6  # 60% de eficiencia
+            incremento_k = deficiencia_k * eficiencia_k
+            incremento_total += incremento_k
+        
+        # Rendimiento con recomendaciones
+        rendimiento_proyectado = rendimiento_actual + incremento_total
+        
+        # Límite máximo
+        rendimiento_max = params['RENDIMIENTO_OPTIMO'] * 1.1  # 10% sobre el óptimo
+        rendimiento_proyectado = min(rendimiento_proyectado, rendimiento_max)
+        
+        rendimientos.append(round(rendimiento_proyectado, 2))
+    
+    return rendimientos
+
+def crear_mapa_rendimiento(gdf_analizado, columna_rendimiento, cultivo, titulo, colormap='YlOrRd'):
+    """Crea mapa de rendimiento con gradiente de colores"""
+    try:
+        gdf_plot = gdf_analizado.to_crs(epsg=3857)
+        
+        fig, ax = plt.subplots(1, 1, figsize=(12, 8))
+        fig.patch.set_facecolor('#0f172a')
+        ax.set_facecolor('#0f172a')
+        
+        # Normalizar valores para colormap
+        valores = gdf_plot[columna_rendimiento]
+        vmin = valores.min() * 0.8
+        vmax = valores.max() * 1.2
+        
+        # Crear colormap
+        if colormap == 'YlOrRd':
+            cmap = plt.cm.YlOrRd
+        elif colormap == 'RdYlGn':
+            cmap = plt.cm.RdYlGn
+        else:
+            cmap = plt.cm.viridis
+        
+        # Plotear cada zona
+        for idx, row in gdf_plot.iterrows():
+            valor = row[columna_rendimiento]
+            valor_norm = (valor - vmin) / (vmax - vmin) if vmax != vmin else 0.5
+            valor_norm = max(0, min(1, valor_norm))
+            color = cmap(valor_norm)
+            
+            gdf_plot.iloc[[idx]].plot(ax=ax, color=color, edgecolor='white', linewidth=1.5, alpha=0.7)
+            
+            # Etiqueta con rendimiento
+            centroid = row.geometry.centroid
+            ax.annotate(f"Z{row['id_zona']}\n{valor:.1f}t", 
+                       (centroid.x, centroid.y),
+                       xytext=(5, 5), textcoords="offset points",
+                       fontsize=8, color='white', weight='bold',
+                       bbox=dict(boxstyle="round,pad=0.3", facecolor='#1e293b', alpha=0.9, edgecolor='white'))
+        
+        # Agregar mapa base ESRI
+        try:
+            ctx.add_basemap(ax, source=ctx.providers.Esri.WorldImagery, alpha=0.4)
+        except:
+            pass
+        
+        ax.set_title(f'{ICONOS_CULTIVOS[cultivo]} {titulo} - {cultivo}',
+                     fontsize=16, fontweight='bold', pad=20, color='white')
+        ax.set_xlabel('Longitud', color='white')
+        ax.set_ylabel('Latitud', color='white')
+        ax.tick_params(colors='white')
+        ax.grid(True, alpha=0.3, color='#475569')
+        
+        # Barra de colores
+        sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=vmin, vmax=vmax))
+        sm.set_array([])
+        cbar = plt.colorbar(sm, ax=ax, shrink=0.8)
+        cbar.set_label('Rendimiento (ton/ha)', fontsize=12, fontweight='bold', color='white')
+        cbar.ax.yaxis.set_tick_params(color='white')
+        cbar.outline.set_edgecolor('white')
+        plt.setp(plt.getp(cbar.ax.axes, 'yticklabels'), color='white')
+        
+        plt.tight_layout()
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png', dpi=150, bbox_inches='tight', facecolor='#0f172a')
+        buf.seek(0)
+        plt.close()
+        return buf
+    except Exception as e:
+        st.error(f"❌ Error creando mapa de rendimiento: {str(e)}")
+        return None
+
+def crear_mapa_comparativo_rendimiento(gdf_analizado, cultivo):
+    """Crea mapa comparativo de rendimiento actual vs proyectado"""
+    try:
+        gdf_plot = gdf_analizado.to_crs(epsg=3857)
+        
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 8))
+        fig.patch.set_facecolor('#0f172a')
+        ax1.set_facecolor('#0f172a')
+        ax2.set_facecolor('#0f172a')
+        
+        # Mapa 1: Rendimiento Actual
+        valores_actual = gdf_plot['rendimiento_actual']
+        vmin1, vmax1 = valores_actual.min() * 0.8, valores_actual.max() * 1.2
+        
+        for idx, row in gdf_plot.iterrows():
+            valor = row['rendimiento_actual']
+            valor_norm = (valor - vmin1) / (vmax1 - vmin1) if vmax1 != vmin1 else 0.5
+            valor_norm = max(0, min(1, valor_norm))
+            color = plt.cm.YlOrRd(valor_norm)
+            
+            gdf_plot.iloc[[idx]].plot(ax=ax1, color=color, edgecolor='white', linewidth=1.5, alpha=0.7)
+            
+            # Etiqueta
+            centroid = row.geometry.centroid
+            ax1.annotate(f"{valor:.1f}t", 
+                        (centroid.x, centroid.y),
+                        xytext=(5, 5), textcoords="offset points",
+                        fontsize=7, color='white', weight='bold')
+        
+        # Mapa 2: Rendimiento Proyectado
+        valores_proy = gdf_plot['rendimiento_proyectado']
+        vmin2, vmax2 = valores_proy.min() * 0.8, valores_proy.max() * 1.2
+        
+        for idx, row in gdf_plot.iterrows():
+            valor = row['rendimiento_proyectado']
+            valor_norm = (valor - vmin2) / (vmax2 - vmin2) if vmax2 != vmin2 else 0.5
+            valor_norm = max(0, min(1, valor_norm))
+            color = plt.cm.RdYlGn(valor_norm)
+            
+            gdf_plot.iloc[[idx]].plot(ax=ax2, color=color, edgecolor='white', linewidth=1.5, alpha=0.7)
+            
+            # Etiqueta con incremento
+            incremento = row['rendimiento_proyectado'] - row['rendimiento_actual']
+            centroid = row.geometry.centroid
+            ax2.annotate(f"{valor:.1f}t\n(+{incremento:.1f})", 
+                        (centroid.x, centroid.y),
+                        xytext=(5, 5), textcoords="offset points",
+                        fontsize=7, color='white', weight='bold')
+        
+        # Títulos
+        ax1.set_title('📊 RENDIMIENTO ACTUAL', fontsize=14, fontweight='bold', color='white')
+        ax2.set_title('🚀 RENDIMIENTO CON FERTILIZACIÓN', fontsize=14, fontweight='bold', color='white')
+        
+        for ax in [ax1, ax2]:
+            ax.set_xlabel('Longitud', color='white')
+            ax.set_ylabel('Latitud', color='white')
+            ax.tick_params(colors='white')
+            ax.grid(True, alpha=0.3, color='#475569')
+        
+        plt.tight_layout()
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png', dpi=150, bbox_inches='tight', facecolor='#0f172a')
+        buf.seek(0)
+        plt.close()
+        return buf
+    except Exception as e:
+        st.error(f"❌ Error creando mapa comparativo: {str(e)}")
+        return None
 
 # ===== FUNCIONES PARA DATOS SATELITALES =====
 def descargar_datos_landsat8(gdf, fecha_inicio, fecha_fin, indice='NDVI'):
@@ -1319,6 +1588,251 @@ def calcular_recomendaciones_npk_cientificas(gdf_analizado, nutriente, cultivo):
         recomendaciones.append(max(0, recomendado_redondeado))
     
     return recomendaciones
+
+# ===== FUNCIÓN PRINCIPAL DE ANÁLISIS (MEJORADA) =====
+def ejecutar_analisis(gdf, nutriente, analisis_tipo, n_divisiones, cultivo,
+                      satelite=None, indice=None, fecha_inicio=None,
+                      fecha_fin=None, intervalo_curvas=5.0, resolucion_dem=10.0):
+    resultados = {
+        'exitoso': False,
+        'gdf_analizado': None,
+        'mapa_buffer': None,
+        'tabla_datos': None,
+        'estadisticas': {},
+        'recomendaciones': [],
+        'area_total': 0,
+        'df_power': None
+    }
+    try:
+        gdf = validar_y_corregir_crs(gdf)
+        area_total = calcular_superficie(gdf)
+        resultados['area_total'] = area_total
+        
+        # === ANÁLISIS DE TEXTURA DEL SUELO ===
+        if analisis_tipo == "ANÁLISIS DE TEXTURA":
+            gdf_dividido = dividir_parcela_en_zonas(gdf, n_divisiones)
+            gdf_analizado = analizar_textura_suelo(gdf_dividido, cultivo)
+            resultados['gdf_analizado'] = gdf_analizado
+            resultados['exitoso'] = True
+            return resultados
+        
+        # === ANÁLISIS DE CURVAS DE NIVEL ===
+        elif analisis_tipo == "ANÁLISIS DE CURVAS DE NIVEL":
+            gdf_dividido = dividir_parcela_en_zonas(gdf, n_divisiones)
+            resultados['gdf_analizado'] = gdf_dividido
+            resultados['exitoso'] = True
+            return resultados
+        
+        # === ANÁLISIS SATELITAL (FERTILIDAD O NPK) ===
+        elif analisis_tipo in ["FERTILIDAD ACTUAL", "RECOMENDACIONES NPK"]:
+            # Obtener datos satelitales
+            datos_satelitales = None
+            if satelite == "SENTINEL-2":
+                datos_satelitales = descargar_datos_sentinel2(gdf, fecha_inicio, fecha_fin, indice)
+            elif satelite == "LANDSAT-8":
+                datos_satelitales = descargar_datos_landsat8(gdf, fecha_inicio, fecha_fin, indice)
+            else:
+                datos_satelitales = generar_datos_simulados(gdf, cultivo, indice)
+            
+            # Dividir parcela
+            gdf_dividido = dividir_parcela_en_zonas(gdf, n_divisiones)
+            
+            # Calcular NPK usando metodologías científicas
+            indices_npk = calcular_indices_npk_avanzados(gdf_dividido, cultivo, satelite)
+            
+            # Crear GeoDataFrame con resultados
+            gdf_analizado = gdf_dividido.copy()
+            for idx, indice_data in enumerate(indices_npk):
+                for key, value in indice_data.items():
+                    gdf_analizado.loc[gdf_analizado.index[idx], key] = value
+            
+            # Calcular áreas
+            areas_ha_list = []
+            for idx, row in gdf_analizado.iterrows():
+                area_gdf = gpd.GeoDataFrame({'geometry': [row.geometry]}, crs=gdf_analizado.crs)
+                area_ha = calcular_superficie(area_gdf)
+                if hasattr(area_ha, 'iloc'):
+                    area_ha = float(area_ha.iloc[0])
+                elif hasattr(area_ha, '__len__') and len(area_ha) > 0:
+                    area_ha = float(area_ha[0])
+                else:
+                    area_ha = float(area_ha)
+                areas_ha_list.append(area_ha)
+            
+            gdf_analizado['area_ha'] = areas_ha_list
+            
+            # Calcular recomendaciones si es necesario
+            if analisis_tipo == "RECOMENDACIONES NPK":
+                recomendaciones_npk = calcular_recomendaciones_npk_cientificas(gdf_analizado, nutriente, cultivo)
+                gdf_analizado['valor_recomendado'] = recomendaciones_npk
+                
+                # NUEVO: Calcular rendimientos actual y proyectado
+                rendimiento_actual = calcular_rendimiento_potencial(gdf_analizado, cultivo)
+                rendimiento_proyectado = calcular_rendimiento_con_recomendaciones(gdf_analizado, cultivo)
+                
+                gdf_analizado['rendimiento_actual'] = rendimiento_actual
+                gdf_analizado['rendimiento_proyectado'] = rendimiento_proyectado
+                gdf_analizado['incremento_rendimiento'] = [
+                    proy - act for proy, act in zip(rendimiento_proyectado, rendimiento_actual)
+                ]
+            
+            resultados['gdf_analizado'] = gdf_analizado
+            resultados['exitoso'] = True
+
+# === MAPAS DE POTENCIAL DE COSECHA ===
+if analisis_tipo == "RECOMENDACIONES NPK":
+    st.subheader("🌾 ANÁLISIS DE POTENCIAL DE COSECHA")
+    
+    # Métricas de rendimiento
+    col_r1, col_r2, col_r3, col_r4 = st.columns(4)
+    with col_r1:
+        rend_actual_prom = gdf_analizado['rendimiento_actual'].mean()
+        st.metric("🌱 Rendimiento Actual", f"{rend_actual_prom:.1f} ton/ha")
+    with col_r2:
+        rend_proy_prom = gdf_analizado['rendimiento_proyectado'].mean()
+        st.metric("🚀 Rendimiento Proyectado", f"{rend_proy_prom:.1f} ton/ha")
+    with col_r3:
+        incremento_prom = gdf_analizado['incremento_rendimiento'].mean()
+        st.metric("📈 Incremento Esperado", f"{incremento_prom:.1f} ton/ha")
+    with col_r4:
+        porcentaje_aumento = (incremento_prom / rend_actual_prom * 100) if rend_actual_prom > 0 else 0
+        st.metric("💹 % de Aumento", f"{porcentaje_aumento:.1f}%")
+    
+    # Mapa comparativo
+    st.subheader("🗺️ COMPARATIVO DE RENDIMIENTO")
+    mapa_comparativo = crear_mapa_comparativo_rendimiento(gdf_analizado, cultivo)
+    if mapa_comparativo:
+        st.image(mapa_comparativo, use_container_width=True)
+        st.download_button(
+            "📥 Descargar Mapa Comparativo",
+            mapa_comparativo,
+            f"mapa_comparativo_rendimiento_{cultivo}_{datetime.now().strftime('%Y%m%d')}.png",
+            "image/png"
+        )
+    
+    # Mapas individuales
+    tab_actual, tab_proyectado, tab_diferencia = st.tabs(["🌱 Actual", "🚀 Proyectado", "📊 Diferencia"])
+    
+    with tab_actual:
+        mapa_actual = crear_mapa_rendimiento(gdf_analizado, 'rendimiento_actual', cultivo, 
+                                             'POTENCIAL DE COSECHA ACTUAL', 'YlOrRd')
+        if mapa_actual:
+            st.image(mapa_actual, use_container_width=True)
+            
+            # Análisis de zonas críticas
+            zonas_bajas = gdf_analizado[gdf_analizado['rendimiento_actual'] < rend_actual_prom * 0.7]
+            if len(zonas_bajas) > 0:
+                st.warning(f"⚠️ **{len(zonas_bajas)} zonas** tienen rendimiento inferior al 70% del promedio")
+                st.write(f"Zonas con menor rendimiento: {', '.join([f'Z{int(z)}' for z in zonas_bajas['id_zona'].head(3).tolist()])}")
+    
+    with tab_proyectado:
+        mapa_proyectado = crear_mapa_rendimiento(gdf_analizado, 'rendimiento_proyectado', cultivo,
+                                                 'POTENCIAL CON FERTILIZACIÓN', 'RdYlGn')
+        if mapa_proyectado:
+            st.image(mapa_proyectado, use_container_width=True)
+            
+            # Zonas con mayor potencial de mejora
+            gdf_analizado['mejora_relativa'] = gdf_analizado['incremento_rendimiento'] / gdf_analizado['rendimiento_actual']
+            zonas_alta_mejora = gdf_analizado.nlargest(3, 'mejora_relativa')
+            if len(zonas_alta_mejora) > 0:
+                st.success(f"🎯 **Zonas con mayor potencial de mejora:**")
+                for _, zona in zonas_alta_mejora.iterrows():
+                    st.write(f"- **Z{zona['id_zona']}**: {zona['rendimiento_actual']:.1f} → {zona['rendimiento_proyectado']:.1f} ton/ha "
+                             f"(+{zona['incremento_rendimiento']:.1f} ton, +{zona['mejora_relativa']*100:.0f}%)")
+    
+    with tab_diferencia:
+        # Gráfico de barras de diferencia
+        fig_diff, ax_diff = plt.subplots(figsize=(12, 6))
+        fig_diff.patch.set_facecolor('#0f172a')
+        ax_diff.set_facecolor('#0f172a')
+        
+        zonas = [f"Z{int(z)}" for z in gdf_analizado['id_zona'].tolist()]
+        actual = gdf_analizado['rendimiento_actual'].tolist()
+        proyectado = gdf_analizado['rendimiento_proyectado'].tolist()
+        
+        x = np.arange(len(zonas))
+        width = 0.35
+        
+        bars1 = ax_diff.bar(x - width/2, actual, width, label='Actual', color='#3b82f6', alpha=0.7)
+        bars2 = ax_diff.bar(x + width/2, proyectado, width, label='Proyectado', color='#10b981', alpha=0.7)
+        
+        # Agregar etiquetas de incremento
+        for i, (act, proy) in enumerate(zip(actual, proyectado)):
+            incremento = proy - act
+            if incremento > 0:
+                ax_diff.text(i, max(act, proy) + 0.1, f"+{incremento:.1f}", 
+                           ha='center', va='bottom', fontsize=8, color='#10b981', fontweight='bold')
+        
+        ax_diff.set_xlabel('Zonas', color='white')
+        ax_diff.set_ylabel('Rendimiento (ton/ha)', color='white')
+        ax_diff.set_title('COMPARACIÓN DE RENDIMIENTO POR ZONA', color='white', fontweight='bold')
+        ax_diff.set_xticks(x)
+        ax_diff.set_xticklabels(zonas, rotation=45, color='white')
+        ax_diff.tick_params(colors='white')
+        ax_diff.legend(facecolor='#1e293b', edgecolor='white', labelcolor='white')
+        ax_diff.grid(True, alpha=0.3, color='#475569')
+        
+        plt.tight_layout()
+        st.pyplot(fig_diff)
+        
+        # Resumen económico simple
+        st.subheader("💰 ANÁLISIS ECONÓMICO SIMPLIFICADO")
+        precio_ton = st.number_input("💰 Precio por tonelada ($)", min_value=100, max_value=1000, value=300, step=50)
+        
+        incremento_total = gdf_analizado['incremento_rendimiento'].sum()
+        valor_incremento = incremento_total * precio_ton
+        
+        costo_fertilizante = st.number_input("💸 Costo estimado de fertilización por ha ($)", 
+                                            min_value=50, max_value=500, value=150, step=10)
+        costo_total = costo_fertilizante * area_total
+        
+        beneficio_neto = valor_incremento - costo_total
+        
+        col_e1, col_e2, col_e3 = st.columns(3)
+        with col_e1:
+            st.metric("💰 Valor del Incremento", f"${valor_incremento:,.0f}")
+        with col_e2:
+            st.metric("💸 Costo de Fertilización", f"${costo_total:,.0f}")
+        with col_e3:
+            color = "green" if beneficio_neto > 0 else "red"
+            st.metric("📊 Beneficio Neto Estimado", f"${beneficio_neto:,.0f}", 
+                     delta_color="normal" if beneficio_neto > 0 else "inverse")
+    
+    # Tabla detallada de rendimiento
+    st.subheader("📋 TABLA DE RENDIMIENTO POR ZONA")
+    columnas_rendimiento = ['id_zona', 'area_ha', 'rendimiento_actual', 'rendimiento_proyectado', 
+                           'incremento_rendimiento', 'valor_recomendado']
+    columnas_rendimiento = [col for col in columnas_rendimiento if col in gdf_analizado.columns]
+    
+    tabla_rendimiento = gdf_analizado[columnas_rendimiento].copy()
+    tabla_rendimiento.columns = ['Zona', 'Área (ha)', 'Rend. Actual (ton/ha)', 'Rend. Proy. (ton/ha)', 
+                                'Incremento (ton/ha)', 'Fert. Recomendado (kg/ha)']
+    st.dataframe(tabla_rendimiento)
+    
+    # Botón de exportación específica
+    csv_rendimiento = tabla_rendimiento.to_csv(index=False)
+    st.download_button(
+        "📥 Descargar Tabla de Rendimiento",
+        csv_rendimiento,
+        f"rendimiento_{cultivo}_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+        "text/csv"
+    )
+            
+            # === DATOS DE NASA POWER ===
+            if satelite:
+                df_power = obtener_datos_nasa_power(gdf, fecha_inicio, fecha_fin)
+                if df_power is not None:
+                    resultados['df_power'] = df_power
+            
+            return resultados
+        else:
+            st.error(f"Tipo de análisis no soportado: {analisis_tipo}")
+            return resultados
+    except Exception as e:
+        st.error(f"❌ Error en análisis: {str(e)}")
+        import traceback
+        st.error(f"Detalle: {traceback.format_exc()}")
+        return resultados
 
 # ===== FUNCIONES DE TEXTURA DEL SUELO - ACTUALIZADAS =====
 def clasificar_textura_suelo(arena, limo, arcilla):
@@ -1840,6 +2354,27 @@ Tipo de Análisis: {analisis_tipo}"""
         pdf.cell(0, 10, '6. METADATOS TÉCNICOS', 0, 1)
         pdf.set_font('Arial', '', 10)
         metadatos = f"""Generado por: Analizador Multi-Cultivo Satellital
+
+# === ANÁLISIS DE RENDIMIENTO ===
+if analisis_tipo == "RECOMENDACIONES NPK" and 'rendimiento_actual' in gdf_analizado.columns:
+    pdf.set_font('Arial', 'B', 14)
+    pdf.cell(0, 10, 'ANÁLISIS DE POTENCIAL DE COSECHA', 0, 1)
+    pdf.set_font('Arial', '', 12)
+    
+    rend_actual = gdf_analizado['rendimiento_actual'].mean()
+    rend_proy = gdf_analizado['rendimiento_proyectado'].mean()
+    incremento = gdf_analizado['incremento_rendimiento'].mean()
+    porcentaje = (incremento / rend_actual * 100) if rend_actual > 0 else 0
+    
+    info_rendimiento = f"""Rendimiento Actual Promedio: {rend_actual:.1f} ton/ha
+Rendimiento Proyectado Promedio: {rend_proy:.1f} ton/ha
+Incremento Esperado: {incremento:.1f} ton/ha
+Porcentaje de Aumento: {porcentaje:.1f}%
+"""
+    for linea in info_rendimiento.strip().split('\n'):
+        pdf.cell(0, 8, limpiar_texto_para_pdf(linea), 0, 1)
+    pdf.ln(5)
+
 Versión: 2.0 (Con metodologías científicas NPK)
 Fecha de generación: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 Sistema de coordenadas: EPSG:4326 (WGS84)
