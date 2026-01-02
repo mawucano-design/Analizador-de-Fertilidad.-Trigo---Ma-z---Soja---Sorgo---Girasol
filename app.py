@@ -1687,6 +1687,7 @@ def ejecutar_analisis(gdf, nutriente, analisis_tipo, n_divisiones, cultivo,
                     resultados['df_power'] = df_power
             
             return resultados
+            
         else:
             st.error(f"Tipo de análisis no soportado: {analisis_tipo}")
             return resultados
