@@ -344,7 +344,7 @@ p, div, span, label, li {
     background: rgba(15, 23, 42, 0.8) !important;
     backdrop-filter: blur(10px) !important;
     border-radius: 16px !important;
-    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    border: 1px solid rgba(255, 255,255, 0.1) !important;
     color: #ffffff !important;
 }
 
@@ -574,7 +574,7 @@ METODOLOGIAS_NPK = {
 }
 
 # ===== CONFIGURACIÓN =====
-# PARÁMETROS GEE POR CULTIVO - ACTUALIZADO CON NUEVOS CULTIVOS
+# PARÁMETROS GEE POR CULTIVO - ACTUALIZADO CON NUEVOS CULTIVOS Y RENDIMIENTO
 PARAMETROS_CULTIVOS = {
     'MAÍZ': {
         'NITROGENO': {'min': 150, 'max': 200, 'optimo': 180},
@@ -646,6 +646,7 @@ PARAMETROS_CULTIVOS = {
         'FACTOR_CLIMA': 0.65
     }
 }
+
 # PARÁMETROS DE TEXTURA DEL SUELO POR CULTIVO - ACTUALIZADO
 TEXTURA_SUELO_OPTIMA = {
     'MAÍZ': {
@@ -1207,7 +1208,8 @@ def calcular_indices_npk_avanzados(gdf, cultivo, satelite):
         })
     
     return resultados
-# ===== NUEVAS FUNCIONES PARA CÁLCULO DE RENDIMIENTO =====
+
+# ===== FUNCIONES PARA CÁLCULO DE RENDIMIENTO =====
 def calcular_rendimiento_potencial(gdf_analizado, cultivo):
     """Calcula el rendimiento potencial actual basado en fertilidad existente"""
     params = PARAMETROS_CULTIVOS[cultivo]
@@ -1589,116 +1591,6 @@ def calcular_recomendaciones_npk_cientificas(gdf_analizado, nutriente, cultivo):
     
     return recomendaciones
 
-# ===== FUNCIÓN PRINCIPAL DE ANÁLISIS (MEJORADA) =====
-def ejecutar_analisis(gdf, nutriente, analisis_tipo, n_divisiones, cultivo,
-                      satelite=None, indice=None, fecha_inicio=None,
-                      fecha_fin=None, intervalo_curvas=5.0, resolucion_dem=10.0):
-    resultados = {
-        'exitoso': False,
-        'gdf_analizado': None,
-        'mapa_buffer': None,
-        'tabla_datos': None,
-        'estadisticas': {},
-        'recomendaciones': [],
-        'area_total': 0,
-        'df_power': None
-    }
-    
-    try:
-        gdf = validar_y_corregir_crs(gdf)
-        area_total = calcular_superficie(gdf)
-        resultados['area_total'] = area_total
-        
-        # === ANÁLISIS DE TEXTURA DEL SUELO ===
-        if analisis_tipo == "ANÁLISIS DE TEXTURA":
-            gdf_dividido = dividir_parcela_en_zonas(gdf, n_divisiones)
-            gdf_analizado = analizar_textura_suelo(gdf_dividido, cultivo)
-            resultados['gdf_analizado'] = gdf_analizado
-            resultados['exitoso'] = True
-            return resultados
-        
-        # === ANÁLISIS DE CURVAS DE NIVEL ===
-        elif analisis_tipo == "ANÁLISIS DE CURVAS DE NIVEL":
-            gdf_dividido = dividir_parcela_en_zonas(gdf, n_divisiones)
-            resultados['gdf_analizado'] = gdf_dividido
-            resultados['exitoso'] = True
-            return resultados
-        
-        # === ANÁLISIS SATELITAL (FERTILIDAD O NPK) ===
-        elif analisis_tipo in ["FERTILIDAD ACTUAL", "RECOMENDACIONES NPK"]:
-            # Obtener datos satelitales
-            datos_satelitales = None
-            if satelite == "SENTINEL-2":
-                datos_satelitales = descargar_datos_sentinel2(gdf, fecha_inicio, fecha_fin, indice)
-            elif satelite == "LANDSAT-8":
-                datos_satelitales = descargar_datos_landsat8(gdf, fecha_inicio, fecha_fin, indice)
-            else:
-                datos_satelitales = generar_datos_simulados(gdf, cultivo, indice)
-            
-            # Dividir parcela
-            gdf_dividido = dividir_parcela_en_zonas(gdf, n_divisiones)
-            
-            # Calcular NPK usando metodologías científicas
-            indices_npk = calcular_indices_npk_avanzados(gdf_dividido, cultivo, satelite)
-            
-            # Crear GeoDataFrame con resultados
-            gdf_analizado = gdf_dividido.copy()
-            for idx, indice_data in enumerate(indices_npk):
-                for key, value in indice_data.items():
-                    gdf_analizado.loc[gdf_analizado.index[idx], key] = value
-            
-            # Calcular áreas
-            areas_ha_list = []
-            for idx, row in gdf_analizado.iterrows():
-                area_gdf = gpd.GeoDataFrame({'geometry': [row.geometry]}, crs=gdf_analizado.crs)
-                area_ha = calcular_superficie(area_gdf)
-                if hasattr(area_ha, 'iloc'):
-                    area_ha = float(area_ha.iloc[0])
-                elif hasattr(area_ha, '__len__') and len(area_ha) > 0:
-                    area_ha = float(area_ha[0])
-                else:
-                    area_ha = float(area_ha)
-                areas_ha_list.append(area_ha)
-            
-            gdf_analizado['area_ha'] = areas_ha_list
-            
-            # Calcular recomendaciones si es necesario
-            if analisis_tipo == "RECOMENDACIONES NPK":
-                recomendaciones_npk = calcular_recomendaciones_npk_cientificas(gdf_analizado, nutriente, cultivo)
-                gdf_analizado['valor_recomendado'] = recomendaciones_npk
-                
-                # NUEVO: Calcular rendimientos actual y proyectado
-                rendimiento_actual = calcular_rendimiento_potencial(gdf_analizado, cultivo)
-                rendimiento_proyectado = calcular_rendimiento_con_recomendaciones(gdf_analizado, cultivo)
-                
-                gdf_analizado['rendimiento_actual'] = rendimiento_actual
-                gdf_analizado['rendimiento_proyectado'] = rendimiento_proyectado
-                gdf_analizado['incremento_rendimiento'] = [
-                    proy - act for proy, act in zip(rendimiento_proyectado, rendimiento_actual)
-                ]
-            
-            resultados['gdf_analizado'] = gdf_analizado
-            resultados['exitoso'] = True
-            
-            # === DATOS DE NASA POWER ===
-            if satelite:
-                df_power = obtener_datos_nasa_power(gdf, fecha_inicio, fecha_fin)
-                if df_power is not None:
-                    resultados['df_power'] = df_power
-            
-            return resultados
-            
-        else:
-            st.error(f"Tipo de análisis no soportado: {analisis_tipo}")
-            return resultados
-            
-    except Exception as e:
-        st.error(f"❌ Error en análisis: {str(e)}")
-        import traceback
-        st.error(f"Detalle: {traceback.format_exc()}")
-        return resultados
-
-
 # ===== FUNCIONES DE TEXTURA DEL SUELO - ACTUALIZADAS =====
 def clasificar_textura_suelo(arena, limo, arcilla):
     try:
@@ -1726,8 +1618,6 @@ def clasificar_textura_suelo(arena, limo, arcilla):
             return "Franco"
     except Exception as e:
         return "NO_DETERMINADA"
-
-# ... resto de las funciones ...
 
 def analizar_textura_suelo(gdf, cultivo):
     gdf = validar_y_corregir_crs(gdf)
@@ -2147,6 +2037,26 @@ Tipo de Análisis: {analisis_tipo}"""
                 pdf.cell(0, 8, limpiar_texto_para_pdf(linea), 0, 1)
             pdf.ln(5)
         
+        # === ANÁLISIS DE RENDIMIENTO ===
+        if analisis_tipo == "RECOMENDACIONES NPK" and 'rendimiento_actual' in gdf_analizado.columns:
+            pdf.set_font('Arial', 'B', 14)
+            pdf.cell(0, 10, 'ANÁLISIS DE POTENCIAL DE COSECHA', 0, 1)
+            pdf.set_font('Arial', '', 12)
+            
+            rend_actual = gdf_analizado['rendimiento_actual'].mean()
+            rend_proy = gdf_analizado['rendimiento_proyectado'].mean()
+            incremento = gdf_analizado['incremento_rendimiento'].mean()
+            porcentaje = (incremento / rend_actual * 100) if rend_actual > 0 else 0
+            
+            info_rendimiento = f"""Rendimiento Actual Promedio: {rend_actual:.1f} ton/ha
+Rendimiento Proyectado Promedio: {rend_proy:.1f} ton/ha
+Incremento Esperado: {incremento:.1f} ton/ha
+Porcentaje de Aumento: {porcentaje:.1f}%
+"""
+            for linea in info_rendimiento.strip().split('\n'):
+                pdf.cell(0, 8, limpiar_texto_para_pdf(linea), 0, 1)
+            pdf.ln(5)
+        
         if mapa_buffer:
             try:
                 pdf.set_font('Arial', 'B', 14)
@@ -2180,6 +2090,8 @@ Tipo de Análisis: {analisis_tipo}"""
                 columnas_mostrar.append('textura_suelo')
             if 'ndwi' in gdf_analizado.columns:
                 columnas_mostrar.append('ndwi')
+            if 'rendimiento_actual' in gdf_analizado.columns:
+                columnas_mostrar.extend(['rendimiento_actual', 'rendimiento_proyectado'])
             
             columnas_mostrar = [col for col in columnas_mostrar if col in gdf_analizado.columns]
             if columnas_mostrar:
@@ -2193,6 +2105,8 @@ Tipo de Análisis: {analisis_tipo}"""
                                 if col in ['npk_integrado', 'ndwi']:
                                     fila.append(f"{valor:.3f}")
                                 elif col in ['nitrogeno_actual', 'fosforo_actual', 'potasio_actual', 'valor_recomendado']:
+                                    fila.append(f"{valor:.1f}")
+                                elif col in ['rendimiento_actual', 'rendimiento_proyectado']:
                                     fila.append(f"{valor:.1f}")
                                 else:
                                     fila.append(f"{valor:.2f}")
@@ -2221,27 +2135,6 @@ Tipo de Análisis: {analisis_tipo}"""
         pdf.cell(0, 10, '6. METADATOS TÉCNICOS', 0, 1)
         pdf.set_font('Arial', '', 10)
         metadatos = f"""Generado por: Analizador Multi-Cultivo Satellital
-
-# === ANÁLISIS DE RENDIMIENTO ===
-if analisis_tipo == "RECOMENDACIONES NPK" and 'rendimiento_actual' in gdf_analizado.columns:
-    pdf.set_font('Arial', 'B', 14)
-    pdf.cell(0, 10, 'ANÁLISIS DE POTENCIAL DE COSECHA', 0, 1)
-    pdf.set_font('Arial', '', 12)
-    
-    rend_actual = gdf_analizado['rendimiento_actual'].mean()
-    rend_proy = gdf_analizado['rendimiento_proyectado'].mean()
-    incremento = gdf_analizado['incremento_rendimiento'].mean()
-    porcentaje = (incremento / rend_actual * 100) if rend_actual > 0 else 0
-    
-    info_rendimiento = f"""Rendimiento Actual Promedio: {rend_actual:.1f} ton/ha
-Rendimiento Proyectado Promedio: {rend_proy:.1f} ton/ha
-Incremento Esperado: {incremento:.1f} ton/ha
-Porcentaje de Aumento: {porcentaje:.1f}%
-"""
-    for linea in info_rendimiento.strip().split('\n'):
-        pdf.cell(0, 8, limpiar_texto_para_pdf(linea), 0, 1)
-    pdf.ln(5)
-
 Versión: 2.0 (Con metodologías científicas NPK)
 Fecha de generación: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 Sistema de coordenadas: EPSG:4326 (WGS84)
@@ -2311,6 +2204,26 @@ def generar_reporte_docx(gdf_analizado, cultivo, analisis_tipo, area_total,
                 p.add_run(str(value))
             doc.add_paragraph()
         
+        # === ANÁLISIS DE RENDIMIENTO ===
+        if analisis_tipo == "RECOMENDACIONES NPK" and 'rendimiento_actual' in gdf_analizado.columns:
+            doc.add_heading('ANÁLISIS DE POTENCIAL DE COSECHA', level=1)
+            rend_actual = gdf_analizado['rendimiento_actual'].mean()
+            rend_proy = gdf_analizado['rendimiento_proyectado'].mean()
+            incremento = gdf_analizado['incremento_rendimiento'].mean()
+            porcentaje = (incremento / rend_actual * 100) if rend_actual > 0 else 0
+            
+            rendimiento_table = doc.add_table(rows=4, cols=2)
+            rendimiento_table.style = 'Table Grid'
+            rendimiento_table.cell(0, 0).text = 'Rendimiento Actual Promedio'
+            rendimiento_table.cell(0, 1).text = f'{rend_actual:.1f} ton/ha'
+            rendimiento_table.cell(1, 0).text = 'Rendimiento Proyectado Promedio'
+            rendimiento_table.cell(1, 1).text = f'{rend_proy:.1f} ton/ha'
+            rendimiento_table.cell(2, 0).text = 'Incremento Esperado'
+            rendimiento_table.cell(2, 1).text = f'{incremento:.1f} ton/ha'
+            rendimiento_table.cell(3, 0).text = 'Porcentaje de Aumento'
+            rendimiento_table.cell(3, 1).text = f'{porcentaje:.1f}%'
+            doc.add_paragraph()
+        
         if mapa_buffer:
             try:
                 doc.add_heading('3. MAPA DE RESULTADOS', level=1)
@@ -2341,6 +2254,8 @@ def generar_reporte_docx(gdf_analizado, cultivo, analisis_tipo, area_total,
                 columnas_mostrar.append('textura_suelo')
             if 'ndwi' in gdf_analizado.columns:
                 columnas_mostrar.append('ndwi')
+            if 'rendimiento_actual' in gdf_analizado.columns:
+                columnas_mostrar.extend(['rendimiento_actual', 'rendimiento_proyectado'])
             
             columnas_mostrar = [col for col in columnas_mostrar if col in gdf_analizado.columns]
             if columnas_mostrar:
@@ -2357,6 +2272,8 @@ def generar_reporte_docx(gdf_analizado, cultivo, analisis_tipo, area_total,
                                 if col in ['npk_integrado', 'ndwi']:
                                     row_cells[i].text = f"{valor:.3f}"
                                 elif col in ['nitrogeno_actual', 'fosforo_actual', 'potasio_actual', 'valor_recomendado']:
+                                    row_cells[i].text = f"{valor:.1f}"
+                                elif col in ['rendimiento_actual', 'rendimiento_proyectado']:
                                     row_cells[i].text = f"{valor:.1f}"
                                 else:
                                     row_cells[i].text = f"{valor:.2f}"
