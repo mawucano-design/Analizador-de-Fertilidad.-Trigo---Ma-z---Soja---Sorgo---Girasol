@@ -647,12 +647,81 @@ PARAMETROS_CULTIVOS = {
     }
 }
 
-# PARÁMETROS DE TEXTURA DEL SUELO POR CULTIVO - ACTUALIZADO
+# ===== NUEVA CLASIFICACIÓN USDA PARA TEXTURA DE SUELO =====
+def clasificar_textura_usda(arena, limo, arcilla):
+    """
+    Clasifica la textura del suelo según el sistema USDA
+    """
+    try:
+        total = arena + limo + arcilla
+        if total == 0:
+            return "Sin datos"
+        
+        # Normalizar porcentajes
+        arena_pct = (arena / total) * 100
+        limo_pct = (limo / total) * 100
+        arcilla_pct = (arcilla / total) * 100
+        
+        # Clasificación USDA según el triángulo de texturas
+        if arcilla_pct > 40:
+            if limo_pct >= 40:
+                return "Arcilla limosa"
+            elif arena_pct <= 45:
+                return "Arcilla"
+            else:
+                return "Arcilla arenosa"
+        elif arcilla_pct >= 27 and arcilla_pct <= 40:
+            if limo_pct >= 40:
+                return "Franco arcilloso limoso"
+            elif arena_pct <= 20:
+                return "Franco arcilloso"
+            else:
+                return "Franco arcilloso arenoso"
+        elif arcilla_pct >= 20 and arcilla_pct < 27:
+            if limo_pct < 28:
+                if arena_pct >= 52:
+                    return "Arena franca"
+                else:
+                    return "Franco arenoso"
+            else:
+                if arena_pct >= 52:
+                    return "Franco limoso arenoso"
+                else:
+                    return "Franco limoso"
+        elif arcilla_pct >= 10 and arcilla_pct < 20:
+            if limo_pct >= 50:
+                return "Limo"
+            elif limo_pct >= 30:
+                if arena_pct >= 50:
+                    return "Franco limoso arenoso"
+                else:
+                    return "Franco limoso"
+            else:
+                if arena_pct >= 70:
+                    return "Arena"
+                elif arena_pct >= 50:
+                    return "Arena franca"
+                else:
+                    return "Franco arenoso"
+        else:  # arcilla_pct < 10
+            if limo_pct >= 80:
+                return "Limo"
+            elif limo_pct >= 50:
+                return "Limo arenoso"
+            else:
+                if arena_pct >= 85:
+                    return "Arena"
+                else:
+                    return "Arena franca"
+    except Exception as e:
+        return "Sin datos"
+
+# ===== PARÁMETROS DE TEXTURA DEL SUELO POR CULTIVO - ACTUALIZADO A USDA =====
 TEXTURA_SUELO_OPTIMA = {
     'MAÍZ': {
-        'textura_optima': 'Franco',
-        'arena_optima': 45,
-        'limo_optima': 35,
+        'textura_optima': 'Franco limoso',
+        'arena_optima': 43,
+        'limo_optima': 37,
         'arcilla_optima': 20,
         'densidad_aparente_optima': 1.3,
         'porosidad_optima': 0.5
@@ -666,18 +735,18 @@ TEXTURA_SUELO_OPTIMA = {
         'porosidad_optima': 0.55
     },
     'TRIGO': {
-        'textura_optima': 'Franco',
-        'arena_optima': 50,
-        'limo_optima': 30,
+        'textura_optima': 'Franco arcilloso limoso',
+        'arena_optima': 30,
+        'limo_optima': 50,
         'arcilla_optima': 20,
         'densidad_aparente_optima': 1.25,
         'porosidad_optima': 0.52
     },
     'GIRASOL': {
-        'textura_optima': 'Franco arenoso-arcilloso',
-        'arena_optima': 55,
+        'textura_optima': 'Franco arenoso',
+        'arena_optima': 60,
         'limo_optima': 25,
-        'arcilla_optima': 20,
+        'arcilla_optima': 15,
         'densidad_aparente_optima': 1.35,
         'porosidad_optima': 0.48
     }
@@ -693,62 +762,152 @@ CLASIFICACION_PENDIENTES = {
     'EXTREMA (>25%)': {'min': 25, 'max': 100, 'color': '#d73027', 'factor_erosivo': 1.0}
 }
 
-# RECOMENDACIONES POR TIPO DE TEXTURA - ACTUALIZADO A NOMENCLATURA VENEZUELA/COLOMBIA
+# ===== RECOMENDACIONES POR TIPO DE TEXTURA USDA - ACTUALIZADO =====
 RECOMENDACIONES_TEXTURA = {
-    'Franco': {
+    'Franco limoso': {
         'propiedades': [
-            "Equilibrio arena-limo-arcilla",
-            "Buena aireación y drenaje",
-            "CIC intermedia-alta",
-            "Retención de agua adecuada"
+            "Equilibrio ideal arena-limo-arcilla",
+            "Excelente estructura y porosidad",
+            "Alta capacidad de retención de agua",
+            "Fertilidad natural alta"
         ],
         'limitantes': [
             "Puede compactarse con maquinaria pesada",
-            "Erosión en pendientes si no hay cobertura"
+            "Moderadamente susceptible a erosión"
         ],
         'manejo': [
-            "Mantener coberturas vivas o muertas",
-            "Evitar tránsito excesivo de maquinaria",
-            "Fertilización eficiente, sin muchas pérdidas",
-            "Ideal para la mayoría de cultivos"
+            "Labranza mínima o conservacionista",
+            "Rotación de cultivos",
+            "Uso de coberturas vegetales",
+            "Fertilización balanceada"
         ]
     },
-    'Franco arcilloso': {
+    'Franco': {
         'propiedades': [
-            "Mayor proporción de arcilla (25–35%)",
-            "Alta retención de agua y nutrientes",
-            "Drenaje natural lento",
+            "Buena aireación y drenaje",
+            "Fácil labranza",
+            "Calentamiento rápido en primavera",
+            "Retención moderada de nutrientes"
+        ],
+        'limitantes': [
+            "Menor retención de agua que suelos más arcillosos",
+            "Requiere riego más frecuente"
+        ],
+        'manejo': [
+            "Riego por goteo o aspersión",
+            "Fertilización fraccionada",
+            "Mulching para conservar humedad"
+        ]
+    },
+    'Franco arcilloso limoso': {
+        'propiedades': [
+            "Alta capacidad de retención de agua",
+            "Excelente retención de nutrientes",
+            "Estructura estable",
+            "Resistente a la erosión"
+        ],
+        'limitantes': [
+            "Lento drenaje",
+            "Difícil labranza en condiciones húmedas",
+            "Lento calentamiento en primavera"
+        ],
+        'manejo': [
+            "Sistemas de drenaje",
+            "Labranza en condiciones óptimas de humedad",
+            "Incorporación de materia orgánica"
+        ]
+    },
+    'Franco arenoso': {
+        'propiedades': [
+            "Excelente drenaje",
+            "Fácil labranza en cualquier condición",
+            "Rápido calentamiento",
+            "Buen desarrollo radicular"
+        ],
+        'limitantes': [
+            "Baja retención de agua y nutrientes",
+            "Alta lixiviación de fertilizantes",
+            "Baja materia orgánica"
+        ],
+        'manejo': [
+            "Riego frecuente en pequeñas cantidades",
+            "Fertilización fraccionada",
+            "Aplicación de materia orgánica",
+            "Cultivos de cobertura"
+        ]
+    },
+    'Arcilla': {
+        'propiedades': [
+            "Alta capacidad de retención de agua y nutrientes",
+            "Estructura estable",
+            "Alta fertilidad potencial"
+        ],
+        'limitantes': [
+            "Muy pesada cuando está húmeda",
+            "Drenaje muy lento",
+            "Difícil labranza",
+            "Propensa a compactación"
+        ],
+        'manejo': [
+            "Drenaje artificial obligatorio",
+            "Labranza en condiciones óptimas",
+            "Encalamiento para mejorar estructura",
+            "Cultivos tolerantes a humedad"
+        ]
+    },
+    'Arena franca': {
+        'propiedades': [
+            "Drenaje muy rápido",
+            "Fácil labranza",
+            "Rápido calentamiento",
+            "Bajo riesgo de compactación"
+        ],
+        'limitantes': [
+            "Muy baja retención de agua",
+            "Alta lixiviación de nutrientes",
+            "Baja fertilidad natural"
+        ],
+        'manejo': [
+            "Riego por goteo con alta frecuencia",
+            "Fertilización en múltiples aplicaciones",
+            "Aplicación intensiva de materia orgánica",
+            "Mulching para conservar humedad"
+        ]
+    },
+    'Arcilla limosa': {
+        'propiedades': [
+            "Muy alta retención de agua y nutrientes",
+            "Estructura muy estable",
+            "Excelente para cultivos exigentes"
+        ],
+        'limitantes': [
+            "Drenaje extremadamente lento",
+            "Muy pesada para labranza",
+            "Requiere manejo especializado"
+        ],
+        'manejo': [
+            "Sistemas de drenaje avanzados",
+            "Labranza solo en condiciones óptimas",
+            "Aplicación de yeso para mejorar estructura",
+            "Camas elevadas para cultivos"
+        ]
+    },
+    'Limo': {
+        'propiedades': [
+            "Alta capacidad de retención de agua",
+            "Fácil labranza",
             "Buena fertilidad natural"
         ],
         'limitantes': [
-            "Riesgo de encharcamiento",
-            "Compactación fácil",
-            "Menor oxigenación radicular"
+            "Susceptible a compactación",
+            "Propenso a formación de costra superficial",
+            "Baja estabilidad estructural"
         ],
         'manejo': [
-            "Implementar drenajes (canales y subdrenes)",
-            "Subsolado previo a siembra",
-            "Incorporar materia orgánica",
-            "Fertilización fraccionada en lluvias intensas"
-        ]
-    },
-    'Franco arenoso-arcilloso': {
-        'propiedades': [
-            "Arena 40–50%, arcilla 20–30%",
-            "Buen desarrollo radicular",
-            "Drenaje moderado",
-            "Retención de agua moderada-baja"
-        ],
-        'limitantes': [
-            "Riesgo de lixiviación de nutrientes",
-            "Estrés hídrico en veranos",
-            "Fertilidad moderada"
-        ],
-        'manejo': [
-            "Uso de coberturas leguminosas",
-            "Aplicar mulching",
-            "Riego suplementario en sequía",
-            "Fertilización fraccionada"
+            "Evitar labranza en condiciones húmedas",
+            "Uso de coberturas vegetales",
+            "Aplicación de materia orgánica",
+            "Riego por aspersión ligera"
         ]
     }
 }
@@ -1315,57 +1474,59 @@ def calcular_rendimiento_con_recomendaciones(gdf_analizado, cultivo):
     
     return rendimientos
 
-def crear_mapa_rendimiento(gdf_analizado, columna_rendimiento, cultivo, titulo, colormap='YlOrRd'):
-    """Crea mapa de rendimiento con gradiente de colores"""
+# ===== NUEVAS FUNCIONES PARA MAPAS DE CALOR DE RENDIMIENTO =====
+def crear_mapa_calor_rendimiento_actual(gdf_analizado, cultivo):
+    """Crea mapa de calor para rendimiento actual (fertilidad real)"""
     try:
+        if 'rendimiento_actual' not in gdf_analizado.columns:
+            return None
+            
         gdf_plot = gdf_analizado.to_crs(epsg=3857)
         
         fig, ax = plt.subplots(1, 1, figsize=(12, 8))
         fig.patch.set_facecolor('#0f172a')
         ax.set_facecolor('#0f172a')
         
-        # Normalizar valores para colormap
-        valores = gdf_plot[columna_rendimiento]
+        # Valores de rendimiento
+        valores = gdf_plot['rendimiento_actual']
         vmin = valores.min() * 0.8
         vmax = valores.max() * 1.2
         
-        # Crear colormap
-        if colormap == 'YlOrRd':
-            cmap = plt.cm.YlOrRd
-        elif colormap == 'RdYlGn':
-            cmap = plt.cm.RdYlGn
-        else:
-            cmap = plt.cm.viridis
+        # Crear colormap personalizado
+        colors = ['#d73027', '#f46d43', '#fdae61', '#fee08b', '#ffffbf', 
+                 '#d9ef8b', '#a6d96a', '#66bd63', '#1a9850', '#006837']
+        cmap = LinearSegmentedColormap.from_list('rendimiento_actual', colors)
         
-        # Plotear cada zona
+        # Plotear cada zona con gradiente de color
         for idx, row in gdf_plot.iterrows():
-            valor = row[columna_rendimiento]
+            valor = row['rendimiento_actual']
             valor_norm = (valor - vmin) / (vmax - vmin) if vmax != vmin else 0.5
             valor_norm = max(0, min(1, valor_norm))
             color = cmap(valor_norm)
             
-            gdf_plot.iloc[[idx]].plot(ax=ax, color=color, edgecolor='white', linewidth=1.5, alpha=0.7)
+            gdf_plot.iloc[[idx]].plot(ax=ax, color=color, edgecolor='white', linewidth=1.5, alpha=0.8)
             
             # Etiqueta con rendimiento
             centroid = row.geometry.centroid
-            ax.annotate(f"Z{row['id_zona']}\n{valor:.1f}t", 
+            ax.annotate(f"{valor:.1f}t", 
                        (centroid.x, centroid.y),
                        xytext=(5, 5), textcoords="offset points",
-                       fontsize=8, color='white', weight='bold',
+                       fontsize=9, color='white', weight='bold',
                        bbox=dict(boxstyle="round,pad=0.3", facecolor='#1e293b', alpha=0.9, edgecolor='white'))
         
-        # Agregar mapa base ESRI
+        # Agregar mapa base
         try:
-            ctx.add_basemap(ax, source=ctx.providers.Esri.WorldImagery, alpha=0.4)
+            ctx.add_basemap(ax, source=ctx.providers.Esri.WorldImagery, alpha=0.3)
         except:
             pass
         
-        ax.set_title(f'{ICONOS_CULTIVOS[cultivo]} {titulo} - {cultivo}',
+        # Configurar título y etiquetas
+        ax.set_title(f'🌾 MAPA DE CALOR - RENDIMIENTO ACTUAL\n{cultivo} (ton/ha)',
                      fontsize=16, fontweight='bold', pad=20, color='white')
         ax.set_xlabel('Longitud', color='white')
         ax.set_ylabel('Latitud', color='white')
         ax.tick_params(colors='white')
-        ax.grid(True, alpha=0.3, color='#475569')
+        ax.grid(True, alpha=0.2, color='#475569')
         
         # Barra de colores
         sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=vmin, vmax=vmax))
@@ -1376,74 +1537,203 @@ def crear_mapa_rendimiento(gdf_analizado, columna_rendimiento, cultivo, titulo, 
         cbar.outline.set_edgecolor('white')
         plt.setp(plt.getp(cbar.ax.axes, 'yticklabels'), color='white')
         
+        # Leyenda de interpretación
+        info_text = f"""
+        🟥 Bajo: < {valores.quantile(0.25):.1f} ton/ha
+        🟧 Medio: {valores.quantile(0.25):.1f}-{valores.quantile(0.75):.1f} ton/ha
+        🟩 Alto: > {valores.quantile(0.75):.1f} ton/ha
+        """
+        ax.text(0.02, 0.98, info_text, transform=ax.transAxes, fontsize=9, 
+                verticalalignment='top', color='white',
+                bbox=dict(boxstyle="round,pad=0.3", facecolor='#1e293b', alpha=0.9))
+        
         plt.tight_layout()
         buf = io.BytesIO()
         plt.savefig(buf, format='png', dpi=150, bbox_inches='tight', facecolor='#0f172a')
         buf.seek(0)
         plt.close()
         return buf
+        
     except Exception as e:
-        st.error(f"❌ Error creando mapa de rendimiento: {str(e)}")
+        st.error(f"Error creando mapa de calor actual: {str(e)}")
         return None
 
-def crear_mapa_comparativo_rendimiento(gdf_analizado, cultivo):
-    """Crea mapa comparativo de rendimiento actual vs proyectado"""
+def crear_mapa_calor_rendimiento_proyectado(gdf_analizado, cultivo):
+    """Crea mapa de calor para rendimiento proyectado (con recomendaciones)"""
     try:
+        if 'rendimiento_proyectado' not in gdf_analizado.columns:
+            return None
+            
         gdf_plot = gdf_analizado.to_crs(epsg=3857)
         
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 8))
+        fig, ax = plt.subplots(1, 1, figsize=(12, 8))
+        fig.patch.set_facecolor('#0f172a')
+        ax.set_facecolor('#0f172a')
+        
+        # Valores de rendimiento proyectado
+        valores = gdf_plot['rendimiento_proyectado']
+        vmin = valores.min() * 0.8
+        vmax = valores.max() * 1.2
+        
+        # Crear colormap para rendimiento proyectado
+        colors = ['#313695', '#4575b4', '#74add1', '#abd9e9', '#e0f3f8',
+                 '#fee090', '#fdae61', '#f46d43', '#d73027', '#a50026']
+        cmap = LinearSegmentedColormap.from_list('rendimiento_proyectado', colors)
+        
+        # Plotear cada zona con gradiente de color
+        for idx, row in gdf_plot.iterrows():
+            valor = row['rendimiento_proyectado']
+            incremento = row['rendimiento_proyectado'] - row['rendimiento_actual']
+            valor_norm = (valor - vmin) / (vmax - vmin) if vmax != vmin else 0.5
+            valor_norm = max(0, min(1, valor_norm))
+            color = cmap(valor_norm)
+            
+            gdf_plot.iloc[[idx]].plot(ax=ax, color=color, edgecolor='white', linewidth=1.5, alpha=0.8)
+            
+            # Etiqueta con rendimiento e incremento
+            centroid = row.geometry.centroid
+            ax.annotate(f"{valor:.1f}t\n(+{incremento:.1f})", 
+                       (centroid.x, centroid.y),
+                       xytext=(5, 5), textcoords="offset points",
+                       fontsize=8, color='white', weight='bold',
+                       bbox=dict(boxstyle="round,pad=0.3", facecolor='#1e293b', alpha=0.9))
+        
+        # Agregar mapa base
+        try:
+            ctx.add_basemap(ax, source=ctx.providers.Esri.WorldImagery, alpha=0.3)
+        except:
+            pass
+        
+        # Configurar título y etiquetas
+        ax.set_title(f'🚀 MAPA DE CALOR - RENDIMIENTO PROYECTADO\n{cultivo} (con fertilización óptima)',
+                     fontsize=16, fontweight='bold', pad=20, color='white')
+        ax.set_xlabel('Longitud', color='white')
+        ax.set_ylabel('Latitud', color='white')
+        ax.tick_params(colors='white')
+        ax.grid(True, alpha=0.2, color='#475569')
+        
+        # Barra de colores
+        sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=vmin, vmax=vmax))
+        sm.set_array([])
+        cbar = plt.colorbar(sm, ax=ax, shrink=0.8)
+        cbar.set_label('Rendimiento Proyectado (ton/ha)', fontsize=12, fontweight='bold', color='white')
+        cbar.ax.yaxis.set_tick_params(color='white')
+        cbar.outline.set_edgecolor('white')
+        plt.setp(plt.getp(cbar.ax.axes, 'yticklabels'), color='white')
+        
+        # Leyenda de incremento
+        incrementos = gdf_analizado['rendimiento_proyectado'] - gdf_analizado['rendimiento_actual']
+        info_text = f"""
+        📈 Incremento promedio: {incrementos.mean():.1f} ton/ha
+        🔝 Máximo incremento: {incrementos.max():.1f} ton/ha
+        💰 Potencial adicional: {(incrementos.sum() * gdf_analizado['area_ha'].sum()):.0f} ton
+        """
+        ax.text(0.02, 0.98, info_text, transform=ax.transAxes, fontsize=9, 
+                verticalalignment='top', color='white',
+                bbox=dict(boxstyle="round,pad=0.3", facecolor='#1e293b', alpha=0.9))
+        
+        plt.tight_layout()
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png', dpi=150, bbox_inches='tight', facecolor='#0f172a')
+        buf.seek(0)
+        plt.close()
+        return buf
+        
+    except Exception as e:
+        st.error(f"Error creando mapa de calor proyectado: {str(e)}")
+        return None
+
+def crear_mapa_comparativo_calor(gdf_analizado, cultivo):
+    """Crea mapa comparativo side-by-side de rendimiento actual vs proyectado"""
+    try:
+        if 'rendimiento_actual' not in gdf_analizado.columns or 'rendimiento_proyectado' not in gdf_analizado.columns:
+            return None
+            
+        gdf_plot = gdf_analizado.to_crs(epsg=3857)
+        
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 7))
         fig.patch.set_facecolor('#0f172a')
         ax1.set_facecolor('#0f172a')
         ax2.set_facecolor('#0f172a')
         
-        # Mapa 1: Rendimiento Actual
-        valores_actual = gdf_plot['rendimiento_actual']
-        vmin1, vmax1 = valores_actual.min() * 0.8, valores_actual.max() * 1.2
+        # Colormaps
+        cmap_actual = plt.cm.YlOrRd
+        cmap_proyectado = plt.cm.RdYlGn
         
+        # Rango común para comparación
+        vmin = min(gdf_plot['rendimiento_actual'].min(), gdf_plot['rendimiento_proyectado'].min()) * 0.8
+        vmax = max(gdf_plot['rendimiento_actual'].max(), gdf_plot['rendimiento_proyectado'].max()) * 1.2
+        
+        # Mapa 1: Rendimiento Actual
         for idx, row in gdf_plot.iterrows():
             valor = row['rendimiento_actual']
-            valor_norm = (valor - vmin1) / (vmax1 - vmin1) if vmax1 != vmin1 else 0.5
+            valor_norm = (valor - vmin) / (vmax - vmin) if vmax != vmin else 0.5
             valor_norm = max(0, min(1, valor_norm))
-            color = plt.cm.YlOrRd(valor_norm)
+            color = cmap_actual(valor_norm)
             
-            gdf_plot.iloc[[idx]].plot(ax=ax1, color=color, edgecolor='white', linewidth=1.5, alpha=0.7)
+            gdf_plot.iloc[[idx]].plot(ax=ax1, color=color, edgecolor='white', linewidth=1.5, alpha=0.8)
             
-            # Etiqueta
+            # Etiqueta simple
             centroid = row.geometry.centroid
-            ax1.annotate(f"{valor:.1f}t", 
+            ax1.annotate(f"{valor:.1f}", 
                         (centroid.x, centroid.y),
-                        xytext=(5, 5), textcoords="offset points",
+                        xytext=(3, 3), textcoords="offset points",
                         fontsize=7, color='white', weight='bold')
         
         # Mapa 2: Rendimiento Proyectado
-        valores_proy = gdf_plot['rendimiento_proyectado']
-        vmin2, vmax2 = valores_proy.min() * 0.8, valores_proy.max() * 1.2
-        
         for idx, row in gdf_plot.iterrows():
             valor = row['rendimiento_proyectado']
-            valor_norm = (valor - vmin2) / (vmax2 - vmin2) if vmax2 != vmin2 else 0.5
+            incremento = row['rendimiento_proyectado'] - row['rendimiento_actual']
+            valor_norm = (valor - vmin) / (vmax - vmin) if vmax != vmin else 0.5
             valor_norm = max(0, min(1, valor_norm))
-            color = plt.cm.RdYlGn(valor_norm)
+            color = cmap_proyectado(valor_norm)
             
-            gdf_plot.iloc[[idx]].plot(ax=ax2, color=color, edgecolor='white', linewidth=1.5, alpha=0.7)
+            gdf_plot.iloc[[idx]].plot(ax=ax2, color=color, edgecolor='white', linewidth=1.5, alpha=0.8)
             
             # Etiqueta con incremento
-            incremento = row['rendimiento_proyectado'] - row['rendimiento_actual']
             centroid = row.geometry.centroid
-            ax2.annotate(f"{valor:.1f}t\n(+{incremento:.1f})", 
+            ax2.annotate(f"{valor:.1f}\n+{incremento:.1f}", 
                         (centroid.x, centroid.y),
-                        xytext=(5, 5), textcoords="offset points",
+                        xytext=(3, 3), textcoords="offset points",
                         fontsize=7, color='white', weight='bold')
         
         # Títulos
-        ax1.set_title('📊 RENDIMIENTO ACTUAL', fontsize=14, fontweight='bold', color='white')
-        ax2.set_title('🚀 RENDIMIENTO CON FERTILIZACIÓN', fontsize=14, fontweight='bold', color='white')
+        ax1.set_title('🌾 RENDIMIENTO ACTUAL\n(ton/ha)', fontsize=14, fontweight='bold', color='white')
+        ax2.set_title('🚀 RENDIMIENTO CON FERTILIZACIÓN\n(ton/ha)', fontsize=14, fontweight='bold', color='white')
         
         for ax in [ax1, ax2]:
             ax.set_xlabel('Longitud', color='white')
             ax.set_ylabel('Latitud', color='white')
             ax.tick_params(colors='white')
-            ax.grid(True, alpha=0.3, color='#475569')
+            ax.grid(True, alpha=0.2, color='#475569')
+        
+        # Barras de color
+        sm1 = plt.cm.ScalarMappable(cmap=cmap_actual, norm=plt.Normalize(vmin=vmin, vmax=vmax))
+        sm1.set_array([])
+        cbar1 = plt.colorbar(sm1, ax=ax1, shrink=0.6)
+        cbar1.set_label('ton/ha', fontsize=10, color='white')
+        
+        sm2 = plt.cm.ScalarMappable(cmap=cmap_proyectado, norm=plt.Normalize(vmin=vmin, vmax=vmax))
+        sm2.set_array([])
+        cbar2 = plt.colorbar(sm2, ax=ax2, shrink=0.6)
+        cbar2.set_label('ton/ha', fontsize=10, color='white')
+        
+        # Estadísticas comparativas
+        rend_actual_prom = gdf_analizado['rendimiento_actual'].mean()
+        rend_proy_prom = gdf_analizado['rendimiento_proyectado'].mean()
+        incremento_prom = rend_proy_prom - rend_actual_prom
+        porcentaje_aumento = (incremento_prom / rend_actual_prom * 100) if rend_actual_prom > 0 else 0
+        
+        info_comparativo = f"""
+        📊 COMPARATIVA:
+        • Actual: {rend_actual_prom:.1f} ton/ha
+        • Proyectado: {rend_proy_prom:.1f} ton/ha
+        • Incremento: +{incremento_prom:.1f} ton/ha
+        • Aumento: +{porcentaje_aumento:.1f}%
+        """
+        
+        fig.text(0.02, 0.02, info_comparativo, fontsize=10, color='white',
+                bbox=dict(boxstyle="round,pad=0.5", facecolor='#1e293b', alpha=0.9))
         
         plt.tight_layout()
         buf = io.BytesIO()
@@ -1451,8 +1741,9 @@ def crear_mapa_comparativo_rendimiento(gdf_analizado, cultivo):
         buf.seek(0)
         plt.close()
         return buf
+        
     except Exception as e:
-        st.error(f"❌ Error creando mapa comparativo: {str(e)}")
+        st.error(f"Error creando mapa comparativo: {str(e)}")
         return None
 
 # ===== FUNCIONES PARA DATOS SATELITALES =====
@@ -1591,33 +1882,10 @@ def calcular_recomendaciones_npk_cientificas(gdf_analizado, nutriente, cultivo):
     
     return recomendaciones
 
-# ===== FUNCIONES DE TEXTURA DEL SUELO - ACTUALIZADAS =====
+# ===== FUNCIONES DE TEXTURA DEL SUELO - ACTUALIZADAS A USDA =====
 def clasificar_textura_suelo(arena, limo, arcilla):
-    try:
-        total = arena + limo + arcilla
-        if total == 0:
-            return "NO_DETERMINADA"
-        arena_norm = (arena / total) * 100
-        limo_norm = (limo / total) * 100
-        arcilla_norm = (arcilla / total) * 100
-        
-        # Nomenclatura actualizada Venezuela/Colombia
-        if arcilla_norm >= 35:
-            return "Franco arcilloso"
-        elif arcilla_norm >= 25 and arcilla_norm <= 35 and arena_norm >= 20 and arena_norm <= 45:
-            return "Franco arcilloso"
-        elif arena_norm >= 40 and arena_norm <= 50 and arcilla_norm >= 20 and arcilla_norm <= 30:
-            return "Franco arenoso-arcilloso"
-        elif arena_norm >= 50 and arena_norm <= 70 and arcilla_norm >= 5 and arcilla_norm <= 20:
-            return "Franco arenoso-arcilloso"
-        elif arcilla_norm >= 7 and arcilla_norm <= 27 and arena_norm >= 43 and arena_norm <= 52:
-            return "Franco"
-        elif arena_norm >= 85:
-            return "Franco arenoso-arcilloso"
-        else:
-            return "Franco"
-    except Exception as e:
-        return "NO_DETERMINADA"
+    """Función principal que ahora usa clasificación USDA"""
+    return clasificar_textura_usda(arena, limo, arcilla)
 
 def analizar_textura_suelo(gdf, cultivo):
     gdf = validar_y_corregir_crs(gdf)
@@ -1943,12 +2211,10 @@ def generar_recomendaciones_generales(gdf_analizado, analisis_tipo, cultivo):
         elif analisis_tipo == "ANÁLISIS DE TEXTURA":
             if 'textura_suelo' in gdf_analizado.columns:
                 textura_predominante = gdf_analizado['textura_suelo'].mode()[0] if len(gdf_analizado) > 0 else "N/D"
-                if textura_predominante == "Franco arcilloso":
-                    recomendaciones.append("Suelo franco arcilloso: Mejorar drenaje y evitar laboreo en condiciones húmedas")
-                elif textura_predominante == "Franco arenoso-arcilloso":
-                    recomendaciones.append("Suelo franco arenoso-arcilloso: Aumentar materia orgánica y considerar riego frecuente")
-                elif textura_predominante == "Franco":
-                    recomendaciones.append("Textura franca: Condiciones óptimas, mantener prácticas de conservación")
+                if textura_predominante in RECOMENDACIONES_TEXTURA:
+                    recomendaciones.append(f"Suelo {textura_predominante}: Ver recomendaciones específicas en el informe")
+                else:
+                    recomendaciones.append("Consultar recomendaciones específicas para la textura identificada")
         
         # === RECOMENDACIONES POR CULTIVO ===
         if cultivo == "MAÍZ":
@@ -2463,10 +2729,21 @@ def crear_mapa_texturas_con_esri(gdf_analizado, cultivo):
         ax.set_facecolor('#0f172a')
         
         colores_textura = {
-            'Franco': '#c7eae5',
-            'Franco arcilloso': '#5ab4ac',
-            'Franco arenoso-arcilloso': '#f6e8c3',
-            'NO_DETERMINADA': '#999999'
+            'Franco limoso': '#c7eae5',
+            'Franco': '#a6d96a',
+            'Franco arcilloso limoso': '#5ab4ac',
+            'Franco arenoso': '#f6e8c3',
+            'Arcilla': '#01665e',
+            'Arcilla limosa': '#003c30',
+            'Arena franca': '#d8b365',
+            'Limo': '#8c510a',
+            'Franco arcilloso': '#35978f',
+            'Franco arcilloso arenoso': '#80cdc1',
+            'Limo arenoso': '#dfc27d',
+            'Arena': '#f6e8c3',
+            'Arcilla arenosa': '#01665e',
+            'Franco limoso arenoso': '#a6d96a',
+            'Sin datos': '#999999'
         }
         
         # Plot de cada zona con su color según textura
@@ -2475,9 +2752,10 @@ def crear_mapa_texturas_con_esri(gdf_analizado, cultivo):
             color = colores_textura.get(textura, '#999999')
             gdf_plot.iloc[[idx]].plot(ax=ax, color=color, edgecolor='white', linewidth=1.5, alpha=0.8)
             
-            # Etiqueta de zona
+            # Etiqueta de zona (abreviada si es muy larga)
+            textura_abrev = textura[:12] + '...' if len(textura) > 15 else textura
             centroid = row.geometry.centroid
-            ax.annotate(f"Z{row['id_zona']}\n{textura[:10]}", (centroid.x, centroid.y),
+            ax.annotate(f"Z{row['id_zona']}\n{textura_abrev}", (centroid.x, centroid.y),
                         xytext=(5, 5), textcoords="offset points",
                         fontsize=8, color='black', weight='bold',
                         bbox=dict(boxstyle="round,pad=0.3", facecolor='white', alpha=0.9))
@@ -2488,23 +2766,28 @@ def crear_mapa_texturas_con_esri(gdf_analizado, cultivo):
         except:
             st.warning("⚠️ No se pudo cargar el mapa base ESRI. Verifica la conexión a internet.")
         
-        ax.set_title(f'{ICONOS_CULTIVOS[cultivo]} MAPA DE TEXTURAS - {cultivo}',
+        ax.set_title(f'{ICONOS_CULTIVOS[cultivo]} MAPA DE TEXTURAS USDA - {cultivo}',
                      fontsize=16, fontweight='bold', pad=20, color='white')
         ax.set_xlabel('Longitud', color='white')
         ax.set_ylabel('Latitud', color='white')
         ax.tick_params(colors='white')
         ax.grid(True, alpha=0.3, color='#475569')
         
-        # Leyenda
+        # Leyenda (solo las texturas presentes en el mapa)
         from matplotlib.patches import Patch
-        legend_elements = [Patch(facecolor=color, edgecolor='white', label=textura)
-                           for textura, color in colores_textura.items()]
-        legend = ax.legend(handles=legend_elements, title='Texturas', loc='upper left', bbox_to_anchor=(1.05, 1))
-        legend.get_title().set_color('white')
-        for text in legend.get_texts():
-            text.set_color('white')
-        legend.get_frame().set_facecolor('#1e293b')
-        legend.get_frame().set_edgecolor('white')
+        texturas_presentes = gdf_analizado['textura_suelo'].unique()
+        legend_elements = [Patch(facecolor=colores_textura.get(textura, '#999999'), 
+                                edgecolor='white', label=textura)
+                          for textura in texturas_presentes if textura in colores_textura]
+        
+        if legend_elements:
+            legend = ax.legend(handles=legend_elements, title='Texturas USDA', 
+                             loc='upper left', bbox_to_anchor=(1.05, 1), fontsize=9)
+            legend.get_title().set_color('white')
+            for text in legend.get_texts():
+                text.set_color('white')
+            legend.get_frame().set_facecolor('#1e293b')
+            legend.get_frame().set_edgecolor('white')
         
         plt.tight_layout()
         buf = io.BytesIO()
@@ -2627,6 +2910,18 @@ def ejecutar_analisis(gdf, nutriente, analisis_tipo, n_divisiones, cultivo,
             if analisis_tipo == "RECOMENDACIONES NPK":
                 recomendaciones_npk = calcular_recomendaciones_npk_cientificas(gdf_analizado, nutriente, cultivo)
                 gdf_analizado['valor_recomendado'] = recomendaciones_npk
+                
+                # ✅ NUEVO: Calcular rendimientos para análisis de recomendaciones
+                rendimientos_actual = calcular_rendimiento_potencial(gdf_analizado, cultivo)
+                rendimientos_proyectado = calcular_rendimiento_con_recomendaciones(gdf_analizado, cultivo)
+                gdf_analizado['rendimiento_actual'] = rendimientos_actual
+                gdf_analizado['rendimiento_proyectado'] = rendimientos_proyectado
+                gdf_analizado['incremento_rendimiento'] = gdf_analizado['rendimiento_proyectado'] - gdf_analizado['rendimiento_actual']
+            
+            # ✅ NUEVO: Para fertilidad actual también calcular rendimiento
+            elif analisis_tipo == "FERTILIDAD ACTUAL":
+                rendimientos_actual = calcular_rendimiento_potencial(gdf_analizado, cultivo)
+                gdf_analizado['rendimiento_actual'] = rendimientos_actual
             
             resultados['gdf_analizado'] = gdf_analizado
             resultados['exitoso'] = True
@@ -2649,10 +2944,10 @@ def ejecutar_analisis(gdf, nutriente, analisis_tipo, n_divisiones, cultivo,
 
 # ===== FUNCIONES DE VISUALIZACIÓN =====
 def mostrar_resultados_textura(gdf_analizado, cultivo, area_total):
-    st.subheader("📊 ESTADÍSTICAS DE TEXTURA")
+    st.subheader("📊 ESTADÍSTICAS DE TEXTURA (USDA)")
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        textura_predominante = gdf_analizado['textura_suelo'].mode()[0] if len(gdf_analizado) > 0 else "NO_DETERMINADA"
+        textura_predominante = gdf_analizado['textura_suelo'].mode()[0] if len(gdf_analizado) > 0 else "Sin datos"
         st.metric("🏗️ Textura Predominante", textura_predominante)
     with col2:
         avg_arena = gdf_analizado['arena'].mean()
@@ -2664,7 +2959,7 @@ def mostrar_resultados_textura(gdf_analizado, cultivo, area_total):
         avg_arcilla = gdf_analizado['arcilla'].mean()
         st.metric("🧱 Arcilla Promedio", f"{avg_arcilla:.1f}%")
     
-    st.subheader("📈 COMPOSICIÓN GRANULOMÉTRICA")
+    st.subheader("📈 COMPOSICIÓN GRANULOMÉTRICA (USDA)")
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
     # Configurar estilo oscuro
     fig.patch.set_facecolor('#0f172a')
@@ -2675,12 +2970,12 @@ def mostrar_resultados_textura(gdf_analizado, cultivo, area_total):
     labels = ['Arena', 'Limo', 'Arcilla']
     colors_pie = ['#d8b365', '#f6e8c3', '#01665e']
     ax1.pie(composicion, labels=labels, colors=colors_pie, autopct='%1.1f%%', startangle=90, textprops={'color': 'white'})
-    ax1.set_title('Composición Promedio del Suelo', color='white')
+    ax1.set_title('Composición Promedio USDA', color='white')
     
     textura_dist = gdf_analizado['textura_suelo'].value_counts()
     ax2.bar(textura_dist.index, textura_dist.values, color=[PALETAS_GEE['TEXTURA'][i % len(PALETAS_GEE['TEXTURA'])] for i in range(len(textura_dist))])
-    ax2.set_title('Distribución de Texturas', color='white')
-    ax2.set_xlabel('Textura', color='white')
+    ax2.set_title('Distribución de Texturas USDA', color='white')
+    ax2.set_xlabel('Clase Textural USDA', color='white')
     ax2.set_ylabel('Número de Zonas', color='white')
     ax2.tick_params(axis='x', rotation=45, colors='white')
     ax2.tick_params(axis='y', colors='white')
@@ -2689,28 +2984,28 @@ def mostrar_resultados_textura(gdf_analizado, cultivo, area_total):
     plt.tight_layout()
     st.pyplot(fig)
     
-    st.subheader("🗺️ MAPA DE TEXTURAS CON ESRI SATELLITE")
+    st.subheader("🗺️ MAPA DE TEXTURAS USDA CON ESRI SATELLITE")
     mapa_texturas = crear_mapa_texturas_con_esri(gdf_analizado, cultivo)
     if mapa_texturas:
         st.image(mapa_texturas, use_container_width=True)
         st.download_button(
-            "📥 Descargar Mapa de Texturas",
+            "📥 Descargar Mapa de Texturas USDA",
             mapa_texturas,
-            f"mapa_texturas_{cultivo}_{datetime.now().strftime('%Y%m%d_%H%M')}.png",
+            f"mapa_texturas_usda_{cultivo}_{datetime.now().strftime('%Y%m%d_%H%M')}.png",
             "image/png"
         )
     
-    st.subheader("📋 TABLA DE RESULTADOS POR ZONA")
+    st.subheader("📋 TABLA DE RESULTADOS POR ZONA (USDA)")
     columnas_textura = ['id_zona', 'area_ha', 'textura_suelo', 'arena', 'limo', 'arcilla']
     columnas_textura = [col for col in columnas_textura if col in gdf_analizado.columns]
     if columnas_textura:
         tabla_textura = gdf_analizado[columnas_textura].copy()
-        tabla_textura.columns = ['Zona', 'Área (ha)', 'Textura', 'Arena (%)', 'Limo (%)', 'Arcilla (%)']
+        tabla_textura.columns = ['Zona', 'Área (ha)', 'Textura USDA', 'Arena (%)', 'Limo (%)', 'Arcilla (%)']
         st.dataframe(tabla_textura)
     
-    st.subheader("💡 RECOMENDACIONES DE MANEJO POR TEXTURA")
+    st.subheader("💡 RECOMENDACIONES DE MANEJO POR TEXTURA USDA")
     if 'textura_suelo' in gdf_analizado.columns:
-        textura_predominante = gdf_analizado['textura_suelo'].mode()[0] if len(gdf_analizado) > 0 else "NO_DETERMINADA"
+        textura_predominante = gdf_analizado['textura_suelo'].mode()[0] if len(gdf_analizado) > 0 else "Sin datos"
         if textura_predominante in RECOMENDACIONES_TEXTURA:
             st.markdown(f"#### 🏗️ **{textura_predominante.upper()}**")
             info_textura = RECOMENDACIONES_TEXTURA[textura_predominante]
@@ -2727,16 +3022,18 @@ def mostrar_resultados_textura(gdf_analizado, cultivo, area_total):
                 st.markdown("**🛠️ MANEJO RECOMENDADO**")
                 for man in info_textura['manejo']:
                     st.markdown(f"• {man}")
+        else:
+            st.info(f"Textura '{textura_predominante}' - Consultar recomendaciones específicas para esta clase textural")
     
-    st.subheader("💾 DESCARGAR RESULTADOS")
+    st.subheader("💾 DESCARGAR RESULTADOS USDA")
     if 'columnas_textura' in locals() and columnas_textura:
         tabla_textura = gdf_analizado[columnas_textura].copy()
-        tabla_textura.columns = ['Zona', 'Área (ha)', 'Textura', 'Arena (%)', 'Limo (%)', 'Arcilla (%)']
+        tabla_textura.columns = ['Zona', 'Área (ha)', 'Textura USDA', 'Arena (%)', 'Limo (%)', 'Arcilla (%)']
         csv = tabla_textura.to_csv(index=False)
         st.download_button(
-            "📥 Descargar CSV con Análisis de Textura",
+            "📥 Descargar CSV con Análisis de Textura USDA",
             csv,
-            f"textura_{cultivo}_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+            f"textura_usda_{cultivo}_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
             "text/csv"
         )
 
@@ -3024,6 +3321,84 @@ if uploaded_file:
                                         f"mapa_recomendaciones_{nutriente}_{cultivo}_{datetime.now().strftime('%Y%m%d')}.png",
                                         "image/png"
                                     )
+                                
+                                # === NUEVO: MAPAS DE CALOR DE POTENCIAL DE COSECHA ===
+                                st.subheader("🔥 MAPAS DE CALOR - POTENCIAL DE COSECHA")
+                                
+                                # Crear pestañas para diferentes visualizaciones
+                                tab1, tab2, tab3 = st.tabs(["🌾 Rendimiento Actual", "🚀 Rendimiento Proyectado", "📊 Comparativa"])
+                                
+                                with tab1:
+                                    st.write("**Potencial de Cosecha con Fertilidad Actual**")
+                                    mapa_calor_actual = crear_mapa_calor_rendimiento_actual(gdf_analizado, cultivo)
+                                    if mapa_calor_actual:
+                                        st.image(mapa_calor_actual, use_container_width=True)
+                                        st.download_button(
+                                            "📥 Descargar Mapa de Calor Actual",
+                                            mapa_calor_actual,
+                                            f"mapa_calor_actual_{cultivo}_{datetime.now().strftime('%Y%m%d')}.png",
+                                            "image/png"
+                                        )
+                                
+                                with tab2:
+                                    st.write("**Potencial de Cosecha con Recomendaciones NPK**")
+                                    mapa_calor_proyectado = crear_mapa_calor_rendimiento_proyectado(gdf_analizado, cultivo)
+                                    if mapa_calor_proyectado:
+                                        st.image(mapa_calor_proyectado, use_container_width=True)
+                                        st.download_button(
+                                            "📥 Descargar Mapa de Calor Proyectado",
+                                            mapa_calor_proyectado,
+                                            f"mapa_calor_proyectado_{cultivo}_{datetime.now().strftime('%Y%m%d')}.png",
+                                            "image/png"
+                                        )
+                                
+                                with tab3:
+                                    st.write("**Comparativa Side-by-Side**")
+                                    mapa_comparativo = crear_mapa_comparativo_calor(gdf_analizado, cultivo)
+                                    if mapa_comparativo:
+                                        st.image(mapa_comparativo, use_container_width=True)
+                                        st.download_button(
+                                            "📥 Descargar Mapa Comparativo",
+                                            mapa_comparativo,
+                                            f"mapa_comparativo_{cultivo}_{datetime.now().strftime('%Y%m%d')}.png",
+                                            "image/png"
+                                        )
+                                
+                                # Estadísticas de rendimiento
+                                st.subheader("📈 ANÁLISIS DE POTENCIAL DE COSECHA")
+                                col_r1, col_r2, col_r3, col_r4 = st.columns(4)
+                                with col_r1:
+                                    rend_actual = gdf_analizado['rendimiento_actual'].mean()
+                                    st.metric("🌾 Rendimiento Actual", f"{rend_actual:.1f} ton/ha")
+                                with col_r2:
+                                    rend_proy = gdf_analizado['rendimiento_proyectado'].mean()
+                                    st.metric("🚀 Rendimiento Proyectado", f"{rend_proy:.1f} ton/ha")
+                                with col_r3:
+                                    incremento = gdf_analizado['incremento_rendimiento'].mean()
+                                    st.metric("📈 Incremento Promedio", f"{incremento:.1f} ton/ha")
+                                with col_r4:
+                                    porcentaje = (incremento / rend_actual * 100) if rend_actual > 0 else 0
+                                    st.metric("💯 % de Aumento", f"{porcentaje:.1f}%")
+                                
+                                # Gráfico de distribución de rendimientos
+                                fig, ax = plt.subplots(figsize=(10, 5))
+                                fig.patch.set_facecolor('#0f172a')
+                                ax.set_facecolor('#0f172a')
+                                
+                                # Histograma comparativo
+                                ax.hist(gdf_analizado['rendimiento_actual'], bins=15, alpha=0.6, label='Actual', 
+                                        color='#3b82f6', edgecolor='white')
+                                ax.hist(gdf_analizado['rendimiento_proyectado'], bins=15, alpha=0.6, label='Proyectado', 
+                                        color='#10b981', edgecolor='white')
+                                
+                                ax.set_xlabel('Rendimiento (ton/ha)', color='white')
+                                ax.set_ylabel('Número de Zonas', color='white')
+                                ax.set_title('Distribución de Potencial de Cosecha', fontsize=14, color='white')
+                                ax.tick_params(colors='white')
+                                ax.legend(facecolor='#1e293b', edgecolor='white', labelcolor='white')
+                                ax.grid(True, alpha=0.2, color='#475569')
+                                
+                                st.pyplot(fig)
                             
                             # === TABLA DE RESULTADOS ===
                             st.subheader("🔬 ÍNDICES SATELITALES Y NPK POR ZONA")
@@ -3216,6 +3591,36 @@ with st.expander("🔬 METODOLOGÍA CIENTÍFICA APLICADA"):
     - **Fórmula:** `K = 100 × (B5-B7)/(B5+B7) + 50`
     - **Bandas:** B5 (NIR), B7 (SWIR 2)
     
+    ### **🏗️ SISTEMA DE CLASIFICACIÓN USDA PARA TEXTURAS:**
+    
+    **CLASES PRINCIPALES:**
+    - **Franco limoso:** Equilibrio ideal para la mayoría de cultivos
+    - **Franco:** Buena aireación y drenaje
+    - **Franco arcilloso limoso:** Alta retención de agua y nutrientes
+    - **Franco arenoso:** Excelente drenaje, requiere riego frecuente
+    - **Arcilla:** Alta fertilidad pero difícil manejo
+    - **Arena franca:** Drenaje muy rápido, baja fertilidad natural
+    
+    **VENTAJAS DEL SISTEMA USDA:**
+    1. **Estándar internacional:** Reconocido globalmente
+    2. **Precisión:** Basado en el triángulo de texturas
+    3. **Compatibilidad:** Integrable con sistemas de información agrícola
+    4. **Recomendaciones específicas:** Manejo adaptado a cada clase
+    
+    ### **🔥 MAPAS DE CALOR DE POTENCIAL DE COSECHA:**
+    
+    **RENDIMIENTO ACTUAL:**
+    - Basado en fertilidad real del suelo (NPK existente)
+    - Considera humedad disponible (NDWI)
+    - Incluye vigor vegetativo (NDVI)
+    - Ajustado por condiciones climáticas (NASA POWER)
+    
+    **RENDIMIENTO PROYECTADO:**
+    - Considera aplicación de recomendaciones NPK
+    - Calcula incremento esperado por fertilización
+    - Incluye eficiencias de absorción por cultivo
+    - Muestra potencial máximo alcanzable
+    
     ### **📊 VALIDACIÓN CIENTÍFICA:**
     
     - **Calibración:** Modelos calibrados con datos de campo de estudios publicados
@@ -3227,7 +3632,7 @@ with st.expander("🔬 METODOLOGÍA CIENTÍFICA APLICADA"):
     1. **Validación de campo:** Siempre validar con análisis de suelo de laboratorio
     2. **Época óptima:** Análisis en etapas vegetativas (V6-V10 para maíz)
     3. **Condiciones ideales:** Imágenes con <10% cobertura de nubes
-    4. **Complementar:** Usar junto con análisis de textura y topografía
+    4. **Complementar:** Usar junto con análisis de textura USDA y topografía
     
     ### **📚 REFERENCIAS CIENTÍFICAS:**
     
@@ -3237,4 +3642,5 @@ with st.expander("🔬 METODOLOGÍA CIENTÍFICA APLICADA"):
     4. Haboudane et al. (2002). Hyperspectral vegetation indices for nitrogen assessment.
     5. Chen et al. (2010). Estimation of soil properties using Landsat imagery.
     6. Thenkabail et al. (2000). Hyperspectral vegetation indices for crop characterization.
+    7. USDA Soil Texture Classification System (2023).
     """)
