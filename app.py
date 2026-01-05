@@ -709,6 +709,50 @@ METODOLOGIAS_NPK = {
 
 # ===== CONFIGURACIÓN =====
 # PARÁMETROS GEE POR CULTIVO - ACTUALIZADO CON NUEVOS CULTIVOS Y RENDIMIENTO
+# VARIEDADES DE MAÍZ ESPECÍFICAS
+VARIEDADES_MAIZ = {
+    'HÍBRIDO TEMPRANO (90-100 días)': {
+        'RENDIMIENTO_BASE': 7.0,
+        'RENDIMIENTO_OPTIMO': 10.0,
+        'RESPUESTA_N': 0.04,
+        'RESPUESTA_P': 0.06,
+        'RESPUESTA_K': 0.03,
+        'NITROGENO_OPTIMO': 160,
+        'FOSFORO_OPTIMO': 45,
+        'POTASIO_OPTIMO': 120
+    },
+    'HÍBRIDO INTERMEDIO (110-120 días)': {
+        'RENDIMIENTO_BASE': 8.0,
+        'RENDIMIENTO_OPTIMO': 12.0,
+        'RESPUESTA_N': 0.05,
+        'RESPUESTA_P': 0.08,
+        'RESPUESTA_K': 0.04,
+        'NITROGENO_OPTIMO': 180,
+        'FOSFORO_OPTIMO': 50,
+        'POTASIO_OPTIMO': 150
+    },
+    'HÍBRIDO TARDÍO (130-140 días)': {
+        'RENDIMIENTO_BASE': 9.0,
+        'RENDIMIENTO_OPTIMO': 14.0,
+        'RESPUESTA_N': 0.06,
+        'RESPUESTA_P': 0.09,
+        'RESPUESTA_K': 0.05,
+        'NITROGENO_OPTIMO': 200,
+        'FOSFORO_OPTIMO': 55,
+        'POTASIO_OPTIMO': 180
+    },
+    'VARIEDAD CRIOLLA': {
+        'RENDIMIENTO_BASE': 4.0,
+        'RENDIMIENTO_OPTIMO': 6.0,
+        'RESPUESTA_N': 0.02,
+        'RESPUESTA_P': 0.03,
+        'RESPUESTA_K': 0.02,
+        'NITROGENO_OPTIMO': 120,
+        'FOSFORO_OPTIMO': 30,
+        'POTASIO_OPTIMO': 80
+    }
+}
+
 PARAMETROS_CULTIVOS = {
     'MAÍZ': {
         'NITROGENO': {'min': 150, 'max': 200, 'optimo': 180},
@@ -720,13 +764,14 @@ PARAMETROS_CULTIVOS = {
         'NDRE_OPTIMO': 0.5,
         'TCARI_OPTIMO': 0.4,
         'OSAVI_OPTIMO': 0.6,
-        # NUEVOS PARÁMETROS DE RENDIMIENTO (ton/ha)
-        'RENDIMIENTO_BASE': 8.0,  # Rendimiento base sin fertilización
-        'RENDIMIENTO_OPTIMO': 12.0,  # Rendimiento máximo con fertilización óptima
-        'RESPUESTA_N': 0.05,  # Incremento por kg de N (ton/kg)
-        'RESPUESTA_P': 0.08,  # Incremento por kg de P (ton/kg)
-        'RESPUESTA_K': 0.04,  # Incremento por kg de K (ton/kg)
-        'FACTOR_CLIMA': 0.7  # Factor climático (0-1)
+        # PARÁMETROS BASE (HÍBRIDO INTERMEDIO POR DEFECTO)
+        'RENDIMIENTO_BASE': 8.0,
+        'RENDIMIENTO_OPTIMO': 12.0,
+        'RESPUESTA_N': 0.05,
+        'RESPUESTA_P': 0.08,
+        'RESPUESTA_K': 0.04,
+        'FACTOR_CLIMA': 0.7,
+        'VARIEDAD_DEFAULT': 'HÍBRIDO INTERMEDIO (110-120 días)'
     },
     'SOYA': {
         'NITROGENO': {'min': 20, 'max': 40, 'optimo': 30},
@@ -1080,7 +1125,21 @@ IMAGENES_CULTIVOS = {
     'GIRASOL': 'https://images.unsplash.com/photo-1560493676-04071c5f467b?auto=format&fit=crop&w=200&h=150&q=80',
 }
 
+# ===== FUNCIÓN AUXILIAR PARA CONVERSIÓN RGBA =====
+def rgba_to_tuple(rgba_str):
+    """Convierte 'rgba(r,g,b,a)' a tupla (r/255, g/255, b/255, a)"""
+    import re
+    match = re.match(r'rgba\((\d+),\s*(\d+),\s*(\d+),\s*([\d.]+)\)', rgba_str)
+    if match:
+        r, g, b, a = map(float, match.groups())
+        return (r/255, g/255, b/255, a)
+    # Fallback a negro transparente
+    return (0, 0, 0, 0.5)
+
 # ===== INICIALIZACIÓN SEGURA DE VARIABLES DE CONFIGURACIÓN =====
+if 'variedad_maiz' not in st.session_state:
+    st.session_state['variedad_maiz'] = 'HÍBRIDO INTERMEDIO (110-120 días)'
+
 nutriente = None
 satelite_seleccionado = "SENTINEL-2"
 indice_seleccionado = "NDVI"
@@ -1093,6 +1152,17 @@ resolucion_dem = 10.0
 with st.sidebar:
     st.markdown('<div class="sidebar-title">⚙️ CONFIGURACIÓN</div>', unsafe_allow_html=True)
     cultivo = st.selectbox("Cultivo:", ["MAÍZ", "SOYA", "TRIGO", "GIRASOL"])
+    
+    # Selección de variedad solo para maíz
+    if cultivo == "MAÍZ":
+        variedad_maiz = st.selectbox(
+            "Variedad de Maíz:", 
+            list(VARIEDADES_MAIZ.keys()),
+            index=1  # HÍBRIDO INTERMEDIO por defecto
+        )
+        st.session_state['variedad_maiz'] = variedad_maiz
+        st.info(f"**Potencial:** {VARIEDADES_MAIZ[variedad_maiz]['RENDIMIENTO_BASE']} - {VARIEDADES_MAIZ[variedad_maiz]['RENDIMIENTO_OPTIMO']} ton/ha")
+    
     st.image(IMAGENES_CULTIVOS[cultivo], use_container_width=True)
     
     # Mostrar metodología NPK seleccionada
@@ -1419,7 +1489,25 @@ def calcular_potasio_landsat8(b5, b7):
 def calcular_indices_npk_avanzados(gdf, cultivo, satelite):
     """Calcula NPK usando metodologías científicas avanzadas"""
     resultados = []
-    params = PARAMETROS_CULTIVOS[cultivo]
+    
+    # Usar parámetros específicos por variedad si es maíz
+    if cultivo == "MAÍZ" and 'variedad_maiz' in st.session_state:
+        variedad = st.session_state['variedad_maiz']
+        params_variedad = VARIEDADES_MAIZ[variedad]
+        # Actualizar parámetros con los de la variedad
+        params = PARAMETROS_CULTIVOS[cultivo].copy()
+        params.update({
+            'RENDIMIENTO_BASE': params_variedad['RENDIMIENTO_BASE'],
+            'RENDIMIENTO_OPTIMO': params_variedad['RENDIMIENTO_OPTIMO'],
+            'RESPUESTA_N': params_variedad['RESPUESTA_N'],
+            'RESPUESTA_P': params_variedad['RESPUESTA_P'],
+            'RESPUESTA_K': params_variedad['RESPUESTA_K'],
+            'NITROGENO': {'optimo': params_variedad['NITROGENO_OPTIMO'], 'min': params_variedad['NITROGENO_OPTIMO']*0.7, 'max': params_variedad['NITROGENO_OPTIMO']*1.2},
+            'FOSFORO': {'optimo': params_variedad['FOSFORO_OPTIMO'], 'min': params_variedad['FOSFORO_OPTIMO']*0.7, 'max': params_variedad['FOSFORO_OPTIMO']*1.2},
+            'POTASIO': {'optimo': params_variedad['POTASIO_OPTIMO'], 'min': params_variedad['POTASIO_OPTIMO']*0.7, 'max': params_variedad['POTASIO_OPTIMO']*1.2}
+        })
+    else:
+        params = PARAMETROS_CULTIVOS[cultivo]
     
     for idx, row in gdf.iterrows():
         # Simular valores de reflectancia basados en posición y cultivo
@@ -1502,10 +1590,32 @@ def calcular_indices_npk_avanzados(gdf, cultivo, satelite):
     
     return resultados
 
-# ===== FUNCIONES PARA CÁLCULO DE RENDIMIENTO =====
+# ===== FUNCIONES PARA CÁLCULO DE RENDIMIENTO MEJORADAS =====
+def obtener_parametros_rendimiento(cultivo):
+    """Obtiene parámetros de rendimiento según cultivo y variedad"""
+    if cultivo == "MAÍZ" and 'variedad_maiz' in st.session_state:
+        variedad = st.session_state['variedad_maiz']
+        params = PARAMETROS_CULTIVOS[cultivo].copy()
+        params_variedad = VARIEDADES_MAIZ[variedad]
+        
+        # Actualizar con parámetros de la variedad
+        params.update({
+            'RENDIMIENTO_BASE': params_variedad['RENDIMIENTO_BASE'],
+            'RENDIMIENTO_OPTIMO': params_variedad['RENDIMIENTO_OPTIMO'],
+            'RESPUESTA_N': params_variedad['RESPUESTA_N'],
+            'RESPUESTA_P': params_variedad['RESPUESTA_P'],
+            'RESPUESTA_K': params_variedad['RESPUESTA_K'],
+            'NITROGENO': {'optimo': params_variedad['NITROGENO_OPTIMO']},
+            'FOSFORO': {'optimo': params_variedad['FOSFORO_OPTIMO']},
+            'POTASIO': {'optimo': params_variedad['POTASIO_OPTIMO']}
+        })
+        return params
+    else:
+        return PARAMETROS_CULTIVOS[cultivo]
+
 def calcular_rendimiento_potencial(gdf_analizado, cultivo):
     """Calcula el rendimiento potencial actual basado en fertilidad existente"""
-    params = PARAMETROS_CULTIVOS[cultivo]
+    params = obtener_parametros_rendimiento(cultivo)
     rendimientos = []
     
     for idx, row in gdf_analizado.iterrows():
@@ -1516,7 +1626,7 @@ def calcular_rendimiento_potencial(gdf_analizado, cultivo):
         factor_humedad = min(1.0, row['ndwi'] / 0.4) if 'ndwi' in row else 0.7
         
         # Factor de vigor vegetativo (NDVI)
-        factor_vigor = min(1.0, row['ndvi'] / params['NDVI_OPTIMO'])
+        factor_vigor = min(1.2, row['ndvi'] / params['NDVI_OPTIMO'])
         
         # Factor climático base
         factor_clima = params['FACTOR_CLIMA']
@@ -1537,7 +1647,7 @@ def calcular_rendimiento_potencial(gdf_analizado, cultivo):
         )
         
         # Límite máximo por defecto
-        rendimiento_potencial = min(rendimiento_potencial, params['RENDIMIENTO_OPTIMO'])
+        rendimiento_potencial = min(rendimiento_potencial, params['RENDIMIENTO_OPTIMO'] * 1.1)
         
         rendimientos.append(round(rendimiento_potencial, 2))
     
@@ -1545,14 +1655,14 @@ def calcular_rendimiento_potencial(gdf_analizado, cultivo):
 
 def calcular_rendimiento_con_recomendaciones(gdf_analizado, cultivo):
     """Calcula el rendimiento proyectado aplicando recomendaciones NPK"""
-    params = PARAMETROS_CULTIVOS[cultivo]
+    params = obtener_parametros_rendimiento(cultivo)
     rendimientos = []
     
     for idx, row in gdf_analizado.iterrows():
         # Rendimiento base actual
         factor_fertilidad = row['npk_integrado']
         factor_humedad = min(1.0, row['ndwi'] / 0.4) if 'ndwi' in row else 0.7
-        factor_vigor = min(1.0, row['ndvi'] / params['NDVI_OPTIMO'])
+        factor_vigor = min(1.2, row['ndvi'] / params['NDVI_OPTIMO'])
         factor_clima = params['FACTOR_CLIMA']
         
         rendimiento_base = params['RENDIMIENTO_BASE']
@@ -1571,13 +1681,13 @@ def calcular_rendimiento_con_recomendaciones(gdf_analizado, cultivo):
         
         # Incremento por Nitrógeno
         if 'valor_recomendado' in row and row['valor_recomendado'] > 0:
-            # Solo si hay deficiencia (valor actual < óptimo)
             n_actual = row['nitrogeno_actual']
             n_optimo = params['NITROGENO']['optimo']
             if n_actual < n_optimo * 0.9:  # Si hay deficiencia significativa
+                deficiencia_n = max(0, n_optimo - n_actual)
                 eficiencia_n = params['RESPUESTA_N'] * 0.7  # 70% de eficiencia
-                incremento_n = row['valor_recomendado'] * eficiencia_n
-                incremento_total += min(incremento_n, n_optimo * params['RESPUESTA_N'])
+                incremento_n = deficiencia_n * eficiencia_n
+                incremento_total += min(incremento_n, deficiencia_n * params['RESPUESTA_N'])
         
         # Incremento por Fósforo
         p_actual = row['fosforo_actual']
@@ -1601,14 +1711,14 @@ def calcular_rendimiento_con_recomendaciones(gdf_analizado, cultivo):
         rendimiento_proyectado = rendimiento_actual + incremento_total
         
         # Límite máximo
-        rendimiento_max = params['RENDIMIENTO_OPTIMO'] * 1.1  # 10% sobre el óptimo
+        rendimiento_max = params['RENDIMIENTO_OPTIMO'] * 1.2  # 20% sobre el óptimo
         rendimiento_proyectado = min(rendimiento_proyectado, rendimiento_max)
         
         rendimientos.append(round(rendimiento_proyectado, 2))
     
     return rendimientos
 
-# ===== NUEVAS FUNCIONES MEJORADAS PARA MAPAS DE CALOR DE RENDIMIENTO =====
+# ===== FUNCIONES CORREGIDAS PARA MAPAS DE CALOR =====
 def crear_mapa_calor_rendimiento_actual(gdf_analizado, cultivo):
     """Crea mapa de calor para rendimiento actual con visualización suave y profesional"""
     try:
@@ -1635,11 +1745,16 @@ def crear_mapa_calor_rendimiento_actual(gdf_analizado, cultivo):
         xi, yi = np.meshgrid(xi, yi)
         
         # Interpolación lineal para suavizar
-        from scipy.interpolate import griddata
-        zi = griddata((x, y), z, (xi, yi), method='cubic', fill_value=np.nan)
+        try:
+            from scipy.interpolate import griddata
+            zi = griddata((x, y), z, (xi, yi), method='cubic', fill_value=np.nan)
+        except:
+            # Fallback a interpolación lineal
+            zi = griddata((x, y), z, (xi, yi), method='linear', fill_value=np.nan)
         
         # Crear mapa de calor suave
-        im = ax.contourf(xi, yi, zi, levels=50, cmap='RdYlGn', alpha=0.8, vmin=z.min()*0.9, vmax=z.max()*1.1)
+        im = ax.contourf(xi, yi, zi, levels=50, cmap='RdYlGn', alpha=0.8, 
+                        vmin=z.min()*0.9, vmax=z.max()*1.1)
         
         # Agregar líneas de contorno
         contour = ax.contour(xi, yi, zi, levels=10, colors='white', linewidths=0.5, alpha=0.5)
@@ -1656,7 +1771,9 @@ def crear_mapa_calor_rendimiento_actual(gdf_analizado, cultivo):
                            xytext=(0, 10), textcoords="offset points",
                            fontsize=8, color='white', weight='bold',
                            ha='center', va='center',
-                           bbox=dict(boxstyle="round,pad=0.2", facecolor='rgba(0,0,0,0.7)', alpha=0.8))
+                           bbox=dict(boxstyle="round,pad=0.2", 
+                                    facecolor=(0, 0, 0, 0.7), 
+                                    alpha=0.8))
         
         # Agregar mapa base
         try:
@@ -1697,7 +1814,8 @@ def crear_mapa_calor_rendimiento_actual(gdf_analizado, cultivo):
         
         ax.text(0.02, 0.98, info_text, transform=ax.transAxes, fontsize=9, 
                 verticalalignment='top', color='white',
-                bbox=dict(boxstyle="round,pad=0.3", facecolor='rgba(30, 41, 59, 0.9)', 
+                bbox=dict(boxstyle="round,pad=0.3", 
+                         facecolor=(30/255, 41/255, 59/255, 0.9), 
                          alpha=0.9, edgecolor='white'))
         
         plt.tight_layout()
@@ -1749,7 +1867,8 @@ def crear_mapa_calor_rendimiento_actual_fallback(gdf_analizado, cultivo):
                        (centroid.x, centroid.y),
                        xytext=(0, 0), textcoords="offset points",
                        fontsize=8, color='white', weight='bold',
-                       bbox=dict(boxstyle="circle,pad=0.2", facecolor='rgba(0,0,0,0.6)', 
+                       bbox=dict(boxstyle="circle,pad=0.2", 
+                                facecolor=(0, 0, 0, 0.6), 
                                 alpha=0.8, edgecolor='white'))
         
         # Agregar mapa base
@@ -1813,9 +1932,13 @@ def crear_mapa_calor_rendimiento_proyectado(gdf_analizado, cultivo):
         xi, yi = np.meshgrid(xi, yi)
         
         # Interpolación del rendimiento proyectado
-        from scipy.interpolate import griddata
-        zi_proyectado = griddata((x, y), z_proyectado, (xi, yi), method='cubic', fill_value=np.nan)
-        zi_incremento = griddata((x, y), incrementos, (xi, yi), method='cubic', fill_value=np.nan)
+        try:
+            from scipy.interpolate import griddata
+            zi_proyectado = griddata((x, y), z_proyectado, (xi, yi), method='cubic', fill_value=np.nan)
+            zi_incremento = griddata((x, y), incrementos, (xi, yi), method='cubic', fill_value=np.nan)
+        except:
+            zi_proyectado = griddata((x, y), z_proyectado, (xi, yi), method='linear', fill_value=np.nan)
+            zi_incremento = griddata((x, y), incrementos, (xi, yi), method='linear', fill_value=np.nan)
         
         # Crear mapa de calor con dos capas
         im_proyectado = ax.contourf(xi, yi, zi_proyectado, levels=50, cmap='RdYlGn', alpha=0.7, 
@@ -1846,7 +1969,9 @@ def crear_mapa_calor_rendimiento_proyectado(gdf_analizado, cultivo):
                            xytext=(0, 15), textcoords="offset points",
                            fontsize=7, color='cyan', weight='bold',
                            ha='center', va='center',
-                           bbox=dict(boxstyle="round,pad=0.2", facecolor='rgba(0,0,0,0.7)', alpha=0.8))
+                           bbox=dict(boxstyle="round,pad=0.2", 
+                                    facecolor=(0, 0, 0, 0.7), 
+                                    alpha=0.8))
         
         # Agregar mapa base
         try:
@@ -1891,7 +2016,8 @@ def crear_mapa_calor_rendimiento_proyectado(gdf_analizado, cultivo):
         
         ax.text(0.02, 0.98, stats_text, transform=ax.transAxes, fontsize=9, 
                 verticalalignment='top', color='white',
-                bbox=dict(boxstyle="round,pad=0.3", facecolor='rgba(30, 41, 59, 0.9)', 
+                bbox=dict(boxstyle="round,pad=0.3", 
+                         facecolor=(30/255, 41/255, 59/255, 0.9), 
                          alpha=0.9, edgecolor='white'))
         
         plt.tight_layout()
@@ -1944,7 +2070,8 @@ def crear_mapa_calor_rendimiento_proyectado_fallback(gdf_analizado, cultivo):
                        xytext=(0, 0), textcoords="offset points",
                        fontsize=7, color='white', weight='bold',
                        ha='center', va='center',
-                       bbox=dict(boxstyle="round,pad=0.2", facecolor='rgba(0,0,0,0.6)', 
+                       bbox=dict(boxstyle="round,pad=0.2", 
+                                facecolor=(0, 0, 0, 0.6), 
                                 alpha=0.8, edgecolor='white'))
         
         # Agregar mapa base
@@ -2013,9 +2140,13 @@ def crear_mapa_comparativo_calor(gdf_analizado, cultivo):
         xi, yi = np.meshgrid(xi, yi)
         
         # Interpolación para ambos conjuntos de datos
-        from scipy.interpolate import griddata
-        zi_actual = griddata((x, y), z_actual, (xi, yi), method='cubic', fill_value=np.nan)
-        zi_proyectado = griddata((x, y), z_proyectado, (xi, yi), method='cubic', fill_value=np.nan)
+        try:
+            from scipy.interpolate import griddata
+            zi_actual = griddata((x, y), z_actual, (xi, yi), method='cubic', fill_value=np.nan)
+            zi_proyectado = griddata((x, y), z_proyectado, (xi, yi), method='cubic', fill_value=np.nan)
+        except:
+            zi_actual = griddata((x, y), z_actual, (xi, yi), method='linear', fill_value=np.nan)
+            zi_proyectado = griddata((x, y), z_proyectado, (xi, yi), method='linear', fill_value=np.nan)
         
         # MAPA 1: RENDIMIENTO ACTUAL
         im1 = ax1.contourf(xi, yi, zi_actual, levels=40, cmap='RdYlGn', alpha=0.8, vmin=vmin, vmax=vmax)
@@ -2033,7 +2164,7 @@ def crear_mapa_comparativo_calor(gdf_analizado, cultivo):
         ax2.clabel(contour2, inline=True, fontsize=8, colors='white', fmt='%1.1f t')
         
         # Superponer capa de incrementos
-        zi_incremento = griddata((x, y), incrementos, (xi, yi), method='cubic', fill_value=np.nan)
+        zi_incremento = griddata((x, y), incrementos, (xi, yi), method='linear', fill_value=np.nan)
         im_incremento = ax2.contourf(xi, yi, zi_incremento, levels=15, cmap='Blues', alpha=0.3)
         
         # Agregar puntos de datos con incremento
@@ -2084,7 +2215,8 @@ def crear_mapa_comparativo_calor(gdf_analizado, cultivo):
         
         # Agregar texto en la parte inferior central
         fig.text(0.5, 0.02, info_comparativo, fontsize=11, color='white', ha='center',
-                bbox=dict(boxstyle="round,pad=0.5", facecolor='rgba(30, 41, 59, 0.95)', 
+                bbox=dict(boxstyle="round,pad=0.5", 
+                         facecolor=(30/255, 41/255, 59/255, 0.95), 
                          alpha=0.95, edgecolor='#3b82f6', linewidth=2))
         
         plt.tight_layout(rect=[0, 0.05, 1, 0.95])
@@ -2133,7 +2265,9 @@ def crear_mapa_comparativo_calor_fallback(gdf_analizado, cultivo):
                         xytext=(0, 0), textcoords="offset points",
                         fontsize=6, color='white', weight='bold',
                         ha='center', va='center',
-                        bbox=dict(boxstyle="circle,pad=0.15", facecolor='rgba(0,0,0,0.6)', alpha=0.8))
+                        bbox=dict(boxstyle="circle,pad=0.15", 
+                                 facecolor=(0, 0, 0, 0.6), 
+                                 alpha=0.8))
         
         # Mapa 2: Rendimiento Proyectado
         for idx, row in gdf_plot.iterrows():
@@ -2152,7 +2286,9 @@ def crear_mapa_comparativo_calor_fallback(gdf_analizado, cultivo):
                         xytext=(0, 0), textcoords="offset points",
                         fontsize=6, color='white', weight='bold',
                         ha='center', va='center',
-                        bbox=dict(boxstyle="round,pad=0.15", facecolor='rgba(0,0,0,0.6)', alpha=0.8))
+                        bbox=dict(boxstyle="round,pad=0.15", 
+                                 facecolor=(0, 0, 0, 0.6), 
+                                 alpha=0.8))
         
         # Títulos
         ax1.set_title('🌾 RENDIMIENTO ACTUAL\n(ton/ha)', fontsize=14, fontweight='bold', color='white')
@@ -2293,6 +2429,17 @@ def calcular_recomendaciones_npk_cientificas(gdf_analizado, nutriente, cultivo):
     """Calcula recomendaciones basadas en metodologías científicas"""
     recomendaciones = []
     params = PARAMETROS_CULTIVOS[cultivo]
+    
+    # Si es maíz y hay variedad seleccionada, usar esos parámetros
+    if cultivo == "MAÍZ" and 'variedad_maiz' in st.session_state:
+        variedad = st.session_state['variedad_maiz']
+        variedad_params = VARIEDADES_MAIZ[variedad]
+        if nutriente == "NITRÓGENO":
+            params['NITROGENO']['optimo'] = variedad_params['NITROGENO_OPTIMO']
+        elif nutriente == "FÓSFORO":
+            params['FOSFORO']['optimo'] = variedad_params['FOSFORO_OPTIMO']
+        else:
+            params['POTASIO']['optimo'] = variedad_params['POTASIO_OPTIMO']
     
     for idx, row in gdf_analizado.iterrows():
         if nutriente == "NITRÓGENO":
@@ -2494,7 +2641,7 @@ def crear_mapa_pendientes_simple(X, Y, pendiente_grid, gdf_original):
                 x_center = np.mean(X_flat[valid_mask][mask_cat])
                 y_center = np.mean(Y_flat[valid_mask][mask_cat])
                 ax1.text(x_center, y_center, f'{porcentaje}%', fontsize=8, fontweight='bold', ha='center', va='center', 
-                        bbox=dict(boxstyle="round,pad=0.3", facecolor='#1e293b', alpha=0.9, edgecolor='white'), color='white')
+                        bbox=dict(boxstyle="round,pad=0.3", facecolor=(30/255, 41/255, 59/255, 0.9), edgecolor='white'), color='white')
     else:
         ax1.text(0.5, 0.5, 'Datos insuficientes\npara mapa de calor', transform=ax1.transAxes, ha='center', va='center', fontsize=12, color='white')
     gdf_original.plot(ax=ax1, color='none', edgecolor='white', linewidth=2)
@@ -2519,7 +2666,7 @@ Estadísticas:
 • Desviación: {stats_pendiente['std']:.1f}%
 """
         ax2.text(0.02, 0.98, stats_text, transform=ax2.transAxes, fontsize=9, verticalalignment='top', 
-                color='white', bbox=dict(boxstyle="round,pad=0.3", facecolor='#1e293b', alpha=0.9, edgecolor='white'))
+                color='white', bbox=dict(boxstyle="round,pad=0.3", facecolor=(30/255, 41/255, 59/255, 0.9), edgecolor='white'))
         ax2.set_xlabel('Pendiente (%)', color='white')
         ax2.set_ylabel('Frecuencia', color='white')
         ax2.set_title('Distribución de Pendientes', fontsize=12, fontweight='bold', color='white')
@@ -2598,11 +2745,17 @@ def generar_resumen_estadisticas(gdf_analizado, analisis_tipo, cultivo, df_power
                 estadisticas['NDWI Promedio'] = f"{gdf_analizado['ndwi'].mean():.3f}"
             if 'materia_organica' in gdf_analizado.columns:
                 estadisticas['Materia Orgánica Promedio'] = f"{gdf_analizado['materia_organica'].mean():.1f}%"
+            
+            # Información de variedad para maíz
+            if cultivo == "MAÍZ" and 'variedad_maiz' in st.session_state:
+                estadisticas['Variedad de Maíz'] = st.session_state['variedad_maiz']
+            
             # Datos de NASA POWER
             if df_power is not None:
                 estadisticas['Radiación Solar Promedio'] = f"{df_power['radiacion_solar'].mean():.1f} kWh/m²/día"
                 estadisticas['Velocidad Viento Promedio'] = f"{df_power['viento_2m'].mean():.2f} m/s"
                 estadisticas['Precipitación Promedio'] = f"{df_power['precipitacion'].mean():.2f} mm/día"
+        
         elif analisis_tipo == "ANÁLISIS DE TEXTURA":
             if 'arena' in gdf_analizado.columns:
                 estadisticas['Arena Promedio'] = f"{gdf_analizado['arena'].mean():.1f}%"
@@ -2664,8 +2817,20 @@ def generar_recomendaciones_generales(gdf_analizado, analisis_tipo, cultivo):
         
         # === RECOMENDACIONES POR CULTIVO ===
         if cultivo == "MAÍZ":
-            recomendaciones.append("Para maíz: Priorizar aplicación de nitrógeno en etapas de crecimiento vegetativo.")
+            # Información de variedad
+            if 'variedad_maiz' in st.session_state:
+                variedad = st.session_state['variedad_maiz']
+                recomendaciones.append(f"Variedad: {variedad}")
+                
+                if "TEMPRANO" in variedad:
+                    recomendaciones.append("Para maíz temprano: Aplicar nitrógeno en dosis fraccionadas (30% siembra, 70% V6-V8)")
+                elif "TARDÍO" in variedad:
+                    recomendaciones.append("Para maíz tardío: Aumentar dosis de potasio para mejorar llenado de grano")
+                else:
+                    recomendaciones.append("Para maíz intermedio: Priorizar aplicación de nitrógeno en etapas de crecimiento vegetativo.")
+            
             recomendaciones.append("Mantener humedad adecuada durante floración y llenado de grano.")
+            
         elif cultivo == "SOYA":
             recomendaciones.append("Para soya: Inocular con rizobios para fijación de nitrógeno atmosférico.")
             recomendaciones.append("Manejo adecuado de humedad durante formación de vainas.")
@@ -2721,6 +2886,11 @@ def generar_reporte_pdf(gdf_analizado, cultivo, analisis_tipo, area_total,
         pdf.cell(0, 10, limpiar_texto_para_pdf(f'REPORTE DE ANÁLISIS AGRÍCOLA - {cultivo}'), 0, 1, 'C')
         pdf.set_font('Arial', '', 12)
         pdf.cell(0, 10, limpiar_texto_para_pdf(f'Tipo de Análisis: {analisis_tipo}'), 0, 1, 'C')
+        
+        # Información de variedad para maíz
+        if cultivo == "MAÍZ" and 'variedad_maiz' in st.session_state:
+            pdf.cell(0, 10, limpiar_texto_para_pdf(f'Variedad: {st.session_state["variedad_maiz"]}'), 0, 1, 'C')
+        
         pdf.cell(0, 10, limpiar_texto_para_pdf(f'Fecha: {datetime.now().strftime("%d/%m/%Y %H:%M")}'), 0, 1, 'C')
         pdf.ln(10)
         pdf.set_font('Arial', 'B', 14)
@@ -2873,6 +3043,12 @@ def generar_reporte_docx(gdf_analizado, cultivo, analisis_tipo, area_total,
         title.alignment = WD_ALIGN_PARAGRAPH.CENTER
         subtitle = doc.add_paragraph(f'Tipo de Análisis: {analisis_tipo}')
         subtitle.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        
+        # Información de variedad para maíz
+        if cultivo == "MAÍZ" and 'variedad_maiz' in st.session_state:
+            variedad_par = doc.add_paragraph(f'Variedad: {st.session_state["variedad_maiz"]}')
+            variedad_par.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        
         fecha = doc.add_paragraph(f'Fecha: {datetime.now().strftime("%d/%m/%Y %H:%M")}')
         fecha.alignment = WD_ALIGN_PARAGRAPH.CENTER
         doc.add_paragraph()
@@ -3041,7 +3217,7 @@ def crear_mapa_npk_con_esri(gdf_analizado, nutriente, cultivo, satelite):
         # Seleccionar columna y paleta según nutriente
         if nutriente == "NITRÓGENO":
             columna = 'nitrogeno_actual'
-            cmap = LinearSegmentedColormap.from_list('nitrogeno_gee', PALETAS_GEE['NITROGENO'])
+            cmap = LinearSegmentedColormap.from_list('nitrogeno_gee', PALETAS_GEE['NITRÓGENO'])
             vmin = PARAMETROS_CULTIVOS[cultivo]['NITROGENO']['min'] * 0.7
             vmax = PARAMETROS_CULTIVOS[cultivo]['NITROGENO']['max'] * 1.2
             titulo_nutriente = "NITRÓGENO (kg/ha)"
@@ -3055,7 +3231,7 @@ def crear_mapa_npk_con_esri(gdf_analizado, nutriente, cultivo, satelite):
             columna = 'potasio_actual'
             cmap = LinearSegmentedColormap.from_list('potasio_gee', PALETAS_GEE['POTASIO'])
             vmin = PARAMETROS_CULTIVOS[cultivo]['POTASIO']['min'] * 0.7
-            vmax = PARAMETROS_CULTIVOS[cultivo]['POTASIO']['max'] * 1.2
+            vmax = PARAMETROS_CULTivos[cultivo]['POTASIO']['max'] * 1.2
             titulo_nutriente = "POTASIO (kg/ha)"
         
         # Plot de las zonas con colores según valor
@@ -3071,7 +3247,7 @@ def crear_mapa_npk_con_esri(gdf_analizado, nutriente, cultivo, satelite):
             ax.annotate(f"Z{row['id_zona']}\n{valor:.0f}", (centroid.x, centroid.y),
                         xytext=(5, 5), textcoords="offset points",
                         fontsize=8, color='white', weight='bold',
-                        bbox=dict(boxstyle="round,pad=0.3", facecolor='#1e293b', alpha=0.9, edgecolor='white'))
+                        bbox=dict(boxstyle="round,pad=0.3", facecolor=(30/255, 41/255, 59/255, 0.9), edgecolor='white'))
         
         # Agregar mapa base ESRI Satellite
         try:
@@ -3127,7 +3303,7 @@ def crear_mapa_fertilidad_integrada(gdf_analizado, cultivo, satelite):
             ax.annotate(f"Z{row['id_zona']}\n{valor:.2f}", (centroid.x, centroid.y),
                         xytext=(5, 5), textcoords="offset points",
                         fontsize=8, color='white', weight='bold',
-                        bbox=dict(boxstyle="round,pad=0.3", facecolor='#1e293b', alpha=0.9, edgecolor='white'))
+                        bbox=dict(boxstyle="round,pad=0.3", facecolor=(30/255, 41/255, 59/255, 0.9), edgecolor='white'))
         
         try:
             ctx.add_basemap(ax, source=ctx.providers.Esri.WorldImagery, alpha=0.4)
@@ -3232,7 +3408,7 @@ def crear_mapa_texturas_con_esri(gdf_analizado, cultivo):
             legend.get_title().set_color('white')
             for text in legend.get_texts():
                 text.set_color('white')
-            legend.get_frame().set_facecolor('#1e293b')
+            legend.get_frame().set_facecolor((30/255, 41/255, 59/255, 0.9))
             legend.get_frame().set_edgecolor('white')
         
         plt.tight_layout()
@@ -3616,6 +3792,8 @@ if uploaded_file:
                 with col2:
                     st.write("**🎯 CONFIGURACIÓN GEE:**")
                     st.write(f"- Cultivo: {ICONOS_CULTIVOS[cultivo]} {cultivo}")
+                    if cultivo == "MAÍZ" and 'variedad_maiz' in st.session_state:
+                        st.write(f"- Variedad: {st.session_state['variedad_maiz']}")
                     st.write(f"- Análisis: {analisis_tipo}")
                     st.write(f"- Zonas: {n_divisiones}")
                     if analisis_tipo in ["FERTILIDAD ACTUAL", "RECOMENDACIONES NPK"]:
@@ -3634,7 +3812,7 @@ if uploaded_file:
                             cultivo, satelite_seleccionado, indice_seleccionado,
                             fecha_inicio, fecha_fin
                         )
-                    elif analisis_tipo == "ANÁLISIS DE CURVAS DE NIVEL":
+                    elif analisis_tipo == "ANÁLISIS DE CURVas DE NIVEL":
                         resultados = ejecutar_analisis(
                             gdf, None, analisis_tipo, n_divisiones,
                             cultivo, None, None, None, None,
@@ -3692,6 +3870,19 @@ if uploaded_file:
                                 with col_m2:
                                     st.write(f"**Bandas utilizadas:** {', '.join(metodologia['bandas'])}")
                                     st.write(f"**Referencia:** {metodologia['referencia']}")
+                            
+                            # Información de variedad para maíz
+                            if cultivo == "MAÍZ" and 'variedad_maiz' in st.session_state:
+                                variedad = st.session_state['variedad_maiz']
+                                variedad_params = VARIEDADES_MAIZ[variedad]
+                                st.info(f"**🌽 VARIEDAD SELECCIONADA: {variedad}**")
+                                col_v1, col_v2 = st.columns(2)
+                                with col_v1:
+                                    st.write(f"**Potencial Base:** {variedad_params['RENDIMIENTO_BASE']} - {variedad_params['RENDIMIENTO_OPTIMO']} ton/ha")
+                                    st.write(f"**Respuesta N:** {variedad_params['RESPUESTA_N']:.3f} ton/kg N")
+                                with col_v2:
+                                    st.write(f"**N Óptimo:** {variedad_params['NITROGENO_OPTIMO']} kg/ha")
+                                    st.write(f"**P Óptimo:** {variedad_params['FOSFORO_OPTIMO']} kg/ha")
                             
                             # Métricas principales
                             col1, col2, col3, col4 = st.columns(4)
@@ -3873,7 +4064,7 @@ if uploaded_file:
                                 ax.set_ylabel('Número de Zonas', color='white')
                                 ax.set_title('Distribución de Potencial de Cosecha', fontsize=14, color='white')
                                 ax.tick_params(colors='white')
-                                ax.legend(facecolor='#1e293b', edgecolor='white', labelcolor='white')
+                                ax.legend(facecolor=(30/255, 41/255, 59/255, 0.9), edgecolor='white', labelcolor='white')
                                 ax.grid(True, alpha=0.2, color='#475569')
                                 
                                 st.pyplot(fig)
@@ -4068,6 +4259,32 @@ with st.expander("🔬 METODOLOGÍA CIENTÍFICA APLICADA"):
     - **Método:** Índice NIR-SWIR (Thenkabail et al., 2000)
     - **Fórmula:** `K = 100 × (B5-B7)/(B5+B7) + 50`
     - **Bandas:** B5 (NIR), B7 (SWIR 2)
+    
+    ### **🌽 VARIEDADES DE MAÍZ IMPLEMENTADAS:**
+    
+    **HÍBRIDO TEMPRANO (90-100 días):**
+    - **Rendimiento Base:** 7.0 ton/ha
+    - **Rendimiento Óptimo:** 10.0 ton/ha
+    - **Requerimiento N:** 160 kg/ha
+    - **Respuesta N:** 0.04 ton/kg N
+    
+    **HÍBRIDO INTERMEDIO (110-120 días):**
+    - **Rendimiento Base:** 8.0 ton/ha
+    - **Rendimiento Óptimo:** 12.0 ton/ha
+    - **Requerimiento N:** 180 kg/ha
+    - **Respuesta N:** 0.05 ton/kg N
+    
+    **HÍBRIDO TARDÍO (130-140 días):**
+    - **Rendimiento Base:** 9.0 ton/ha
+    - **Rendimiento Óptimo:** 14.0 ton/ha
+    - **Requerimiento N:** 200 kg/ha
+    - **Respuesta N:** 0.06 ton/kg N
+    
+    **VARIEDAD CRIOLLA:**
+    - **Rendimiento Base:** 4.0 ton/ha
+    - **Rendimiento Óptimo:** 6.0 ton/ha
+    - **Requerimiento N:** 120 kg/ha
+    - **Respuesta N:** 0.02 ton/kg N
     
     ### **🏗️ SISTEMA DE CLASIFICACIÓN USDA PARA TEXTURAS:**
     
