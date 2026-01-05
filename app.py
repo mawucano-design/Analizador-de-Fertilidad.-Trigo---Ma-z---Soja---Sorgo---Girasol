@@ -751,6 +751,172 @@ VARIEDADES_MAIZ = {
         'FOSFORO_OPTIMO': 30,
         'POTASIO_OPTIMO': 80
     }
+# ===== VARIEDADES DE SOYA PARA ARGENTINA =====
+VARIEDADES_SOYA = {
+    'DM 53i72 IPRO (GRUPO V)': {
+        'RENDIMIENTO_BASE': 3.2,
+        'RENDIMIENTO_OPTIMO': 4.5,
+        'RESPUESTA_N': 0.015,
+        'RESPUESTA_P': 0.025,
+        'RESPUESTA_K': 0.020,
+        'NITROGENO_OPTIMO': 25,
+        'FOSFORO_OPTIMO': 35,
+        'POTASIO_OPTIMO': 90,
+        'CICLO': 115,
+        'TECNOLOGIA': 'Intacta RR2 PRO',
+        'REGION': 'Núcleo Sur'
+    },
+    'NS 4619 IPRO (GRUPO IV)': {
+        'RENDIMIENTO_BASE': 3.5,
+        'RENDIMIENTO_OPTIMO': 5.0,
+        'RESPUESTA_N': 0.018,
+        'RESPUESTA_P': 0.028,
+        'RESPUESTA_K': 0.022,
+        'NITROGENO_OPTIMO': 28,
+        'FOSFORO_OPTIMO': 38,
+        'POTASIO_OPTIMO': 95,
+        'CICLO': 105,
+        'TECNOLOGIA': 'Intacta RR2 PRO',
+        'REGION': 'Núcleo Norte'
+    },
+    'A 4910 RG (GRUPO IV)': {
+        'RENDIMIENTO_BASE': 3.0,
+        'RENDIMIENTO_OPTIMO': 4.2,
+        'RESPUESTA_N': 0.014,
+        'RESPUESTA_P': 0.023,
+        'RESPUESTA_K': 0.019,
+        'NITROGENO_OPTIMO': 22,
+        'FOSFORO_OPTIMO': 32,
+        'POTASIO_OPTIMO': 85,
+        'CICLO': 100,
+        'TECNOLOGIA': 'RR1',
+        'REGION': 'Norte Argentino'
+    },
+    'SYN 1359 IPRO (GRUPO V)': {
+        'RENDIMIENTO_BASE': 3.8,
+        'RENDIMIENTO_OPTIMO': 5.3,
+        'RESPUESTA_N': 0.020,
+        'RESPUESTA_P': 0.030,
+        'RESPUESTA_K': 0.024,
+        'NITROGENO_OPTIMO': 30,
+        'FOSFORO_OPTIMO': 40,
+        'POTASIO_OPTIMO': 100,
+        'CICLO': 120,
+        'TECNOLOGIA': 'Intacta RR2 PRO',
+        'REGION': 'Sudeste Bonaerense'
+    }
+}
+
+# ===== VARIEDADES DE TRIGO PARA ARGENTINA =====
+VARIEDADES_TRIGO = {
+    'BIOINTA 3004 (PANADERO)': {
+        'RENDIMIENTO_BASE': 4.0,
+        'RENDIMIENTO_OPTIMO': 6.5,
+        'RESPUESTA_N': 0.025,
+        'RESPUESTA_P': 0.040,
+        'RESPUESTA_K': 0.030,
+        'NITROGENO_OPTIMO': 140,
+        'FOSFORO_OPTIMO': 45,
+        'POTASIO_OPTIMO': 95,
+        'CICLO': 125,
+        'CALIDAD': 'Panadero Superior',
+        'REGION': 'Sudeste Bonaerense'
+    },
+    'KLEIN CAPRICORNIO (CÁNDIDO)': {
+        'RENDIMIENTO_BASE': 4.5,
+        'RENDIMIENTO_OPTIMO': 7.0,
+        'RESPUESTA_N': 0.028,
+        'RESPUESTA_P': 0.045,
+        'RESPUESTA_K': 0.035,
+        'NITROGENO_OPTIMO': 150,
+        'FOSFORO_OPTIMO': 48,
+        'POTASIO_OPTIMO': 100,
+        'CICLO': 120,
+        'CALIDAD': 'Panadero',
+        'REGION': 'Núcleo Norte'
+    },
+    'BUCK GUARANÍ (SINTÉTICO)': {
+        'RENDIMIENTO_BASE': 3.8,
+        'RENDIMIENTO_OPTIMO': 6.0,
+        'RESPUESTA_N': 0.022,
+        'RESPUESTA_P': 0.038,
+        'RESPUESTA_K': 0.028,
+        'NITROGENO_OPTIMO': 135,
+        'FOSFORO_OPTIMO': 42,
+        'POTASIO_OPTIMO': 90,
+        'CICLO': 115,
+        'CALIDAD': 'Panadero',
+        'REGION': 'Norte Argentino'
+    },
+    'ACA 303 PLUS (DOBLE PROPÓSITO)': {
+        'RENDIMIENTO_BASE': 4.2,
+        'RENDIMIENTO_OPTIMO': 6.8,
+        'RESPUESTA_N': 0.026,
+        'RESPUESTA_P': 0.042,
+        'RESPUESTA_K': 0.032,
+        'NITROGENO_OPTIMO': 145,
+        'FOSFORO_OPTIMO': 46,
+        'POTASIO_OPTIMO': 98,
+        'CICLO': 130,
+        'CALIDAD': 'Panadero/Forrajero',
+        'REGION': 'Centro Sur'
+    }
+}
+
+# ===== VARIEDADES DE GIRASOL PARA ARGENTINA =====
+VARIEDADES_GIRASOL = {
+    'DK 4045 CL (ALTO OLEICO)': {
+        'RENDIMIENTO_BASE': 2.5,
+        'RENDIMIENTO_OPTIMO': 3.8,
+        'RESPUESTA_N': 0.012,
+        'RESPUESTA_P': 0.018,
+        'RESPUESTA_K': 0.015,
+        'NITROGENO_OPTIMO': 85,
+        'FOSFORO_OPTIMO': 35,
+        'POTASIO_OPTIMO': 115,
+        'CICLO': 105,
+        'ACEITE': 'Alto Oleico (82%)',
+        'REGION': 'Núcleo Norte'
+    },
+    'SY VERT 854 CL (CONVENCIONAL)': {
+        'RENDIMIENTO_BASE': 2.8,
+        'RENDIMIENTO_OPTIMO': 4.2,
+        'RESPUESTA_N': 0.014,
+        'RESPUESTA_P': 0.020,
+        'RESPUESTA_K': 0.017,
+        'NITROGENO_OPTIMO': 90,
+        'FOSFORO_OPTIMO': 38,
+        'POTASIO_OPTIMO': 120,
+        'CICLO': 110,
+        'ACEITE': 'Convencional (48%)',
+        'REGION': 'Sudeste Bonaerense'
+    },
+    'NIDER A 6620 CL (TOLERANTE)': {
+        'RENDIMIENTO_BASE': 2.3,
+        'RENDIMIENTO_OPTIMO': 3.5,
+        'RESPUESTA_N': 0.011,
+        'RESPUESTA_P': 0.017,
+        'RESPUESTA_K': 0.014,
+        'NITROGENO_OPTIMO': 80,
+        'FOSFORO_OPTIMO': 32,
+        'POTASIO_OPTIMO': 110,
+        'CICLO': 100,
+        'ACEITE': 'Convencional (46%)',
+        'REGION': 'Norte Argentino'
+    },
+    'ACA 861 CL (ALTO RENDIMIENTO)': {
+        'RENDIMIENTO_BASE': 3.0,
+        'RENDIMIENTO_OPTIMO': 4.5,
+        'RESPUESTA_N': 0.016,
+        'RESPUESTA_P': 0.022,
+        'RESPUESTA_K': 0.019,
+        'NITROGENO_OPTIMO': 95,
+        'FOSFORO_OPTIMO': 40,
+        'POTASIO_OPTIMO': 125,
+        'CICLO': 115,
+        'ACEITE': 'Alto Oleico (80%)',
+        'REGION': 'Centro Sur'
+    }
 }
 
 PARAMETROS_CULTIVOS = {
