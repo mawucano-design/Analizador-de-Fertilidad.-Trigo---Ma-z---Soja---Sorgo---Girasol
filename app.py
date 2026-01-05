@@ -2426,9 +2426,10 @@ def obtener_datos_nasa_power(gdf, fecha_inicio, fecha_fin):
 
 # ===== FUNCIONES DE ANÁLISIS GEE MEJORADAS =====
 def calcular_recomendaciones_npk_cientificas(gdf_analizado, nutriente, cultivo):
-    """Calcula recomendaciones basadas en metodologías científicas"""
+    """Calcula recomendaciones basadas en metodologías científicas - CORREGIDO"""
+    import copy
     recomendaciones = []
-    params = PARAMETROS_CULTIVOS[cultivo]
+    params = copy.deepcopy(PARAMETROS_CULTIVOS[cultivo])
     
     # Si es maíz y hay variedad seleccionada, usar esos parámetros
     if cultivo == "MAÍZ" and 'variedad_maiz' in st.session_state:
@@ -2438,7 +2439,7 @@ def calcular_recomendaciones_npk_cientificas(gdf_analizado, nutriente, cultivo):
             params['NITROGENO']['optimo'] = variedad_params['NITROGENO_OPTIMO']
         elif nutriente == "FÓSFORO":
             params['FOSFORO']['optimo'] = variedad_params['FOSFORO_OPTIMO']
-        else:
+        elif nutriente == "POTASIO":
             params['POTASIO']['optimo'] = variedad_params['POTASIO_OPTIMO']
     
     for idx, row in gdf_analizado.iterrows():
@@ -3201,9 +3202,9 @@ def generar_reporte_docx(gdf_analizado, cultivo, analisis_tipo, area_total,
         st.error(f"Detalle: {traceback.format_exc()}")
         return None
 
-# ===== FUNCIONES DE VISUALIZACIÓN MEJORADAS CON MAPAS ESRI =====
+# ===== FUNCIÓN CORREGIDA crear_mapa_npk_con_esri =====
 def crear_mapa_npk_con_esri(gdf_analizado, nutriente, cultivo, satelite):
-    """Crea mapa de NPK con fondo ESRI Satellite"""
+    """Crea mapa de NPK con fondo ESRI Satellite - CORREGIDO"""
     try:
         # Convertir a Web Mercator para el mapa base
         gdf_plot = gdf_analizado.to_crs(epsg=3857)
@@ -3214,25 +3215,32 @@ def crear_mapa_npk_con_esri(gdf_analizado, nutriente, cultivo, satelite):
         fig.patch.set_facecolor('#0f172a')
         ax.set_facecolor('#0f172a')
         
+        # Mapear nutriente con tilde a clave sin tilde
+        mapeo_nutriente = {
+            'NITRÓGENO': ('nitrogeno_actual', 'NITROGENO', 'NITRÓGENO (kg/ha)'),
+            'FÓSFORO': ('fosforo_actual', 'FOSFORO', 'FÓSFORO (kg/ha)'),
+            'POTASIO': ('potasio_actual', 'POTASIO', 'POTASIO (kg/ha)')
+        }
+        
+        if nutriente not in mapeo_nutriente:
+            st.error(f"❌ Nutriente '{nutriente}' no reconocido")
+            return None
+            
+        columna, clave_param, titulo_nutriente = mapeo_nutriente[nutriente]
+        
         # Seleccionar columna y paleta según nutriente
         if nutriente == "NITRÓGENO":
-            columna = 'nitrogeno_actual'
-            cmap = LinearSegmentedColormap.from_list('nitrogeno_gee', PALETAS_GEE['NITRÓGENO'])
+            cmap = LinearSegmentedColormap.from_list('nitrogeno_gee', PALETAS_GEE['NITROGENO'])
             vmin = PARAMETROS_CULTIVOS[cultivo]['NITROGENO']['min'] * 0.7
             vmax = PARAMETROS_CULTIVOS[cultivo]['NITROGENO']['max'] * 1.2
-            titulo_nutriente = "NITRÓGENO (kg/ha)"
         elif nutriente == "FÓSFORO":
-            columna = 'fosforo_actual'
             cmap = LinearSegmentedColormap.from_list('fosforo_gee', PALETAS_GEE['FOSFORO'])
             vmin = PARAMETROS_CULTIVOS[cultivo]['FOSFORO']['min'] * 0.7
             vmax = PARAMETROS_CULTIVOS[cultivo]['FOSFORO']['max'] * 1.2
-            titulo_nutriente = "FÓSFORO (kg/ha)"
         else:  # POTASIO
-            columna = 'potasio_actual'
             cmap = LinearSegmentedColormap.from_list('potasio_gee', PALETAS_GEE['POTASIO'])
             vmin = PARAMETROS_CULTIVOS[cultivo]['POTASIO']['min'] * 0.7
-            vmax = PARAMETROS_CULTivos[cultivo]['POTASIO']['max'] * 1.2
-            titulo_nutriente = "POTASIO (kg/ha)"
+            vmax = PARAMETROS_CULTIVOS[cultivo]['POTASIO']['max'] * 1.2
         
         # Plot de las zonas con colores según valor
         for idx, row in gdf_plot.iterrows():
@@ -3281,6 +3289,8 @@ def crear_mapa_npk_con_esri(gdf_analizado, nutriente, cultivo, satelite):
         return buf
     except Exception as e:
         st.error(f"❌ Error creando mapa NPK con ESRI: {str(e)}")
+        import traceback
+        st.error(f"Detalle: {traceback.format_exc()}")
         return None
 
 def crear_mapa_fertilidad_integrada(gdf_analizado, cultivo, satelite):
@@ -3812,7 +3822,7 @@ if uploaded_file:
                             cultivo, satelite_seleccionado, indice_seleccionado,
                             fecha_inicio, fecha_fin
                         )
-                    elif analisis_tipo == "ANÁLISIS DE CURVas DE NIVEL":
+                    elif analisis_tipo == "ANÁLISIS DE CURVAS DE NIVEL":
                         resultados = ejecutar_analisis(
                             gdf, None, analisis_tipo, n_divisiones,
                             cultivo, None, None, None, None,
@@ -4227,19 +4237,19 @@ with st.expander("🔬 METODOLOGÍA CIENTÍFICA APLICADA"):
     
     **NITRÓGENO (N):**
     - **Método:** NDRE + Regresión Espectral (Clevers & Gitelson, 2013)
-    - **Fórmula:** `N = 150 × NDRE + 50 × (B8A/B5)`
+    - **Fórmula:** `N = 150 * NDRE + 50 * (B8A/B5)`
     - **Bandas:** B5 (Red Edge 1), B8A (Red Edge 4)
     - **Precisión esperada:** R² = 0.75
     
     **FÓSFORO (P):**
     - **Método:** Índice SWIR-VIS (Miphokasap et al., 2012)
-    - **Fórmula:** `P = 80 × (B11/B4)^0.5 + 20`
+    - **Fórmula:** `P = 80 * (B11/B4)^0.5 + 20`
     - **Bandas:** B4 (Rojo), B11 (SWIR 1)
     - **Precisión esperada:** R² = 0.65
     
     **POTASIO (K):**
     - **Método:** Índice de Estrés Hídrico (Jackson et al., 2004)
-    - **Fórmula:** `K = 120 × NDII + 40 × (B8/B12)`
+    - **Fórmula:** `K = 120 * NDII + 40 * (B8/B12)`
     - **Bandas:** B8 (NIR), B11 (SWIR 1), B12 (SWIR 2)
     - **Precisión esperada:** R² = 0.70
     
