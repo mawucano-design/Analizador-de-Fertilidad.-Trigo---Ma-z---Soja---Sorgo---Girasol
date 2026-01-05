@@ -2044,24 +2044,25 @@ def realizar_analisis_economico(gdf_analizado, cultivo, variedad_params, area_to
     rend_proy_prom = gdf_analizado['rendimiento_proyectado'].mean()
     incremento_prom = gdf_analizado['incremento_rendimiento'].mean()
     
-    # Calcular fertilizante necesario (promedio por ha)
+    # === CÁLCULO DE FERTILIZANTES NECESARIOS ===
     fertilizante_necesario = {
         'NITRÓGENO': 0,
         'FÓSFORO': 0,
         'POTASIO': 0
     }
     
-    if 'valor_recomendado' in gdf_analizado.columns:
-        # Solo para análisis de recomendaciones NPK
-        for nutriente in ['NITRÓGENO', 'FÓSFORO', 'POTASIO']:
-            if f'{nutriente.lower()}_recomendado' in gdf_analizado.columns:
-                col_name = f'{nutriente.lower()}_recomendado'
-                fertilizante_necesario[nutriente] = gdf_analizado[col_name].mean()
+    # Solo calcular si hay columnas de recomendaciones
+    has_recommendations = False
+    for nutriente in ['NITRÓGENO', 'FÓSFORO', 'POTASIO']:
+        col_name = f'{nutriente.lower()}_recomendado'
+        if col_name in gdf_analizado.columns:
+            fertilizante_necesario[nutriente] = gdf_analizado[col_name].mean()
+            has_recommendations = True
     
     # === CÁLCULO DE COSTOS ===
     costos = {}
     
-    # 1. Costos fijos (por ha)
+    # 1. Costos fijos por hectárea (sin fertilización)
     costos['semilla'] = precios_cultivo['costo_semilla']
     costos['herbicidas'] = precios_cultivo['costo_herbicidas']
     costos['insecticidas'] = precios_cultivo['costo_insecticidas']
@@ -2069,57 +2070,75 @@ def realizar_analisis_economico(gdf_analizado, cultivo, variedad_params, area_to
     costos['cosecha'] = precios_cultivo['costo_cosecha']
     costos['otros'] = precios_cultivo['costo_otros']
     
-    # 2. Costos de fertilización
+    # 2. Costos de fertilización (si hay recomendaciones)
     costos_fertilizacion = 0
+    detalles_fertilizacion = {
+        'NITRÓGENO': {'cantidad_kg_ha': 0, 'costo_usd_ha': 0},
+        'FÓSFORO': {'cantidad_kg_ha': 0, 'costo_usd_ha': 0},
+        'POTASIO': {'cantidad_kg_ha': 0, 'costo_usd_ha': 0}
+    }
     
-    # Nitrógeno
-    if fertilizante_necesario['NITRÓGENO'] > 0:
-        fuente_n = conversion['NITRÓGENO']['fuente_principal']
-        contenido_n = conversion['NITRÓGENO']['contenido_nutriente']
-        eficiencia_n = conversion['NITRÓGENO']['eficiencia']
+    if has_recommendations:
+        # Nitrógeno
+        if fertilizante_necesario['NITRÓGENO'] > 0:
+            fuente_n = conversion['NITRÓGENO']['fuente_principal']
+            contenido_n = conversion['NITRÓGENO']['contenido_nutriente']
+            eficiencia_n = conversion['NITRÓGENO']['eficiencia']
+            
+            # Cantidad de fertilizante necesaria (kg/ha)
+            kg_fertilizante_n = (fertilizante_necesario['NITRÓGENO'] / contenido_n) / eficiencia_n
+            costo_n = (kg_fertilizante_n / 1000) * precios_fert[fuente_n]
+            costos_fertilizacion += costo_n
+            detalles_fertilizacion['NITRÓGENO'] = {
+                'cantidad_kg_ha': round(kg_fertilizante_n, 1),
+                'costo_usd_ha': round(costo_n, 1)
+            }
         
-        # Cantidad de fertilizante necesaria (kg/ha)
-        kg_fertilizante_n = (fertilizante_necesario['NITRÓGENO'] / contenido_n) / eficiencia_n
-        costo_n = (kg_fertilizante_n / 1000) * precios_fert[fuente_n]
-        costos_fertilizacion += costo_n
-    
-    # Fósforo
-    if fertilizante_necesario['FÓSFORO'] > 0:
-        fuente_p = conversion['FÓSFORO']['fuente_principal']
-        contenido_p = conversion['FÓSFORO']['contenido_nutriente']
-        eficiencia_p = conversion['FÓSFORO']['eficiencia']
+        # Fósforo
+        if fertilizante_necesario['FÓSFORO'] > 0:
+            fuente_p = conversion['FÓSFORO']['fuente_principal']
+            contenido_p = conversion['FÓSFORO']['contenido_nutriente']
+            eficiencia_p = conversion['FÓSFORO']['eficiencia']
+            
+            kg_fertilizante_p = (fertilizante_necesario['FÓSFORO'] / contenido_p) / eficiencia_p
+            costo_p = (kg_fertilizante_p / 1000) * precios_fert[fuente_p]
+            costos_fertilizacion += costo_p
+            detalles_fertilizacion['FÓSFORO'] = {
+                'cantidad_kg_ha': round(kg_fertilizante_p, 1),
+                'costo_usd_ha': round(costo_p, 1)
+            }
         
-        kg_fertilizante_p = (fertilizante_necesario['FÓSFORO'] / contenido_p) / eficiencia_p
-        costo_p = (kg_fertilizante_p / 1000) * precios_fert[fuente_p]
-        costos_fertilizacion += costo_p
+        # Potasio
+        if fertilizante_necesario['POTASIO'] > 0:
+            fuente_k = conversion['POTASIO']['fuente_principal']
+            contenido_k = conversion['POTASIO']['contenido_nutriente']
+            eficiencia_k = conversion['POTASIO']['eficiencia']
+            
+            kg_fertilizante_k = (fertilizante_necesario['POTASIO'] / contenido_k) / eficiencia_k
+            costo_k = (kg_fertilizante_k / 1000) * precios_fert[fuente_k]
+            costos_fertilizacion += costo_k
+            detalles_fertilizacion['POTASIO'] = {
+                'cantidad_kg_ha': round(kg_fertilizante_k, 1),
+                'costo_usd_ha': round(costo_k, 1)
+            }
     
-    # Potasio
-    if fertilizante_necesario['POTASIO'] > 0:
-        fuente_k = conversion['POTASIO']['fuente_principal']
-        contenido_k = conversion['POTASIO']['contenido_nutriente']
-        eficiencia_k = conversion['POTASIO']['eficiencia']
-        
-        kg_fertilizante_k = (fertilizante_necesario['POTASIO'] / contenido_k) / eficiencia_k
-        costo_k = (kg_fertilizante_k / 1000) * precios_fert[fuente_k]
-        costos_fertilizacion += costo_k
+    costos['fertilizacion'] = round(costos_fertilizacion, 1)
     
-    costos['fertilizacion'] = costos_fertilizacion
-    
-    # Costo total por ha
-    costo_total_ha = sum(costos.values())
+    # Costo total por hectárea
+    costo_total_ha = sum([v for v in costos.values() if isinstance(v, (int, float))])
     
     # === CÁLCULO DE INGRESOS ===
     # Escenario actual (sin fertilización)
     ingresos_actual_ha = rend_actual_prom * precios_cultivo['precio_ton']
-    margen_actual_ha = ingresos_actual_ha - costo_total_ha + costos['fertilizacion']  # Sin costo de fertilización
+    margen_actual_ha = ingresos_actual_ha - (costo_total_ha - costos['fertilizacion'])
     
     # Escenario proyectado (con fertilización)
     ingresos_proy_ha = rend_proy_prom * precios_cultivo['precio_ton']
     margen_proy_ha = ingresos_proy_ha - costo_total_ha
     
     # === CÁLCULO DE INDICADORES FINANCIEROS ===
-    # 1. Incremento de margen por ha
-    incremento_margen_ha = margen_proy_ha - margen_actual_ha
+    # 1. Incremento de margen por hectárea
+    incremento_margen_ha = max(0, margen_proy_ha - margen_actual_ha)
     
     # 2. Retorno sobre inversión en fertilización (ROI)
     if costos_fertilizacion > 0:
@@ -2135,18 +2154,20 @@ def realizar_analisis_economico(gdf_analizado, cultivo, variedad_params, area_to
         relacion_bc_actual = 0
         relacion_bc_proy = 0
     
-    # 4. VAN (Valor Actual Neto) para 5 años
+    # 4. VAN (Valor Actual Neto) para el período de análisis
     flujos = []
     for año in range(financieros['periodo_analisis']):
         # Ajustar por inflación
         factor_inflacion = (1 + financieros['inflacion_esperada']) ** año
         
-        # Flujo neto anual (considerando impuestos y subsidios)
+        # Flujo neto anual
         flujo_neto = incremento_margen_ha * area_total * factor_inflacion
-        flujo_neto = flujo_neto * (1 - financieros['impuestos'])  # Después de impuestos
-        flujo_neto = flujo_neto * (1 + financieros['subsidios'])  # Con subsidios
         
-        # Inversión inicial solo en el año 0 (costo de fertilización)
+        # Ajustar por impuestos y subsidios
+        flujo_neto = flujo_neto * (1 - financieros['impuestos'])
+        flujo_neto = flujo_neto * (1 + financieros['subsidios'])
+        
+        # Inversión inicial en el año 0 (costo de fertilización)
         if año == 0:
             flujo_neto -= costos_fertilizacion * area_total
         
@@ -2157,12 +2178,12 @@ def realizar_analisis_economico(gdf_analizado, cultivo, variedad_params, area_to
     for t, flujo in enumerate(flujos):
         van += flujo / ((1 + financieros['tasa_descuento']) ** t)
     
-    # 5. TIR (Tasa Interna de Retorno) - aproximación
-    def calcular_tir(flujos):
-        """Calcula TIR por prueba y error"""
+    # 5. TIR (Tasa Interna de Retorno) - aproximación por bisección
+    def calcular_tir(flujos_calculados):
+        """Calcula TIR por método de bisección"""
         def npv(tasa):
             npv_val = 0
-            for t, flujo in enumerate(flujos):
+            for t, flujo in enumerate(flujos_calculados):
                 npv_val += flujo / ((1 + tasa) ** t)
             return npv_val
         
@@ -2190,50 +2211,79 @@ def realizar_analisis_economico(gdf_analizado, cultivo, variedad_params, area_to
     resultados_economicos = {
         # Información básica
         'cultivo': cultivo,
-        'area_total_ha': area_total,
+        'area_total_ha': round(area_total, 2),
         'variedad': st.session_state.get('variedad', 'No especificada'),
         
         # Rendimientos
-        'rendimiento_actual_ton_ha': rend_actual_prom,
-        'rendimiento_proy_ton_ha': rend_proy_prom,
-        'incremento_rendimiento_ton_ha': incremento_prom,
+        'rendimiento_actual_ton_ha': round(rend_actual_prom, 1),
+        'rendimiento_proy_ton_ha': round(rend_proy_prom, 1),
+        'incremento_rendimiento_ton_ha': round(incremento_prom, 1),
         
         # Costos (USD/ha)
-        'costo_total_ha': costo_total_ha,
-        'costo_fertilizacion_ha': costos_fertilizacion,
-        'costo_semilla_ha': costos['semilla'],
-        'costo_insumos_ha': costos['herbicidas'] + costos['insecticidas'] + costos['otros'],
+        'costo_total_ha': round(costo_total_ha, 1),
+        'costo_fertilizacion_ha': round(costos_fertilizacion, 1),
+        'costo_semilla_ha': round(costos['semilla'], 1),
+        'costo_insumos_ha': round(costos['herbicidas'] + costos['insecticidas'] + costos['otros'], 1),
+        'detalles_fertilizacion': detalles_fertilizacion,
         
         # Ingresos (USD/ha)
-        'ingreso_actual_ha': ingresos_actual_ha,
-        'ingreso_proy_ha': ingresos_proy_ha,
+        'ingreso_actual_ha': round(ingresos_actual_ha, 1),
+        'ingreso_proy_ha': round(ingresos_proy_ha, 1),
         
         # Margenes (USD/ha)
-        'margen_actual_ha': margen_actual_ha,
-        'margen_proy_ha': margen_proy_ha,
-        'incremento_margen_ha': incremento_margen_ha,
+        'margen_actual_ha': round(margen_actual_ha, 1),
+        'margen_proy_ha': round(margen_proy_ha, 1),
+        'incremento_margen_ha': round(incremento_margen_ha, 1),
         
         # Indicadores financieros
-        'roi_fertilizacion_%': roi_fertilizacion,
-        'relacion_bc_actual': relacion_bc_actual,
-        'relacion_bc_proy': relacion_bc_proy,
-        'van_usd': van,
-        'tir_%': tir,
-        'punto_equilibrio_ha': punto_equilibrio_ha,
+        'roi_fertilizacion_%': round(roi_fertilizacion, 1),
+        'relacion_bc_actual': round(relacion_bc_actual, 2),
+        'relacion_bc_proy': round(relacion_bc_proy, 2),
+        'van_usd': round(van, 0),
+        'tir_%': round(tir, 1),
+        'punto_equilibrio_ha': round(punto_equilibrio_ha, 2),
         
         # Totales para la parcela
-        'incremento_produccion_total_ton': incremento_prom * area_total,
-        'incremento_ingreso_total_usd': incremento_margen_ha * area_total,
-        'costo_fertilizacion_total_usd': costos_fertilizacion * area_total
+        'incremento_produccion_total_ton': round(incremento_prom * area_total, 1),
+        'incremento_ingreso_total_usd': round(incremento_margen_ha * area_total, 0),
+        'costo_fertilizacion_total_usd': round(costos_fertilizacion * area_total, 0),
+        
+        # Parámetros utilizados
+        'precio_tonelada': precios_cultivo['precio_ton'],
+        'tasa_descuento': financieros['tasa_descuento'] * 100,
+        'periodo_analisis': financieros['periodo_analisis']
     }
     
     return resultados_economicos
+
+def mostrar_detalles_fertilizacion(detalles):
+    """Muestra los detalles de fertilización en formato de tabla"""
+    if not detalles:
+        return None
+    
+    df_fert = pd.DataFrame([
+        {
+            'Nutriente': nut,
+            'Fertilizante': PARAMETROS_ECONOMICOS['CONVERSION_NUTRIENTES'][nut]['fuente_principal'],
+            'Cantidad (kg/ha)': det['cantidad_kg_ha'],
+            'Costo (USD/ha)': det['costo_usd_ha']
+        }
+        for nut, det in detalles.items() if det['cantidad_kg_ha'] > 0
+    ])
+    
+    if not df_fert.empty:
+        st.markdown("#### 🧪 DETALLES DE FERTILIZACIÓN")
+        st.dataframe(df_fert, use_container_width=True)
 
 def mostrar_analisis_economico(resultados_economicos):
     """Muestra el análisis económico en una interfaz atractiva"""
     
     st.markdown("---")
     st.subheader("💰 ANÁLISIS ECONÓMICO AGRÍCOLA")
+    
+    # Mostrar detalles de fertilización si existen
+    if 'detalles_fertilizacion' in resultados_economicos:
+        mostrar_detalles_fertilizacion(resultados_economicos['detalles_fertilizacion'])
     
     # Métricas principales
     col1, col2, col3, col4 = st.columns(4)
@@ -2368,11 +2418,7 @@ def mostrar_analisis_economico(resultados_economicos):
             ax.tick_params(colors='white')
             
             # Agregar valores en las barras
-            if ax == ax1:
-                bars = bars1
-            else:
-                bars = bars2
-                
+            bars = bars1 if ax == ax1 else bars2
             for bar in bars:
                 height = bar.get_height()
                 ax.text(bar.get_x() + bar.get_width()/2., height + 10,
@@ -2396,9 +2442,8 @@ def mostrar_analisis_economico(resultados_economicos):
     
     with tab4:
         # Proyección de flujos de caja
-        st.markdown("#### 📅 PROYECCIÓN DE FLUJOS DE CAJA (5 AÑOS)")
+        st.markdown("#### 📅 PROYECCIÓN DE FLUJOS DE CAJA")
         
-        # Calcular flujos para la proyección
         financieros = PARAMETROS_ECONOMICOS['PARAMETROS_FINANCIEROS']
         flujos_proyectados = []
         
@@ -2457,7 +2502,7 @@ def mostrar_analisis_economico(resultados_economicos):
             st.success("**INVERTIR EN FERTILIZACIÓN:** ROI > 100% indica excelente retorno")
         if resultados_economicos['van_usd'] > 0:
             st.success("**PROYECTO VIABLE:** VAN positivo genera valor económico")
-        if resultados_economicos['tir_%'] > PARAMETROS_ECONOMICOS['PARAMETROS_FINANCIEROS']['tasa_descuento'] * 100:
+        if resultados_economicos['tir_%'] > resultados_economicos['tasa_descuento']:
             st.success(f"**TIR ATRACTIVA:** {resultados_economicos['tir_%']:.1f}% supera la tasa de descuento")
         
         # Recomendación específica por cultivo
@@ -2465,12 +2510,18 @@ def mostrar_analisis_economico(resultados_economicos):
             st.info("Para maíz: Considerar fertilización nitrogenada en dosis divididas")
         elif resultados_economicos['cultivo'] == "SOYA":
             st.info("Para soja: Optimizar inoculación y manejo de fósforo")
+        elif resultados_economicos['cultivo'] == "TRIGO":
+            st.info("Para trigo: Priorizar nitrógeno en macollamiento y encañazón")
+        elif resultados_economicos['cultivo'] == "GIRASOL":
+            st.info("Para girasol: Aplicar potasio para mejorar calidad de semilla")
     
     with rec_col2:
         st.markdown("##### ⚠️ CONSIDERACIONES")
         st.warning("**RIESGOS CLIMÁTICOS:** Considerar seguro agrícola")
         st.warning("**VOLATILIDAD PRECIOS:** Diversificar cultivos si es posible")
         st.warning("**COSTOS LOGÍSTICOS:** Incluir en análisis de rentabilidad")
+        if resultados_economicos['punto_equilibrio_ha'] > 0:
+            st.info(f"**PUNTO DE EQUILIBRIO:** {resultados_economicos['punto_equilibrio_ha']:.1f} ha para recuperar inversión")
     
     # Descargar análisis económico
     st.markdown("---")
@@ -2478,7 +2529,8 @@ def mostrar_analisis_economico(resultados_economicos):
     
     if st.button("📊 Generar Reporte Económico (Excel)"):
         # Crear DataFrame para Excel
-        df_economico = pd.DataFrame([resultados_economicos])
+        df_economico = pd.DataFrame([{k:v for k,v in resultados_economicos.items() 
+                                    if k not in ['detalles_fertilizacion']}])
         
         # Crear Excel con múltiples hojas
         excel_buffer = BytesIO()
