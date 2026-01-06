@@ -2029,6 +2029,136 @@ def calcular_rendimiento_con_recomendaciones(gdf_analizado, cultivo):
     
     return rendimientos
 
+# ===== FUNCIONES PARA CÁLCULO DE RENDIMIENTO MEJORADAS =====
+def obtener_parametros_rendimiento(cultivo):
+    """Obtiene parámetros de rendimiento según cultivo y variedad"""
+    if 'variedad_params' in st.session_state and st.session_state['variedad_params']:
+        variedad_params = st.session_state['variedad_params']
+        params = PARAMETROS_CULTIVOS[cultivo].copy()
+        
+        # Actualizar con parámetros de la variedad
+        params.update({
+            'RENDIMIENTO_BASE': variedad_params['RENDIMIENTO_BASE'],
+            'RENDIMIENTO_OPTIMO': variedad_params['RENDIMIENTO_OPTIMO'],
+            'RESPUESTA_N': variedad_params['RESPUESTA_N'],
+            'RESPUESTA_P': variedad_params['RESPUESTA_P'],
+            'RESPUESTA_K': variedad_params['RESPUESTA_K'],
+            'NITROGENO': {'optimo': variedad_params['NITROGENO_OPTIMO']},
+            'FOSFORO': {'optimo': variedad_params['FOSFORO_OPTIMO']},
+            'POTASIO': {'optimo': variedad_params['POTASIO_OPTIMO']}
+        })
+        return params
+    else:
+        return PARAMETROS_CULTIVOS[cultivo]
+
+def calcular_rendimiento_potencial(gdf_analizado, cultivo):
+    """Calcula el rendimiento potencial actual basado en fertilidad existente"""
+    params = obtener_parametros_rendimiento(cultivo)
+    rendimientos = []
+    
+    for idx, row in gdf_analizado.iterrows():
+        # Factor de fertilidad actual (0-1)
+        factor_fertilidad = row['npk_integrado']
+        
+        # Factor de humedad (NDWI ajustado)
+        factor_humedad = min(1.0, row['ndwi'] / 0.4) if 'ndwi' in row and not pd.isna(row['ndwi']) else 0.7
+        
+        # Factor de vigor vegetativo (NDVI)
+        factor_vigor = min(1.2, row['ndvi'] / params.get('NDVI_OPTIMO', 0.8))
+        
+        # Factor climático base
+        factor_clima = params['FACTOR_CLIMA']
+        
+        # Cálculo de rendimiento base
+        rendimiento_base = params['RENDIMIENTO_BASE']
+        
+        # Ajuste por fertilidad actual
+        ajuste_fertilidad = 0.5 + (factor_fertilidad * 0.5)  # Entre 0.5 y 1.0
+        
+        # Rendimiento potencial estimado
+        rendimiento_potencial = (
+            rendimiento_base * 
+            ajuste_fertilidad * 
+            factor_humedad * 
+            factor_vigor * 
+            factor_clima
+        )
+        
+        # Límite máximo por defecto
+        rendimiento_potencial = min(rendimiento_potencial, params['RENDIMIENTO_OPTIMO'] * 1.1)
+        
+        rendimientos.append(round(rendimiento_potencial, 2))
+    
+    return rendimientos
+
+def calcular_rendimiento_con_recomendaciones(gdf_analizado, cultivo):
+    """Calcula el rendimiento proyectado aplicando recomendaciones NPK"""
+    params = obtener_parametros_rendimiento(cultivo)
+    rendimientos = []
+    
+    for idx, row in gdf_analizado.iterrows():
+        # Rendimiento base actual
+        factor_fertilidad = row['npk_integrado']
+        factor_humedad = min(1.0, row['ndwi'] / 0.4) if 'ndwi' in row and not pd.isna(row['ndwi']) else 0.7
+        factor_vigor = min(1.2, row['ndvi'] / params.get('NDVI_OPTIMO', 0.8))
+        factor_clima = params['FACTOR_CLIMA']
+        
+        rendimiento_base = params['RENDIMIENTO_BASE']
+        ajuste_fertilidad = 0.5 + (factor_fertilidad * 0.5)
+        
+        rendimiento_actual = (
+            rendimiento_base * 
+            ajuste_fertilidad * 
+            factor_humedad * 
+            factor_vigor * 
+            factor_clima
+        )
+        
+        # Calcular incremento por fertilización basado en deficiencias
+        incremento_total = 0
+        
+        # Incremento por Nitrógeno (usando la columna de recomendación)
+        if 'nitrogeno_recomendado' in row and row['nitrogeno_recomendado'] > 0:
+            n_actual = row['nitrogeno_actual']
+            n_optimo = params['NITROGENO']['optimo']
+            if n_actual < n_optimo * 0.9:  # Si hay deficiencia significativa
+                deficiencia_n = max(0, n_optimo - n_actual)
+                # El incremento es proporcional a la respuesta del cultivo y la eficiencia de aplicación
+                incremento_n = deficiencia_n * params['RESPUESTA_N'] * 0.7  # 70% de eficiencia
+                incremento_total += min(incremento_n, deficiencia_n * params['RESPUESTA_N'])
+        
+        # Incremento por Fósforo
+        if 'fosforo_recomendado' in row and row['fosforo_recomendado'] > 0:
+            p_actual = row['fosforo_actual']
+            p_optimo = params['FOSFORO']['optimo']
+            if p_actual < p_optimo * 0.85:
+                deficiencia_p = max(0, p_optimo - p_actual)
+                incremento_p = deficiencia_p * params['RESPUESTA_P'] * 0.5  # 50% de eficiencia
+                incremento_total += incremento_p
+        
+        # Incremento por Potasio
+        if 'potasio_recomendado' in row and row['potasio_recomendado'] > 0:
+            k_actual = row['potasio_actual']
+            k_optimo = params['POTASIO']['optimo']
+            if k_actual < k_optimo * 0.85:
+                deficiencia_k = max(0, k_optimo - k_actual)
+                incremento_k = deficiencia_k * params['RESPUESTA_K'] * 0.6  # 60% de eficiencia
+                incremento_total += incremento_k
+        
+        # Rendimiento con recomendaciones
+        rendimiento_proyectado = rendimiento_actual + incremento_total
+        
+        # Límite máximo realista (20% sobre el óptimo)
+        rendimiento_max = params['RENDIMIENTO_OPTIMO'] * 1.2
+        rendimiento_proyectado = min(rendimiento_proyectado, rendimiento_max)
+        
+        # Asegurar que no sea menor que el rendimiento actual
+        rendimiento_proyectado = max(rendimiento_proyectado, rendimiento_actual)
+        
+        rendimientos.append(round(rendimiento_proyectado, 2))
+    
+    return rendimientos
+
 # ===== FUNCIONES PARA ANÁLISIS ECONÓMICO =====
 def realizar_analisis_economico(gdf_analizado, cultivo, variedad_params, area_total):
     """Realiza análisis económico completo (VAN, TIR, B/C) para la parcela"""
@@ -2130,7 +2260,9 @@ def realizar_analisis_economico(gdf_analizado, cultivo, variedad_params, area_to
     # === CÁLCULO DE INGRESOS ===
     # Escenario actual (sin fertilización)
     ingresos_actual_ha = rend_actual_prom * precios_cultivo['precio_ton']
-    margen_actual_ha = ingresos_actual_ha - (costo_total_ha - costos['fertilizacion'])
+    # En escenario actual no incluye costos de fertilización
+    costo_actual_ha = costo_total_ha - costos['fertilizacion']
+    margen_actual_ha = ingresos_actual_ha - costo_actual_ha
     
     # Escenario proyectado (con fertilización)
     ingresos_proy_ha = rend_proy_prom * precios_cultivo['precio_ton']
@@ -2146,39 +2278,43 @@ def realizar_analisis_economico(gdf_analizado, cultivo, variedad_params, area_to
     else:
         roi_fertilizacion = 0
     
-    # 3. Relación Beneficio/Costo (B/C)
-    if costo_total_ha > 0:
-        relacion_bc_actual = margen_actual_ha / costo_total_ha
-        relacion_bc_proy = margen_proy_ha / costo_total_ha
+    # 3. Relación Beneficio/Costo (B/C) - mejorada
+    if costo_actual_ha > 0:
+        relacion_bc_actual = margen_actual_ha / costo_actual_ha
     else:
         relacion_bc_actual = 0
+    
+    if costo_total_ha > 0:
+        relacion_bc_proy = margen_proy_ha / costo_total_ha
+    else:
         relacion_bc_proy = 0
     
-    # 4. VAN (Valor Actual Neto) para el período de análisis
+    # 4. VAN (Valor Actual Neto) para el período de análisis - CORREGIDO
     flujos = []
-    for año in range(financieros['periodo_analisis']):
-        # Ajustar por inflación
-        factor_inflacion = (1 + financieros['inflacion_esperada']) ** año
-        
-        # Flujo neto anual
-        flujo_neto = incremento_margen_ha * area_total * factor_inflacion
-        
-        # Ajustar por impuestos y subsidios
-        flujo_neto = flujo_neto * (1 - financieros['impuestos'])
-        flujo_neto = flujo_neto * (1 + financieros['subsidios'])
-        
-        # Inversión inicial en el año 0 (costo de fertilización)
+    for año in range(financieros['periodo_analisis'] + 1):  # Incluye año 0
         if año == 0:
-            flujo_neto -= costos_fertilizacion * area_total
+            # Año 0: solo inversión inicial en fertilización
+            flujo_neto = -costos_fertilizacion * area_total
+        else:
+            # Años 1 en adelante: flujo neto anual por incremento de margen
+            flujo_neto = incremento_margen_ha * area_total
+            
+            # Ajustar por inflación
+            factor_inflacion = (1 + financieros['inflacion_esperada']) ** (año - 1)
+            flujo_neto *= factor_inflacion
+            
+            # Ajustar por impuestos y subsidios
+            flujo_neto = flujo_neto * (1 - financieros['impuestos'])
+            flujo_neto = flujo_neto * (1 + financieros['subsidios'])
         
         flujos.append(flujo_neto)
     
-    # Calcular VAN
+    # Calcular VAN con tasa de descuento
     van = 0
     for t, flujo in enumerate(flujos):
         van += flujo / ((1 + financieros['tasa_descuento']) ** t)
     
-    # 5. TIR (Tasa Interna de Retorno) - aproximación por bisección
+    # 5. TIR (Tasa Interna de Retorno) - aproximación por bisección CORREGIDA
     def calcular_tir(flujos_calculados):
         """Calcula TIR por método de bisección"""
         def npv(tasa):
@@ -2187,9 +2323,15 @@ def realizar_analisis_economico(gdf_analizado, cultivo, variedad_params, area_to
                 npv_val += flujo / ((1 + tasa) ** t)
             return npv_val
         
-        # Método de bisección
-        low = 0.0
-        high = 1.0  # 100%
+        # Método de bisección mejorado
+        low = -0.9  # Permitir tasas negativas hasta -90%
+        high = 5.0  # Hasta 500% como máximo
+        
+        # Verificar si hay cambio de signo en el NPV
+        if npv(low) * npv(high) > 0:
+            # No hay cambio de signo, no se puede calcular TIR
+            return 0.0
+        
         for _ in range(100):
             mid = (low + high) / 2
             if npv(mid) > 0:
@@ -2201,9 +2343,18 @@ def realizar_analisis_economico(gdf_analizado, cultivo, variedad_params, area_to
     
     tir = calcular_tir(flujos) * 100  # Convertir a porcentaje
     
-    # 6. Punto de equilibrio
-    if incremento_margen_ha > 0:
+    # 6. Punto de equilibrio (mejorado y CORREGIDO)
+    if incremento_margen_ha > 0 and costos_fertilizacion > 0:
+        # Punto de equilibrio en hectáreas: área mínima para cubrir costo de fertilización
         punto_equilibrio_ha = costos_fertilizacion / incremento_margen_ha
+        # Redondear a 1 decimal y asegurar que sea al menos 0.1 ha
+        punto_equilibrio_ha = max(0.1, round(punto_equilibrio_ha, 1))
+    elif incremento_margen_ha <= 0:
+        # Si no hay incremento de margen, la inversión nunca se recupera
+        punto_equilibrio_ha = float('inf')  # Representa infinito
+    elif costos_fertilizacion <= 0:
+        # Si no hay costos de fertilización, el punto de equilibrio es 0
+        punto_equilibrio_ha = 0
     else:
         punto_equilibrio_ha = 0
     
@@ -2241,7 +2392,7 @@ def realizar_analisis_economico(gdf_analizado, cultivo, variedad_params, area_to
         'relacion_bc_proy': round(relacion_bc_proy, 2),
         'van_usd': round(van, 0),
         'tir_%': round(tir, 1),
-        'punto_equilibrio_ha': round(punto_equilibrio_ha, 2),
+        'punto_equilibrio_ha': punto_equilibrio_ha if punto_equilibrio_ha != float('inf') else '∞',
         
         # Totales para la parcela
         'incremento_produccion_total_ton': round(incremento_prom * area_total, 1),
@@ -2310,9 +2461,10 @@ def mostrar_analisis_economico(resultados_economicos):
         )
     
     with col4:
+        tir_value = resultados_economicos['tir_%']
         st.metric(
             "🎯 TIR",
-            f"{resultados_economicos['tir_%']:.1f}%",
+            f"{tir_value:.1f}%" if isinstance(tir_value, (int, float)) else str(tir_value),
             delta_color="normal"
         )
     
@@ -2447,15 +2599,22 @@ def mostrar_analisis_economico(resultados_economicos):
         financieros = PARAMETROS_ECONOMICOS['PARAMETROS_FINANCIEROS']
         flujos_proyectados = []
         
-        for año in range(financieros['periodo_analisis']):
-            factor_inflacion = (1 + financieros['inflacion_esperada']) ** año
-            flujo_anual = resultados_economicos['incremento_margen_ha'] * resultados_economicos['area_total_ha'] * factor_inflacion
-            
+        for año in range(financieros['periodo_analisis'] + 1):
             if año == 0:
-                flujo_anual -= resultados_economicos['costo_fertilizacion_total_usd']
+                flujo_anual = -resultados_economicos['costo_fertilizacion_total_usd']
+            else:
+                flujo_anual = resultados_economicos['incremento_margen_ha'] * resultados_economicos['area_total_ha']
+                
+                # Ajustar por inflación
+                factor_inflacion = (1 + financieros['inflacion_esperada']) ** (año - 1)
+                flujo_anual *= factor_inflacion
+                
+                # Ajustar por impuestos y subsidios
+                flujo_anual = flujo_anual * (1 - financieros['impuestos'])
+                flujo_anual = flujo_anual * (1 + financieros['subsidios'])
             
             flujos_proyectados.append({
-                'Año': año + 1,
+                'Año': año,
                 'Flujo Neto (USD)': flujo_anual,
                 'Flujo Acumulado (USD)': sum(f['Flujo Neto (USD)'] for f in flujos_proyectados) + flujo_anual
             })
@@ -2522,13 +2681,14 @@ def crear_tablero_control_economico(resultados_economicos):
         """.format(van=resultados_economicos['van_usd']), unsafe_allow_html=True)
     
     with col3:
+        tir_value = resultados_economicos['tir_%']
         st.markdown("""
         <div class="dashboard-card">
             <h4>🎯 TASA INTERNA</h4>
-            <div class="stats-value">{tir}%</div>
+            <div class="stats-value">{tir}</div>
             <div class="stats-label">TIR del Proyecto</div>
         </div>
-        """.format(tir=resultados_economicos['tir_%']), unsafe_allow_html=True)
+        """.format(tir=f"{tir_value:.1f}%" if isinstance(tir_value, (int, float)) else str(tir_value)), unsafe_allow_html=True)
     
     with col4:
         st.markdown("""
@@ -2693,18 +2853,22 @@ def crear_tablero_control_economico(resultados_economicos):
     
     with col2:
         # Punto de equilibrio
+        punto_eq = resultados_economicos['punto_equilibrio_ha']
         st.markdown(f"""
         <div class="dashboard-card">
             <h4>⚖️ PUNTO EQUILIBRIO</h4>
-            <div class="stats-value">{resultados_economicos['punto_equilibrio_ha']:.1f} ha</div>
+            <div class="stats-value">{punto_eq if isinstance(punto_eq, str) else f'{punto_eq:.1f} ha'}</div>
             <div class="stats-label">Área mínima rentable</div>
         </div>
         """, unsafe_allow_html=True)
     
     with col3:
         # Margen de seguridad
-        margen_seguridad = ((resultados_economicos['margen_proy_ha'] - resultados_economicos['margen_actual_ha']) / 
-                           resultados_economicos['margen_proy_ha'] * 100)
+        if resultados_economicos['margen_proy_ha'] > 0:
+            margen_seguridad = ((resultados_economicos['margen_proy_ha'] - resultados_economicos['margen_actual_ha']) / 
+                               resultados_economicos['margen_proy_ha'] * 100)
+        else:
+            margen_seguridad = 0
         st.markdown(f"""
         <div class="dashboard-card">
             <h4>🛡️ MARGEN SEGURIDAD</h4>
@@ -2725,7 +2889,7 @@ def crear_tablero_control_economico(resultados_economicos):
             st.success("**INVERTIR EN FERTILIZACIÓN:** ROI > 100% indica excelente retorno")
         if resultados_economicos['van_usd'] > 0:
             st.success("**PROYECTO VIABLE:** VAN positivo genera valor económico")
-        if resultados_economicos['tir_%'] > resultados_economicos['tasa_descuento']:
+        if isinstance(resultados_economicos['tir_%'], (int, float)) and resultados_economicos['tir_%'] > resultados_economicos['tasa_descuento']:
             st.success(f"**TIR ATRACTIVA:** {resultados_economicos['tir_%']:.1f}% supera la tasa de descuento")
         
         # Recomendación específica por cultivo
@@ -2743,8 +2907,11 @@ def crear_tablero_control_economico(resultados_economicos):
         st.warning("**RIESGOS CLIMÁTICOS:** Considerar seguro agrícola")
         st.warning("**VOLATILIDAD PRECIOS:** Diversificar cultivos si es posible")
         st.warning("**COSTOS LOGÍSTICOS:** Incluir en análisis de rentabilidad")
-        if resultados_economicos['punto_equilibrio_ha'] > 0:
-            st.info(f"**PUNTO DE EQUILIBRIO:** {resultados_economicos['punto_equilibrio_ha']:.1f} ha para recuperar inversión")
+        punto_eq = resultados_economicos['punto_equilibrio_ha']
+        if isinstance(punto_eq, (int, float)) and punto_eq > 0:
+            st.info(f"**PUNTO DE EQUILIBRIO:** {punto_eq:.1f} ha para recuperar inversión")
+        elif punto_eq == float('inf') or punto_eq == '∞':
+            st.error("**NO RECOMENDABLE:** La inversión no se recupera con el área disponible")
     
     # Descargar análisis económico
     st.markdown("---")
@@ -2752,14 +2919,14 @@ def crear_tablero_control_economico(resultados_economicos):
     
     if st.button("📊 Generar Reporte Económico (Excel)"):
         # Crear DataFrame para Excel
-        df_economico = pd.DataFrame([{k:v for k,v in resultados_economicos.items() 
-                                    if k not in ['detalles_fertilizacion']}])
+        resultados_sin_detalles = {k:v for k,v in resultados_economicos.items() 
+                                   if k not in ['detalles_fertilizacion']}
         
         # Crear Excel con múltiples hojas
         excel_buffer = BytesIO()
         with pd.ExcelWriter(excel_buffer, engine='openpyxl') as writer:
             # Hoja 1: Resumen
-            df_economico.T.to_excel(writer, sheet_name='Resumen')
+            pd.DataFrame([resultados_sin_detalles]).T.to_excel(writer, sheet_name='Resumen', header=['Valor'])
             
             # Hoja 2: Costos detallados
             costos_det = pd.DataFrame({
@@ -2777,9 +2944,31 @@ def crear_tablero_control_economico(resultados_economicos):
             })
             costos_det.to_excel(writer, sheet_name='Costos', index=False)
             
-            # Hoja 3: Proyecciones
-            if 'flujos_proyectados' in locals():
-                pd.DataFrame(flujos_proyectados).to_excel(writer, sheet_name='Proyecciones', index=False)
+            # Hoja 3: Proyecciones de flujo de caja
+            financieros = PARAMETROS_ECONOMICOS['PARAMETROS_FINANCIEROS']
+            flujos_proyectados = []
+            
+            for año in range(financieros['periodo_analisis'] + 1):
+                if año == 0:
+                    flujo_anual = -resultados_economicos['costo_fertilizacion_total_usd']
+                else:
+                    flujo_anual = resultados_economicos['incremento_margen_ha'] * resultados_economicos['area_total_ha']
+                    
+                    # Ajustar por inflación
+                    factor_inflacion = (1 + financieros['inflacion_esperada']) ** (año - 1)
+                    flujo_anual *= factor_inflacion
+                    
+                    # Ajustar por impuestos y subsidios
+                    flujo_anual = flujo_anual * (1 - financieros['impuestos'])
+                    flujo_anual = flujo_anual * (1 + financieros['subsidios'])
+                
+                flujos_proyectados.append({
+                    'Año': año,
+                    'Flujo Neto (USD)': flujo_anual,
+                    'Flujo Acumulado (USD)': sum(f['Flujo Neto (USD)'] for f in flujos_proyectados) + flujo_anual
+                })
+            
+            pd.DataFrame(flujos_proyectados).to_excel(writer, sheet_name='Proyecciones', index=False)
         
         excel_buffer.seek(0)
         
