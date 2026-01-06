@@ -4906,10 +4906,10 @@ if uploaded_file:
                             cultivo, None, None, None, None
                         )
                     
-  try:
-    # ===== TABLA DE RESULTADOS =====
-    st.subheader("🔬 ÍNDICES SATELITALES Y NPK POR ZONA")
-    columnas_indices = ['id_zona', 'npk_integrado', 'nitrogeno_actual', 'fosforo_actual', 'potasio_actual']
+# ===== TABLA DE RESULTADOS =====
+    try:
+        st.subheader("🔬 ÍNDICES SATELITALES Y NPK POR ZONA")
+        columnas_indices = ['id_zona', 'npk_integrado', 'nitrogeno_actual', 'fosforo_actual', 'potasio_actual']
     if analisis_tipo == "RECOMENDACIONES NPK":
         columnas_indices = ['id_zona', 'valor_recomendado', 'nitrogeno_actual', 'fosforo_actual', 'potasio_actual']
     
