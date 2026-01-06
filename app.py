@@ -4906,8 +4906,7 @@ if uploaded_file:
                             cultivo, None, None, None, None
                         )
                     
-       # ===== PROCESAMIENTO DE RESULTADOS CON MANEJO DE ERRORES =====
-try:
+  try:
     # ===== TABLA DE RESULTADOS =====
     st.subheader("🔬 ÍNDICES SATELITALES Y NPK POR ZONA")
     columnas_indices = ['id_zona', 'npk_integrado', 'nitrogeno_actual', 'fosforo_actual', 'potasio_actual']
@@ -4935,32 +4934,32 @@ try:
     tabla_indices = tabla_indices.rename(columns={k: v for k, v in rename_dict.items() if k in tabla_indices.columns})
     st.dataframe(tabla_indices)
 
+    # GUARDAR RESULTADOS EN SESSION STATE
+    if resultados and resultados['exitoso']:
+        st.session_state['resultados_guardados'] = {
+            'gdf_analizado': resultados['gdf_analizado'],
+            'analisis_tipo': analisis_tipo,
+            'cultivo': cultivo,
+            'area_total': resultados['area_total'],
+            'nutriente': nutriente,
+            'satelite_seleccionado': satelite_seleccionado,
+            'indice_seleccionado': indice_seleccionado,
+            'mapa_buffer': resultados.get('mapa_buffer'),
+            'X': None,
+            'Y': None,
+            'Z': None,
+            'pendiente_grid': None,
+            'gdf_original': gdf if analisis_tipo == "ANÁLISIS DE CURVAS DE NIVEL" else None,
+            'df_power': resultados.get('df_power')
+        }
+        
+        st.success(f"✅ **ANÁLISIS COMPLETADO EXITOSAMENTE!**")
+        st.info(f"📊 **Resultados guardados en tablero de control.**")
+
 except Exception as e:
-    st.error(f"❌ Error mostrando tabla de resultados: {str(e)}")
+    st.error(f"❌ Error procesando resultados: {str(e)}")
     import traceback
     st.error(f"Detalle: {traceback.format_exc()}")
-
-# GUARDAR RESULTADOS EN SESSION STATE
-if resultados and resultados['exitoso']:
-    st.session_state['resultados_guardados'] = {
-        'gdf_analizado': resultados['gdf_analizado'],
-        'analisis_tipo': analisis_tipo,
-        'cultivo': cultivo,
-        'area_total': resultados['area_total'],
-        'nutriente': nutriente,
-        'satelite_seleccionado': satelite_seleccionado,
-        'indice_seleccionado': indice_seleccionado,
-        'mapa_buffer': resultados.get('mapa_buffer'),
-        'X': None,
-        'Y': None,
-        'Z': None,
-        'pendiente_grid': None,
-        'gdf_original': gdf if analisis_tipo == "ANÁLISIS DE CURVAS DE NIVEL" else None,
-        'df_power': resultados.get('df_power')
-    }
-    
-    st.success(f"✅ **ANÁLISIS COMPLETADO EXITOSAMENTE!**")
-    st.info(f"📊 **Resultados guardados en tablero de control.**")
     
     # ===== CREAR PESTAÑAS PARA DIFERENTES VISTAS =====
     # Definir pestañas según tipo de análisis
