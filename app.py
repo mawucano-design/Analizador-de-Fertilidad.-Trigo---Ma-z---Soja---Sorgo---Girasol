@@ -4907,64 +4907,58 @@ if uploaded_file:
                         )
                     
 # ===== TABLA DE RESULTADOS =====
-try:
-    st.subheader("🔬 ÍNDICES SATELITALES Y NPK POR ZONA")
-    
-    # Definir columnas base
-    columnas_indices = ['id_zona', 'npk_integrado', 'nitrogeno_actual', 'fosforo_actual', 'potasio_actual']
-    
-    # Ajustar columnas según tipo de análisis
-    if analisis_tipo == "RECOMENDACIONES NPK":
-        columnas_indices = ['id_zona', 'valor_recomendado', 'nitrogeno_actual', 'fosforo_actual', 'potasio_actual']
-    
-    # Añadir índices vegetativos
-    columnas_indices.extend(['materia_organica', 'ndvi', 'ndre', 'humedad_suelo', 'ndwi'])
-    columnas_indices = [col for col in columnas_indices if col in gdf_analizado.columns]
-    
-    # Crear y mostrar tabla
-    tabla_indices = gdf_analizado[columnas_indices].copy()
-    rename_dict = {
-        'id_zona': 'Zona',
-        'npk_integrado': 'NPK Integrado',
-        'nitrogeno_actual': 'N (kg/ha)',
-        'fosforo_actual': 'P (kg/ha)',
-        'potasio_actual': 'K (kg/ha)',
-        'valor_recomendado': 'Recomendación (kg/ha)',
-        'materia_organica': 'MO (%)',
-        'ndvi': 'NDVI',
-        'ndre': 'NDRE',
-        'humedad_suelo': 'Humedad',
-        'ndwi': 'NDWI'
-    }
-    tabla_indices = tabla_indicios.rename(columns={k: v for k, v in rename_dict.items() if k in tabla_indices.columns})
-    st.dataframe(tabla_indices, use_container_width=True)
-    
-    # GUARDAR RESULTADOS EN SESSION STATE
-    if resultados and resultados['exitoso']:
-        st.session_state['resultados_guardados'] = {
-            'gdf_analizado': resultados['gdf_analizado'],
-            'analisis_tipo': analisis_tipo,
-            'cultivo': cultivo,
-            'area_total': resultados['area_total'],
-            'nutriente': nutriente,
-            'satelite_seleccionado': satelite_seleccionado,
-            'indice_seleccionado': indice_seleccionado,
-            'mapa_buffer': resultados.get('mapa_buffer'),
-            'X': None,
-            'Y': None,
-            'Z': None,
-            'pendiente_grid': None,
-            'gdf_original': gdf if analisis_tipo == "ANÁLISIS DE CURVAS DE NIVEL" else None,
-            'df_power': resultados.get('df_power')
-        }
-        
-        st.success(f"✅ **ANÁLISIS COMPLETADO EXITOSAMENTE!**")
-        st.info(f"📊 **Resultados guardados en tablero de control.**")
+st.subheader("🔬 ÍNDICES SATELITALES Y NPK POR ZONA")
 
-except Exception as e:
-    st.error(f"❌ Error procesando resultados: {str(e)}")
-    import traceback
-    st.error(f"Detalle: {traceback.format_exc()}")
+# Definir columnas base
+columnas_indices = ['id_zona', 'npk_integrado', 'nitrogeno_actual', 'fosforo_actual', 'potasio_actual']
+
+# Ajustar columnas según tipo de análisis
+if analisis_tipo == "RECOMENDACIONES NPK":
+    columnas_indices = ['id_zona', 'valor_recomendado', 'nitrogeno_actual', 'fosforo_actual', 'potasio_actual']
+
+# Añadir índices vegetativos
+columnas_indices.extend(['materia_organica', 'ndvi', 'ndre', 'humedad_suelo', 'ndwi'])
+columnas_indices = [col for col in columnas_indices if col in gdf_analizado.columns]
+
+# Crear y mostrar tabla
+tabla_indices = gdf_analizado[columnas_indices].copy()
+rename_dict = {
+    'id_zona': 'Zona',
+    'npk_integrado': 'NPK Integrado',
+    'nitrogeno_actual': 'N (kg/ha)',
+    'fosforo_actual': 'P (kg/ha)',
+    'potasio_actual': 'K (kg/ha)',
+    'valor_recomendado': 'Recomendación (kg/ha)',
+    'materia_organica': 'MO (%)',
+    'ndvi': 'NDVI',
+    'ndre': 'NDRE',
+    'humedad_suelo': 'Humedad',
+    'ndwi': 'NDWI'
+}
+tabla_indices = tabla_indices.rename(columns={k: v for k, v in rename_dict.items() if k in tabla_indices.columns})
+st.dataframe(tabla_indices, use_container_width=True)
+
+# GUARDAR RESULTADOS EN SESSION STATE
+if resultados and resultados['exitoso']:
+    st.session_state['resultados_guardados'] = {
+        'gdf_analizado': resultados['gdf_analizado'],
+        'analisis_tipo': analisis_tipo,
+        'cultivo': cultivo,
+        'area_total': resultados['area_total'],
+        'nutriente': nutriente,
+        'satelite_seleccionado': satelite_seleccionado,
+        'indice_seleccionado': indice_seleccionado,
+        'mapa_buffer': resultados.get('mapa_buffer'),
+        'X': None,
+        'Y': None,
+        'Z': None,
+        'pendiente_grid': None,
+        'gdf_original': gdf if analisis_tipo == "ANÁLISIS DE CURVAS DE NIVEL" else None,
+        'df_power': resultados.get('df_power')
+    }
+    
+    st.success(f"✅ **ANÁLISIS COMPLETADO EXITOSAMENTE!**")
+    st.info(f"📊 **Resultados guardados en tablero de control.**")
     
     # ===== CREAR PESTAÑAS PARA DIFERENTES VISTAS =====
     # Definir pestañas según tipo de análisis
