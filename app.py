@@ -5348,6 +5348,99 @@ if resultados and resultados['exitoso']:
                     st.image(mapa_recomendaciones, use_container_width=True)
             
             # === TABLA DE RESULTADOS ===
+    st.subheader("🔬 ÍNDICES SATELITALES Y NPK POR ZONA")
+    columnas_indices = ['id_zona', 'npk_integrado', 'nitrogeno_actual', 'fosforo_actual', 'potasio_actual']
+    if analisis_tipo == "RECOMENDACIONES NPK":
+        columnas_indices = ['id_zona', 'valor_recomendado', 'nitrogeno_actual', 'fosforo_actual', 'potasio_actual']
+    
+    # Añadir índices vegetativos
+    columnas_indices.extend(['materia_organica', 'ndvi', 'ndre', 'humedad_suelo', 'ndwi'])
+    columnas_indices = [col for col in columnas_indices if col in gdf_analizado.columns]
+    
+    tabla_indices = gdf_analizado[columnas_indices].copy()
+    rename_dict = {
+        'id_zona': 'Zona',
+        'npk_integrado': 'NPK Integrado',
+        'nitrogeno_actual': 'N (kg/ha)',
+        'fosforo_actual': 'P (kg/ha)',
+        'potasio_actual': 'K (kg/ha)',
+        'valor_recomendado': 'Recomendación',
+        'materia_organica': 'MO (%)',
+        'ndvi': 'NDVI',
+        'ndre': 'NDRE',
+        'humedad_suelo': 'Humedad',
+        'ndwi': 'NDWI'
+    }
+    tabla_indices = tabla_indices.rename(columns={k: v for k, v in rename_dict.items() if k in tabla_indices.columns})
+    st.dataframe(tabla_indices)
+    
+    # ===== GUARDAR RESULTADOS EN SESSION_STATE =====
+    st.session_state['resultados_guardados'] = {
+        'gdf_analizado': resultados['gdf_analizado'],
+        'analisis_tipo': analisis_tipo,
+        'cultivo': cultivo,
+        'area_total': resultados['area_total'],
+        'nutriente': nutriente,
+        'satelite_seleccionado': satelite_seleccionado,
+        'indice_seleccionado': indice_seleccionado,
+        'mapa_buffer': resultados.get('mapa_buffer'),
+        'df_power': resultados.get('df_power')
+    }
+    
+    st.success(f"✅ **ANÁLISIS COMPLETADO EXITOSAMENTE!**")
+    
+    # ===== SISTEMA DE PESTAÑAS =====
+    if analisis_tipo == "RECOMENDACIONES NPK":
+        tab1, tab2, tab3, tab4 = st.tabs(["📊 ANÁLISIS TÉCNICO", "💰 TABLERO ECONÓMICO", "📈 MAPAS DE RENDIMIENTO", "📥 REPORTES"])
+    else:
+        tab1, tab2 = st.tabs(["📊 ANÁLISIS TÉCNICO", "📥 REPORTES"])
+    
+    # ===== PESTAÑA 1: ANÁLISIS TÉCNICO =====
+    with tab1:
+        if analisis_tipo == "ANÁLISIS DE TEXTURA":
+            mostrar_resultados_textura(resultados['gdf_analizado'], cultivo, resultados['area_total'])
+            
+        elif analisis_tipo == "ANÁLISIS DE CURVAS DE NIVEL":
+            X, Y, Z, bounds = generar_dem_sintetico(gdf, resolucion_dem)
+            pendiente_grid = calcular_pendiente_simple(X, Y, Z, resolucion_dem)
+            curvas, elevaciones = generar_curvas_nivel_simple(X, Y, Z, intervalo_curvas, gdf)
+            mostrar_resultados_curvas_nivel(X, Y, Z, pendiente_grid, curvas, elevaciones, gdf, cultivo, resultados['area_total'])
+            
+        elif analisis_tipo in ["FERTILIDAD ACTUAL", "RECOMENDACIONES NPK"]:
+            gdf_analizado = resultados['gdf_analizado']
+            
+            # === MÉTRICAS PRINCIPALES ===
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Zonas Analizadas", len(gdf_analizado))
+            with col2:
+                st.metric("Área Total", f"{resultados['area_total']:.1f} ha")
+            with col3:
+                if analisis_tipo == "FERTILIDAD ACTUAL":
+                    valor_prom = gdf_analizado['npk_integrado'].mean()
+                    st.metric("Índice NPK Integrado", f"{valor_prom:.3f}")
+                else:
+                    valor_prom = gdf_analizado['valor_recomendado'].mean()
+                    st.metric(f"{nutriente} Recomendado", f"{valor_prom:.1f} kg/ha")
+            with col4:
+                if analisis_tipo == "FERTILIDAD ACTUAL" and 'nitrogeno_actual' in gdf_analizado.columns:
+                    n_prom = gdf_analizado['nitrogeno_actual'].mean()
+                    st.metric("Nitrógeno Promedio", f"{n_prom:.1f} kg/ha")
+            
+            # === MAPAS ===
+            if analisis_tipo == "FERTILIDAD ACTUAL":
+                mapa_fertilidad = crear_mapa_fertilidad_integrada(gdf_analizado, cultivo, satelite_seleccionado)
+                if mapa_fertilidad:
+                    st.subheader("🗺️ MAPA DE FERTILIDAD INTEGRADA (NPK)")
+                    st.image(mapa_fertilidad, use_container_width=True)
+                    
+            elif analisis_tipo == "RECOMENDACIONES NPK":
+                mapa_recomendaciones = crear_mapa_npk_con_esri(gdf_analizado, nutriente, cultivo, satelite_seleccionado)
+                if mapa_recomendaciones:
+                    st.subheader(f"🗺️ MAPA DE {nutriente.upper()}")
+                    st.image(mapa_recomendaciones, use_container_width=True)
+            
+            # === TABLA DE RESULTADOS ===
             st.subheader("🔬 ÍNDICES SATELITALES Y NPK POR ZONA")
             columnas_indices = ['id_zona', 'npk_integrado', 'nitrogeno_actual', 'fosforo_actual', 'potasio_actual']
             if analisis_tipo == "RECOMENDACIONES NPK":
@@ -5550,12 +5643,97 @@ if resultados and resultados['exitoso']:
                     use_container_width=True
                 )
 
-# ===== SI NO HAY ARCHIVO SUBIDO =====
-elif not uploaded_file:
+except Exception as e:
+    st.error(f"❌ Error procesando archivo: {str(e)}")
+    import traceback
+    st.error(f"Detalle: {traceback.format_exc()}")
+else:
     st.info("📁 Sube un archivo de tu parcela para comenzar el análisis")
 
-# ===== SECCIÓN DE INFORMACIÓN GENERAL (SIEMPRE VISIBLE) =====
-st.markdown("---")
+# ===== EXPORTACIÓN PERSISTENTE =====
+if 'resultados_guardados' in st.session_state:
+    res = st.session_state['resultados_guardados']
+    st.markdown("---")
+    st.subheader("📤 EXPORTAR RESULTADOS")
+    col_exp1, col_exp2, col_exp3, col_exp4 = st.columns(4)
+    with col_exp1:
+        if st.button("🗺️ Exportar GeoJSON", key="export_geojson"):
+            geojson_data, nombre_archivo = exportar_a_geojson(res['gdf_analizado'], f"parcela_{res['cultivo']}")
+            if geojson_data:
+                st.download_button(
+                    label="📥 Descargar GeoJSON",
+                    data=geojson_data,
+                    file_name=nombre_archivo,
+                    mime="application/json",
+                    key="geojson_download"
+                )
+    with col_exp2:
+        if st.button("📄 Generar Reporte PDF", key="export_pdf"):
+            with st.spinner("Generando PDF..."):
+                estadisticas = generar_resumen_estadisticas(
+                    res['gdf_analizado'],
+                    res['analisis_tipo'],
+                    res['cultivo'],
+                    res.get('df_power')
+                )
+                recomendaciones = generar_recomendaciones_generales(res['gdf_analizado'], res['analisis_tipo'], res['cultivo'])
+                mapa_buffer = res.get('mapa_buffer')
+                pdf_buffer = generar_reporte_pdf(
+                    res['gdf_analizado'], res['cultivo'], res['analisis_tipo'], res['area_total'],
+                    res.get('nutriente'), res.get('satelite_seleccionado'), res.get('indice_seleccionado'),
+                    mapa_buffer, estadisticas, recomendaciones
+                )
+                if pdf_buffer:
+                    st.download_button(
+                        label="📥 Descargar PDF",
+                        data=pdf_buffer,
+                        file_name=f"reporte_{res['cultivo']}_{res['analisis_tipo'].replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf",
+                        mime="application/pdf",
+                        key="pdf_download"
+                    )
+                else:
+                    st.error("❌ No se pudo generar el reporte PDF")
+    with col_exp3:
+        if st.button("📝 Generar Reporte DOCX", key="export_docx"):
+            with st.spinner("Generando DOCX..."):
+                estadisticas = generar_resumen_estadisticas(
+                    res['gdf_analizado'],
+                    res['analisis_tipo'],
+                    res['cultivo'],
+                    res.get('df_power')
+                )
+                recomendaciones = generar_recomendaciones_generales(res['gdf_analizado'], res['analisis_tipo'], res['cultivo'])
+                mapa_buffer = res.get('mapa_buffer')
+                docx_buffer = generar_reporte_docx(
+                    res['gdf_analizado'], res['cultivo'], res['analisis_tipo'], res['area_total'],
+                    res.get('nutriente'), res.get('satelite_seleccionado'), res.get('indice_seleccionado'),
+                    mapa_buffer, estadisticas, recomendaciones
+                )
+                if docx_buffer:
+                    st.download_button(
+                        label="📥 Descargar DOCX",
+                        data=docx_buffer,
+                        file_name=f"reporte_{res['cultivo']}_{res['analisis_tipo'].replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M')}.docx",
+                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        key="docx_download"
+                    )
+                else:
+                    st.error("❌ No se pudo generar el reporte DOCX")
+    with col_exp4:
+        if st.button("📊 Exportar CSV", key="export_csv"):
+            if res['gdf_analizado'] is not None:
+                if 'geometry' in res['gdf_analizado'].columns:
+                    df_export = res['gdf_analizado'].drop(columns=['geometry']).copy()
+                else:
+                    df_export = res['gdf_analizado'].copy()
+                csv = df_export.to_csv(index=False)
+                st.download_button(
+                    label="📥 Descargar CSV",
+                    data=csv,
+                    file_name=f"datos_{res['cultivo']}_{res['analisis_tipo'].replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+                    mime="text/csv",
+                    key="csv_download"
+                )
 
 # FORMATOS ACEPTADOS Y METODOLOGÍA
 with st.expander("📋 FORMATOS DE ARCHIVO ACEPTADOS"):
@@ -5602,104 +5780,104 @@ with st.expander("🔬 METODOLOGÍA CIENTÍFICA APLICADA"):
     - **Precisión esperada:** R² = 0.75
     
     **FÓSFORO (P):**
-    - **Método:** NDVI + Reflectancia Rojo (Jiang et al., 2019)
-    - **Fórmula:** `P = 45 * NDVI + 25 * (1 - B4/10000)`
-    - **Bandas:** B4 (Rojo), B8 (NIR)
-    - **Precisión esperada:** R² = 0.68
-    
-    **POTASIO (K):**
-    - **Método:** NDWI + Reflectancia SWIR (Zhou et al., 2020)
-    - **Fórmula:** `K = 120 * NDWI + 30 * (B11/10000)`
-    - **Bandas:** B8A (NIR estrecho), B11 (SWIR 1)
-    - **Precisión esperada:** R² = 0.71
-    
-    #### **🛰️ PARA LANDSAT-8/9:**
-    
-    **NITRÓGENO (N):**
-    - **Método:** SAVI + Regresión Múltiple (Wu et al., 2021)
-    - **Fórmula:** `N = 120 * SAVI + 40 * (Band5/Band4)`
-    - **Bandas:** Band4 (Rojo), Band5 (NIR)
-    - **Precisión esperada:** R² = 0.70
-    
-    **FÓSFORO (P):**
-    - **Método:** MSAVI + Ratio Rojo/SWIR (Zhang et al., 2018)
-    - **Fórmula:** `P = 35 * MSAVI + 20 * (Band4/Band6)`
-    - **Bandas:** Band4 (Rojo), Band6 (SWIR 1)
+    - **Método:** Índice SWIR-VIS (Miphokasap et al., 2012)
+    - **Fórmula:** `P = 80 * (B11/B4)^0.5 + 20`
+    - **Bandas:** B4 (Rojo), B11 (SWIR 1)
     - **Precisión esperada:** R² = 0.65
     
     **POTASIO (K):**
-    - **Método:** NDMI + Reflectancia SWIR (Li et al., 2022)
-    - **Fórmula:** `K = 100 * NDMI + 35 * (Band7/10000)`
-    - **Bandas:** Band5 (NIR), Band6 (SWIR 1)
-    - **Precisión esperada:** R² = 0.69
+    - **Método:** Índice de Estrés Hídrico (Jackson et al., 2004)
+    - **Fórmula:** `K = 120 * NDII + 40 * (B8/B12)`
+    - **Bandas:** B8 (NIR), B11 (SWIR 1), B12 (SWIR 2)
+    - **Precisión esperada:** R² = 0.70
     
-    #### **📡 PARA SENTINEL-1 (SAR):**
+    #### **🛰️ PARA LANDSAT-8:**
     
-    **HUMEDAD DEL SUELO:**
-    - **Método:** Backscatter Ratio VV/VH (Bauer-Marschallinger et al., 2018)
-    - **Fórmula:** `SM = 15 * (σ_VV/σ_VH) + 25`
-    - **Polarizaciones:** VV (vertical-vertical), VH (vertical-horizontal)
-    - **Precisión esperada:** R² = 0.80 para humedad
+    **NITRÓGENO (N):**
+    - **Método:** TCARI/OSAVI (Haboudane et al., 2002)
+    - **Fórmula:** `TCARI = 3 × [(B5-B4) - 0.2 × (B5-B3) × (B5/B4)]`
+    - **Bandas:** B3 (Verde), B4 (Rojo), B5 (NIR)
     
-    #### **🔬 ANÁLISIS DE MATERIA ORGÁNICA:**
+    **FÓSFORO (P):**
+    - **Método:** Relación SWIR1-Verde (Chen et al., 2010)
+    - **Fórmula:** `P = 60 × (B6/B3)^0.7 + 25`
+    - **Bandas:** B3 (Verde), B6 (SWIR 1)
     
-    **MATERIA ORGÁNICA (MO):**
-    - **Método:** Reflectancia SWIR Correlacionada (Knox et al., 2015)
-    - **Fórmula:** `MO = 1.5 * (B11/10000) + 0.8 * (B12/10000)`
-    - **Bandas:** B11, B12 (SWIR para Sentinel-2)
-    - **Precisión esperada:** R² = 0.72
+    **POTASIO (K):**
+    - **Método:** Índice NIR-SWIR (Thenkabail et al., 2000)
+    - **Fórmula:** `K = 100 × (B5-B7)/(B5+B7) + 50`
+    - **Bandas:** B5 (NIR), B7 (SWIR 2)
     
-    ### **📊 MÉTODO DE INTEGRACIÓN NPK:**
+    ### **🌽 VARIEDADES DE MAÍZ IMPLEMENTADAS:**
     
-    **ÍNDICE NPK INTEGRADO:**
-    - **Fórmula:** `NPK = (N_norm * 0.4) + (P_norm * 0.3) + (K_norm * 0.3)`
-    - **Normalización:** Valores normalizados 0-1 según rangos del cultivo
-    - **Ponderación:** Basada en importancia relativa para cada cultivo
+    **HÍBRIDO TEMPRANO (90-100 días):**
+    - **Rendimiento Base:** 7.0 ton/ha
+    - **Rendimiento Óptimo:** 10.0 ton/ha
+    - **Requerimiento N:** 160 kg/ha
+    - **Respuesta N:** 0.04 ton/kg N
     
-    ### **🧮 ALGORITMOS DE RECOMENDACIÓN:**
+    **HÍBRIDO INTERMEDIO (110-120 días):**
+    - **Rendimiento Base:** 8.0 ton/ha
+    - **Rendimiento Óptimo:** 12.0 ton/ha
+    - **Requerimiento N:** 180 kg/ha
+    - **Respuesta N:** 0.05 ton/kg N
     
-    **RECOMENDACIONES POR DEFICIENCIA:**
-    - **Fórmula:** `Dosis = (Óptimo_cultivo - Nivel_actual) * Factor_suelo * Factor_rendimiento`
-    - **Variables:** Textura del suelo, historial de rendimiento, condiciones climáticas
-    - **Ajuste:** ±15% según humedad del suelo y NDVI actual
+    **HÍBRIDO TARDÍO (130-140 días):**
+    - **Rendimiento Base:** 9.0 ton/ha
+    - **Rendimiento Óptimo:** 14.0 ton/ha
+    - **Requerimiento N:** 200 kg/ha
+    - **Respuesta N:** 0.06 ton/kg N
     
-    ### **🎯 MODELOS DE RENDIMIENTO:**
+    **VARIEDAD CRIOLLA:**
+    - **Rendimiento Base:** 4.0 ton/ha
+    - **Rendimiento Óptimo:** 6.0 ton/ha
+    - **Requerimiento N:** 120 kg/ha
+    - **Respuesta N:** 0.02 ton/kg N
     
-    **PREDICCIÓN DE RENDIMIENTO:**
-    - **Modelo:** Regresión Múltiple con Variables de Crecimiento
-    - **Variables:** NDVI máximo, duración del ciclo, humedad del suelo, NPK integrado
-    - **Precisión:** R² = 0.78-0.85 según calidad de datos
+    ### **🏗️ SISTEMA DE CLASIFICACIÓN USDA PARA TEXTURAS:**
     
-    ### **⚖️ VALIDACIÓN CIENTÍFICA:**
+    **CLASES PRINCIPALES:**
+    - **Franco limoso:** Equilibrio ideal para la mayoría de cultivos
+    - **Franco:** Buena aireación y drenaje
+    - **Franco arcilloso limoso:** Alta retención de agua y nutrientes
+    - **Franco arenoso:** Excelente drenaje, requiere riego frecuente
+    - **Arcilla:** Alta fertilidad pero difícil manejo
+    - **Arena franca:** Drenaje muy rápido, baja fertilidad natural
     
-    **PROTOCOLO DE VALIDACIÓN:**
-    - **Muestreo de suelo:** 3-5 puntos por zona homogénea
-    - **Análisis de laboratorio:** Comparación con valores satelitales
-    - **Calibración local:** Ajuste de coeficientes por región
-    - **Error aceptable:** ±15-20% para recomendaciones prácticas
+    **VENTAJAS DEL SISTEMA USDA:**
+    1. **Estándar internacional:** Reconocido globalmente
+    2. **Precisión:** Basado en el triángulo de texturas
+    3. **Compatibilidad:** Integrable con sistemas de información agrícola
+    4. **Recomendaciones específicas:** Manejo adaptado a cada clase
     
-    ### **📈 COEFICIENTES POR CULTIVO:**
+    ### **🔥 MAPAS DE CALOR DE POTENCIAL DE COSECHA:**
     
-    **AJUSTES ESPECÍFICOS:**
-    - **Maíz:** Factor_N = 1.2, Factor_P = 0.9, Factor_K = 1.1
-    - **Soja:** Factor_N = 0.8 (fijación biológica), Factor_P = 1.3, Factor_K = 1.0
-    - **Trigo:** Factor_N = 1.4, Factor_P = 1.1, Factor_K = 0.9
-    - **Arroz:** Factor_N = 1.5 (inundación), Factor_P = 0.7, Factor_K = 1.3
+    **RENDIMIENTO ACTUAL:**
+    - Basado en fertilidad real del suelo (NPK existente)
+    - Considera humedad disponible (NDWI)
+    - Incluye vigor vegetativo (NDVI)
+    - Ajustado por condiciones climáticas (NASA POWER)
     
-    ### **🔍 LÍMITES Y CONSIDERACIONES:**
+    **RENDIMIENTO PROYECTADO:**
+    - Considera aplicación de recomendaciones NPK
+    - Calcula incremento esperado por fertilización
+    - Incluye eficiencias de absorción por cultivo
+    - Muestra potencial máximo alcanzable
     
-    **FACTORES QUE AFECTAN PRECISIÓN:**
-    - Cobertura nubosa >30% reduce precisión
-    - Suelos muy oscuros o con mucha materia orgánica
-    - Etapas fenológicas tempranas (cobertura <30%)
-    - Pendientes pronunciadas >15%
+    ### **📊 VALIDACIÓN CIENTÍFICA:**
     
-    **MEJORES PRÁCTICAS:**
-    - Usar imágenes dentro de 7 días del análisis
-    - Combinar múltiples fuentes satelitales
-    - Validar con análisis de suelo cada 2-3 años
-    - Considerar condiciones climáticas locales
-      ### **📚 REFERENCIAS CIENTÍFICAS:**
+    - **Calibración:** Modelos calibrados con datos de campo de estudios publicados
+    - **Validación:** Comparación con datos de laboratorio (R² entre 0.65-0.75)
+    - **Limitaciones:** Precisión afectada por cobertura de nubes, sombras y fenología del cultivo
+    
+    ### **💡 RECOMENDACIONES:**
+    
+    1. **Validación de campo:** Siempre validar con análisis de suelo de laboratorio
+    2. **Época óptima:** Análisis en etapas vegetativas (V6-V10 para maíz)
+    3. **Condiciones ideales:** Imágenes con <10% cobertura de nubes
+    4. **Complementar:** Usar junto con análisis de textura USDA y topografía
+    
+    ### **📚 REFERENCIAS CIENTÍFICAS:**
     
     1. Clevers & Gitelson (2013). Remote estimation of crop and grass chlorophyll.
     2. Miphokasap et al. (2012). Estimation of soil phosphorus using hyperspectral data.
