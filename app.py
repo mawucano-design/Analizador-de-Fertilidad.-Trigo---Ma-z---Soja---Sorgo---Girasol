@@ -2489,6 +2489,229 @@ def mostrar_analisis_economico(resultados_economicos):
         ax.tick_params(colors='white')
         
         st.pyplot(fig)
+
+def crear_tablero_control_economico(resultados_economicos):
+    """Crea un tablero de control visual para el análisis económico"""
+    
+    st.markdown("---")
+    st.markdown('<div class="hero-banner" style="padding: 2em 1em !important;">', unsafe_allow_html=True)
+    st.markdown('<div class="hero-content"><h1 class="hero-title">📊 TABLERO DE CONTROL ECONÓMICO</h1></div>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+    
+    # ===== MÉTRICAS PRINCIPALES =====
+    st.markdown("### 🎯 MÉTRICAS CLAVE")
+    
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.markdown("""
+        <div class="dashboard-card">
+            <h4>💰 ROI FERTILIZACIÓN</h4>
+            <div class="stats-value">{roi}%</div>
+            <div class="stats-label">Retorno sobre inversión</div>
+        </div>
+        """.format(roi=resultados_economicos['roi_fertilizacion_%']), unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown("""
+        <div class="dashboard-card">
+            <h4>📈 VAN TOTAL</h4>
+            <div class="stats-value">${van:,.0f}</div>
+            <div class="stats-label">Valor Actual Neto</div>
+        </div>
+        """.format(van=resultados_economicos['van_usd']), unsafe_allow_html=True)
+    
+    with col3:
+        st.markdown("""
+        <div class="dashboard-card">
+            <h4>🎯 TASA INTERNA</h4>
+            <div class="stats-value">{tir}%</div>
+            <div class="stats-label">TIR del Proyecto</div>
+        </div>
+        """.format(tir=resultados_economicos['tir_%']), unsafe_allow_html=True)
+    
+    with col4:
+        st.markdown("""
+        <div class="dashboard-card">
+            <h4>📊 RELACIÓN B/C</h4>
+            <div class="stats-value">{bc:.2f}</div>
+            <div class="stats-label">Beneficio/Costo</div>
+        </div>
+        """.format(bc=resultados_economicos['relacion_bc_proy']), unsafe_allow_html=True)
+    
+    # ===== GRÁFICO DE RENTABILIDAD =====
+    st.markdown("### 📈 ANÁLISIS DE RENTABILIDAD")
+    
+    # Datos para gráficos
+    escenarios = ['Actual (sin fertilización)', 'Proyectado (con fertilización)']
+    margenes = [
+        resultados_economicos['margen_actual_ha'],
+        resultados_economicos['margen_proy_ha']
+    ]
+    ingresos = [
+        resultados_economicos['ingreso_actual_ha'],
+        resultados_economicos['ingreso_proy_ha']
+    ]
+    costos = [
+        resultados_economicos['costo_total_ha'] - resultados_economicos['costo_fertilizacion_ha'],
+        resultados_economicos['costo_total_ha']
+    ]
+    
+    fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(14, 10))
+    fig.patch.set_facecolor('#0f172a')
+    
+    # Gráfico 1: Comparativa de margen por hectárea
+    ax1.bar(escenarios, margenes, color=['#ef4444', '#10b981'])
+    ax1.set_title('Margen Neto por Hectárea', color='white', fontweight='bold')
+    ax1.set_ylabel('USD/ha', color='white')
+    ax1.tick_params(colors='white')
+    ax1.set_facecolor('#0f172a')
+    
+    # Agregar valores en las barras
+    for i, v in enumerate(margenes):
+        ax1.text(i, v + max(margenes)*0.02, f'${v:,.0f}', 
+                ha='center', color='white', fontweight='bold')
+    
+    # Gráfico 2: Composición de ingresos vs costos
+    x = np.arange(len(escenarios))
+    width = 0.35
+    
+    ax2.bar(x - width/2, ingresos, width, label='Ingresos', color='#3b82f6')
+    ax2.bar(x + width/2, costos, width, label='Costos', color='#f59e0b')
+    ax2.set_title('Ingresos vs Costos por Hectárea', color='white', fontweight='bold')
+    ax2.set_ylabel('USD/ha', color='white')
+    ax2.set_xticks(x)
+    ax2.set_xticklabels(escenarios, color='white')
+    ax2.tick_params(colors='white')
+    ax2.legend(facecolor='#0f172a', edgecolor='white', labelcolor='white')
+    ax2.set_facecolor('#0f172a')
+    
+    # Gráfico 3: Distribución de costos
+    costos_detalle = {
+        'Semilla': resultados_economicos['costo_semilla_ha'],
+        'Fertilización': resultados_economicos['costo_fertilizacion_ha'],
+        'Herbicidas': PARAMETROS_ECONOMICOS['PRECIOS_CULTIVOS'][resultados_economicos['cultivo']]['costo_herbicidas'],
+        'Inseticidas': PARAMETROS_ECONOMICOS['PRECIOS_CULTIVOS'][resultados_economicos['cultivo']]['costo_insecticidas'],
+        'Labores': PARAMETROS_ECONOMICOS['PRECIOS_CULTIVOS'][resultados_economicos['cultivo']]['costo_labores'],
+        'Cosecha': PARAMETROS_ECONOMICOS['PRECIOS_CULTIVOS'][resultados_economicos['cultivo']]['costo_cosecha'],
+        'Otros': PARAMETROS_ECONOMICOS['PRECIOS_CULTIVOS'][resultados_economicos['cultivo']]['costo_otros']
+    }
+    
+    colors_pie = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6']
+    ax3.pie(costos_detalle.values(), labels=costos_detalle.keys(), autopct='%1.1f%%',
+            colors=colors_pie, startangle=90, textprops={'color': 'white'})
+    ax3.set_title('Distribución de Costos por Hectárea', color='white', fontweight='bold')
+    
+    # Gráfico 4: ROI por componente
+    if resultados_economicos['detalles_fertilizacion']:
+        nutrientes = ['NITRÓGENO', 'FÓSFORO', 'POTASIO']
+        rois = []
+        labels = []
+        for nut in nutrientes:
+            det = resultados_economicos['detalles_fertilizacion'][nut]
+            if det['costo_usd_ha'] > 0:
+                # Calcular ROI aproximado para cada nutriente
+                if nut == 'NITRÓGENO':
+                    roi_nut = resultados_economicos['roi_fertilizacion_%'] * 0.4
+                elif nut == 'FÓSFORO':
+                    roi_nut = resultados_economicos['roi_fertilizacion_%'] * 0.3
+                else:
+                    roi_nut = resultados_economicos['roi_fertilizacion_%'] * 0.3
+                rois.append(roi_nut)
+                labels.append(nut[:3])
+        
+        if rois:
+            bars = ax4.bar(labels, rois, color=['#3b82f6', '#10b981', '#f59e0b'])
+            ax4.set_title('ROI por Nutriente', color='white', fontweight='bold')
+            ax4.set_ylabel('ROI (%)', color='white')
+            ax4.tick_params(colors='white')
+            ax4.set_facecolor('#0f172a')
+            
+            # Agregar valores en las barras
+            for bar in bars:
+                height = bar.get_height()
+                ax4.text(bar.get_x() + bar.get_width()/2., height + 2,
+                        f'{height:.0f}%', ha='center', color='white', fontweight='bold')
+    
+    plt.tight_layout()
+    st.pyplot(fig)
+    
+    # ===== TABLA RESUMEN =====
+    st.markdown("### 📋 RESUMEN ECONÓMICO")
+    
+    resumen_data = {
+        'Concepto': [
+            'Área Total Analizada',
+            'Variedad',
+            'Rendimiento Actual Promedio',
+            'Rendimiento Proyectado Promedio',
+            'Incremento Esperado',
+            'Precio de Mercado',
+            'Ingresos Actuales Totales',
+            'Ingresos Proyectados Totales',
+            'Costos Totales',
+            'Margen Actual Total',
+            'Margen Proyectado Total',
+            'Incremento de Margen Total'
+        ],
+        'Valor': [
+            f"{resultados_economicos['area_total_ha']:.2f} ha",
+            resultados_economicos['variedad'],
+            f"{resultados_economicos['rendimiento_actual_ton_ha']:.1f} ton/ha",
+            f"{resultados_economicos['rendimiento_proy_ton_ha']:.1f} ton/ha",
+            f"+{resultados_economicos['incremento_rendimiento_ton_ha']:.1f} ton/ha",
+            f"${resultados_economicos['precio_tonelada']:,.0f}/ton",
+            f"${resultados_economicos['ingreso_actual_ha'] * resultados_economicos['area_total_ha']:,.0f}",
+            f"${resultados_economicos['ingreso_proy_ha'] * resultados_economicos['area_total_ha']:,.0f}",
+            f"${resultados_economicos['costo_total_ha'] * resultados_economicos['area_total_ha']:,.0f}",
+            f"${resultados_economicos['margen_actual_ha'] * resultados_economicos['area_total_ha']:,.0f}",
+            f"${resultados_economicos['margen_proy_ha'] * resultados_economicos['area_total_ha']:,.0f}",
+            f"${resultados_economicos['incremento_margen_ha'] * resultados_economicos['area_total_ha']:,.0f}"
+        ]
+    }
+    
+    df_resumen = pd.DataFrame(resumen_data)
+    st.dataframe(df_resumen, use_container_width=True, hide_index=True)
+    
+    # ===== INDICADORES DE RIESGO =====
+    st.markdown("### ⚠️ INDICADORES DE RIESGO")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        # Riesgo por volatilidad de precios
+        riesgo_precios = "BAJO" if resultados_economicos['roi_fertilizacion_%'] > 150 else \
+                        "MODERADO" if resultados_economicos['roi_fertilizacion_%'] > 100 else "ALTO"
+        color_riesgo = "green" if riesgo_precios == "BAJO" else "orange" if riesgo_precios == "MODERADO" else "red"
+        st.markdown(f"""
+        <div class="dashboard-card">
+            <h4>📉 RIESGO PRECIOS</h4>
+            <div class="stats-value" style="color: {color_riesgo};">{riesgo_precios}</div>
+            <div class="stats-label">Sensibilidad a precios</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        # Punto de equilibrio
+        st.markdown(f"""
+        <div class="dashboard-card">
+            <h4>⚖️ PUNTO EQUILIBRIO</h4>
+            <div class="stats-value">{resultados_economicos['punto_equilibrio_ha']:.1f} ha</div>
+            <div class="stats-label">Área mínima rentable</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col3:
+        # Margen de seguridad
+        margen_seguridad = ((resultados_economicos['margen_proy_ha'] - resultados_economicos['margen_actual_ha']) / 
+                           resultados_economicos['margen_proy_ha'] * 100)
+        st.markdown(f"""
+        <div class="dashboard-card">
+            <h4>🛡️ MARGEN SEGURIDAD</h4>
+            <div class="stats-value">{margen_seguridad:.1f}%</div>
+            <div class="stats-label">Tolerancia a variaciones</div>
+        </div>
+        """, unsafe_allow_html=True)
     
     # Recomendaciones económicas
     st.markdown("---")
