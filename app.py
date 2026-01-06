@@ -2159,6 +2159,136 @@ def calcular_rendimiento_con_recomendaciones(gdf_analizado, cultivo):
     
     return rendimientos
 
+# ===== FUNCIONES PARA CÁLCULO DE RENDIMIENTO MEJORADAS =====
+def obtener_parametros_rendimiento(cultivo):
+    """Obtiene parámetros de rendimiento según cultivo y variedad"""
+    if 'variedad_params' in st.session_state and st.session_state['variedad_params']:
+        variedad_params = st.session_state['variedad_params']
+        params = PARAMETROS_CULTIVOS[cultivo].copy()
+        
+        # Actualizar con parámetros de la variedad
+        params.update({
+            'RENDIMIENTO_BASE': variedad_params['RENDIMIENTO_BASE'],
+            'RENDIMIENTO_OPTIMO': variedad_params['RENDIMIENTO_OPTIMO'],
+            'RESPUESTA_N': variedad_params['RESPUESTA_N'],
+            'RESPUESTA_P': variedad_params['RESPUESTA_P'],
+            'RESPUESTA_K': variedad_params['RESPUESTA_K'],
+            'NITROGENO': {'optimo': variedad_params['NITROGENO_OPTIMO']},
+            'FOSFORO': {'optimo': variedad_params['FOSFORO_OPTIMO']},
+            'POTASIO': {'optimo': variedad_params['POTASIO_OPTIMO']}
+        })
+        return params
+    else:
+        return PARAMETROS_CULTIVOS[cultivo]
+
+def calcular_rendimiento_potencial(gdf_analizado, cultivo):
+    """Calcula el rendimiento potencial actual basado en fertilidad existente"""
+    params = obtener_parametros_rendimiento(cultivo)
+    rendimientos = []
+    
+    for idx, row in gdf_analizado.iterrows():
+        # Factor de fertilidad actual (0-1)
+        factor_fertilidad = row['npk_integrado']
+        
+        # Factor de humedad (NDWI ajustado)
+        factor_humedad = min(1.0, row['ndwi'] / 0.4) if 'ndwi' in row and not pd.isna(row['ndwi']) else 0.7
+        
+        # Factor de vigor vegetativo (NDVI)
+        factor_vigor = min(1.2, row['ndvi'] / params.get('NDVI_OPTIMO', 0.8))
+        
+        # Factor climático base
+        factor_clima = params['FACTOR_CLIMA']
+        
+        # Cálculo de rendimiento base
+        rendimiento_base = params['RENDIMIENTO_BASE']
+        
+        # Ajuste por fertilidad actual
+        ajuste_fertilidad = 0.5 + (factor_fertilidad * 0.5)  # Entre 0.5 y 1.0
+        
+        # Rendimiento potencial estimado
+        rendimiento_potencial = (
+            rendimiento_base * 
+            ajuste_fertilidad * 
+            factor_humedad * 
+            factor_vigor * 
+            factor_clima
+        )
+        
+        # Límite máximo por defecto
+        rendimiento_potencial = min(rendimiento_potencial, params['RENDIMIENTO_OPTIMO'] * 1.1)
+        
+        rendimientos.append(round(rendimiento_potencial, 2))
+    
+    return rendimientos
+
+def calcular_rendimiento_con_recomendaciones(gdf_analizado, cultivo):
+    """Calcula el rendimiento proyectado aplicando recomendaciones NPK"""
+    params = obtener_parametros_rendimiento(cultivo)
+    rendimientos = []
+    
+    for idx, row in gdf_analizado.iterrows():
+        # Rendimiento base actual
+        factor_fertilidad = row['npk_integrado']
+        factor_humedad = min(1.0, row['ndwi'] / 0.4) if 'ndwi' in row and not pd.isna(row['ndwi']) else 0.7
+        factor_vigor = min(1.2, row['ndvi'] / params.get('NDVI_OPTIMO', 0.8))
+        factor_clima = params['FACTOR_CLIMA']
+        
+        rendimiento_base = params['RENDIMIENTO_BASE']
+        ajuste_fertilidad = 0.5 + (factor_fertilidad * 0.5)
+        
+        rendimiento_actual = (
+            rendimiento_base * 
+            ajuste_fertilidad * 
+            factor_humedad * 
+            factor_vigor * 
+            factor_clima
+        )
+        
+        # Calcular incremento por fertilización basado en deficiencias
+        incremento_total = 0
+        
+        # Incremento por Nitrógeno (usando la columna de recomendación)
+        if 'nitrogeno_recomendado' in row and row['nitrogeno_recomendado'] > 0:
+            n_actual = row['nitrogeno_actual']
+            n_optimo = params['NITROGENO']['optimo']
+            if n_actual < n_optimo * 0.9:  # Si hay deficiencia significativa
+                deficiencia_n = max(0, n_optimo - n_actual)
+                # El incremento es proporcional a la respuesta del cultivo y la eficiencia de aplicación
+                incremento_n = deficiencia_n * params['RESPUESTA_N'] * 0.7  # 70% de eficiencia
+                incremento_total += min(incremento_n, deficiencia_n * params['RESPUESTA_N'])
+        
+        # Incremento por Fósforo
+        if 'fosforo_recomendado' in row and row['fosforo_recomendado'] > 0:
+            p_actual = row['fosforo_actual']
+            p_optimo = params['FOSFORO']['optimo']
+            if p_actual < p_optimo * 0.85:
+                deficiencia_p = max(0, p_optimo - p_actual)
+                incremento_p = deficiencia_p * params['RESPUESTA_P'] * 0.5  # 50% de eficiencia
+                incremento_total += incremento_p
+        
+        # Incremento por Potasio
+        if 'potasio_recomendado' in row and row['potasio_recomendado'] > 0:
+            k_actual = row['potasio_actual']
+            k_optimo = params['POTASIO']['optimo']
+            if k_actual < k_optimo * 0.85:
+                deficiencia_k = max(0, k_optimo - k_actual)
+                incremento_k = deficiencia_k * params['RESPUESTA_K'] * 0.6  # 60% de eficiencia
+                incremento_total += incremento_k
+        
+        # Rendimiento con recomendaciones
+        rendimiento_proyectado = rendimiento_actual + incremento_total
+        
+        # Límite máximo realista (20% sobre el óptimo)
+        rendimiento_max = params['RENDIMIENTO_OPTIMO'] * 1.2
+        rendimiento_proyectado = min(rendimiento_proyectado, rendimiento_max)
+        
+        # Asegurar que no sea menor que el rendimiento actual
+        rendimiento_proyectado = max(rendimiento_proyectado, rendimiento_actual)
+        
+        rendimientos.append(round(rendimiento_proyectado, 2))
+    
+    return rendimientos
+
 # ===== FUNCIONES PARA ANÁLISIS ECONÓMICO =====
 def realizar_analisis_economico(gdf_analizado, cultivo, variedad_params, area_total):
     """Realiza análisis económico completo (VAN, TIR, B/C) para la parcela"""
@@ -2268,7 +2398,7 @@ def realizar_analisis_economico(gdf_analizado, cultivo, variedad_params, area_to
     ingresos_proy_ha = rend_proy_prom * precios_cultivo['precio_ton']
     margen_proy_ha = ingresos_proy_ha - costo_total_ha
     
-# === CÁLCULO DE INDICADORES FINANCIEROS ===
+    # === CÁLCULO DE INDICADORES FINANCIEROS ===
     
     # DIAGNÓSTICO INICIAL: Verificar valores de entrada
     st.warning("🔍 DIAGNÓSTICO INICIAL:")
@@ -2579,6 +2709,577 @@ def realizar_analisis_economico(gdf_analizado, cultivo, variedad_params, area_to
     
     return resultados_economicos
 
+def mostrar_detalles_fertilizacion(detalles):
+    """Muestra los detalles de fertilización en formato de tabla"""
+    if not detalles:
+        return None
+    
+    df_fert = pd.DataFrame([
+        {
+            'Nutriente': nut,
+            'Fertilizante': PARAMETROS_ECONOMICOS['CONVERSION_NUTRIENTES'][nut]['fuente_principal'],
+            'Cantidad (kg/ha)': det['cantidad_kg_ha'],
+            'Costo (USD/ha)': det['costo_usd_ha']
+        }
+        for nut, det in detalles.items() if det['cantidad_kg_ha'] > 0
+    ])
+    
+    if not df_fert.empty:
+        st.markdown("#### 🧪 DETALLES DE FERTILIZACIÓN")
+        st.dataframe(df_fert, use_container_width=True)
+
+def mostrar_analisis_economico(resultados_economicos):
+    """Muestra el análisis económico en una interfaz atractiva"""
+    
+    st.markdown("---")
+    st.subheader("💰 ANÁLISIS ECONÓMICO AGRÍCOLA")
+    
+    # Mostrar detalles de fertilización si existen
+    if 'detalles_fertilizacion' in resultados_economicos:
+        mostrar_detalles_fertilizacion(resultados_economicos['detalles_fertilizacion'])
+    
+    # Métricas principales
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric(
+            "📈 Incremento Producción",
+            f"{resultados_economicos['incremento_rendimiento_ton_ha']:.1f} ton/ha",
+            f"{resultados_economicos['incremento_produccion_total_ton']:.0f} ton total"
+        )
+    
+    with col2:
+        st.metric(
+            "💰 ROI Fertilización",
+            f"{resultados_economicos['roi_fertilizacion_%']:.0f}%",
+            delta_color="normal"
+        )
+    
+    with col3:
+        st.metric(
+            "📊 VAN Proyecto",
+            f"${resultados_economicos['van_usd']:,.0f}",
+            delta_color="normal"
+        )
+    
+    with col4:
+        tir_value = resultados_economicos['tir_%']
+        st.metric(
+            "🎯 TIR",
+            f"{tir_value:.1f}%" if isinstance(tir_value, (int, float)) else str(tir_value),
+            delta_color="normal"
+        )
+    
+    # Tabs para análisis detallado
+    tab1, tab2, tab3, tab4 = st.tabs(["📋 Resumen", "📊 Costos", "💰 Rentabilidad", "📈 Proyecciones"])
+    
+    with tab1:
+        # Tabla resumen
+        st.markdown("#### 📊 RESUMEN ECONÓMICO POR HECTÁREA")
+        resumen_data = {
+            'Concepto': [
+                'Rendimiento Actual',
+                'Rendimiento Proyectado',
+                'Incremento',
+                'Ingresos Actuales',
+                'Ingresos Proyectados',
+                'Costos Totales',
+                'Margen Actual',
+                'Margen Proyectado',
+                'Incremento Margen'
+            ],
+            'Valor (USD/ha)': [
+                f"{resultados_economicos['rendimiento_actual_ton_ha']:.1f} ton",
+                f"{resultados_economicos['rendimiento_proy_ton_ha']:.1f} ton",
+                f"+{resultados_economicos['incremento_rendimiento_ton_ha']:.1f} ton",
+                f"${resultados_economicos['ingreso_actual_ha']:,.0f}",
+                f"${resultados_economicos['ingreso_proy_ha']:,.0f}",
+                f"${resultados_economicos['costo_total_ha']:,.0f}",
+                f"${resultados_economicos['margen_actual_ha']:,.0f}",
+                f"${resultados_economicos['margen_proy_ha']:,.0f}",
+                f"${resultados_economicos['incremento_margen_ha']:,.0f}"
+            ]
+        }
+        st.dataframe(pd.DataFrame(resumen_data), use_container_width=True)
+    
+    with tab2:
+        # Gráfico de costos
+        st.markdown("#### 🏷️ DISTRIBUCIÓN DE COSTOS (USD/ha)")
+        costos_data = {
+            'Rubro': ['Semilla', 'Fertilización', 'Herbicidas', 'Inseticidas', 'Labores', 'Cosecha', 'Otros'],
+            'Costo USD/ha': [
+                resultados_economicos['costo_semilla_ha'],
+                resultados_economicos['costo_fertilizacion_ha'],
+                PARAMETROS_ECONOMICOS['PRECIOS_CULTIVOS'][resultados_economicos['cultivo']]['costo_herbicidas'],
+                PARAMETROS_ECONOMICOS['PRECIOS_CULTIVOS'][resultados_economicos['cultivo']]['costo_insecticidas'],
+                PARAMETROS_ECONOMICOS['PRECIOS_CULTIVOS'][resultados_economicos['cultivo']]['costo_labores'],
+                PARAMETROS_ECONOMICOS['PRECIOS_CULTIVOS'][resultados_economicos['cultivo']]['costo_cosecha'],
+                PARAMETROS_ECONOMICOS['PRECIOS_CULTIVOS'][resultados_economicos['cultivo']]['costo_otros']
+            ]
+        }
+        
+        df_costos = pd.DataFrame(costos_data)
+        fig, ax = plt.subplots(figsize=(10, 6))
+        colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6']
+        ax.bar(df_costos['Rubro'], df_costos['Costo USD/ha'], color=colors)
+        ax.set_title('Distribución de Costos por Hectárea', color='white')
+        ax.set_ylabel('USD/ha', color='white')
+        ax.tick_params(colors='white')
+        ax.set_facecolor('#0f172a')
+        fig.patch.set_facecolor('#0f172a')
+        
+        # Agregar valores en las barras
+        for i, v in enumerate(df_costos['Costo USD/ha']):
+            ax.text(i, v + 5, f'${v:,.0f}', ha='center', color='white', fontweight='bold')
+        
+        st.pyplot(fig)
+    
+    with tab3:
+        # Gráfico de rentabilidad comparativa
+        st.markdown("#### 📈 COMPARATIVA DE RENTABILIDAD")
+        
+        rentabilidad_data = {
+            'Escenario': ['Actual (sin fert.)', 'Proyectado (con fert.)'],
+            'B/C Ratio': [
+                resultados_economicos['relacion_bc_actual'],
+                resultados_economicos['relacion_bc_proy']
+            ],
+            'Margen (USD/ha)': [
+                resultados_economicos['margen_actual_ha'],
+                resultados_economicos['margen_proy_ha']
+            ]
+        }
+        
+        df_rent = pd.DataFrame(rentabilidad_data)
+        
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
+        
+        # Gráfico 1: B/C Ratio
+        bars1 = ax1.bar(df_rent['Escenario'], df_rent['B/C Ratio'], color=['#ef4444', '#10b981'])
+        ax1.set_title('Relación Beneficio/Costo', color='white')
+        ax1.set_ylabel('Ratio B/C', color='white')
+        ax1.axhline(y=1.0, color='white', linestyle='--', alpha=0.5)
+        ax1.text(0.5, 1.05, 'Límite Rentabilidad', ha='center', color='white', fontsize=9)
+        
+        # Gráfico 2: Margen USD/ha
+        bars2 = ax2.bar(df_rent['Escenario'], df_rent['Margen (USD/ha)'], color=['#f59e0b', '#3b82f6'])
+        ax2.set_title('Margen Neto por Hectárea', color='white')
+        ax2.set_ylabel('USD/ha', color='white')
+        
+        # Configurar ambos gráficos
+        for ax in [ax1, ax2]:
+            ax.set_facecolor('#0f172a')
+            ax.tick_params(colors='white')
+            
+            # Agregar valores en las barras
+            bars = bars1 if ax == ax1 else bars2
+            for bar in bars:
+                height = bar.get_height()
+                ax.text(bar.get_x() + bar.get_width()/2., height + 10,
+                       f'${height:,.0f}' if ax == ax2 else f'{height:.2f}',
+                       ha='center', va='bottom', color='white', fontweight='bold')
+        
+        fig.patch.set_facecolor('#0f172a')
+        plt.tight_layout()
+        st.pyplot(fig)
+        
+        # Interpretación
+        st.markdown("##### 💡 INTERPRETACIÓN:")
+        if resultados_economicos['relacion_bc_proy'] > 1.5:
+            st.success("**EXCELENTE RENTABILIDAD:** La inversión en fertilización es altamente rentable (B/C > 1.5)")
+        elif resultados_economicos['relacion_bc_proy'] > 1.2:
+            st.info("**BUENA RENTABILIDAD:** La inversión es recomendable (B/C > 1.2)")
+        elif resultados_economicos['relacion_bc_proy'] > 1.0:
+            st.warning("**RENTABILIDAD LIMITE:** La inversión apenas cubre costos (B/C > 1.0)")
+        else:
+            st.error("**NO RENTABLE:** La inversión no se recomienda (B/C < 1.0)")
+    
+    with tab4:
+        # Proyección de flujos de caja
+        st.markdown("#### 📅 PROYECCIÓN DE FLUJOS DE CAJA")
+        
+        financieros = PARAMETROS_ECONOMICOS['PARAMETROS_FINANCIEROS']
+        flujos_proyectados = []
+        
+        for año in range(financieros['periodo_analisis'] + 1):
+            if año == 0:
+                flujo_anual = -resultados_economicos['costo_fertilizacion_total_usd']
+            else:
+                flujo_anual = resultados_economicos['incremento_margen_ha'] * resultados_economicos['area_total_ha']
+                
+                # Ajustar por inflación
+                factor_inflacion = (1 + financieros['inflacion_esperada']) ** (año - 1)
+                flujo_anual *= factor_inflacion
+                
+                # Ajustar por impuestos y subsidios
+                flujo_anual = flujo_anual * (1 - financieros['impuestos'])
+                flujo_anual = flujo_anual * (1 + financieros['subsidios'])
+            
+            flujos_proyectados.append({
+                'Año': año,
+                'Flujo Neto (USD)': flujo_anual,
+                'Flujo Acumulado (USD)': sum(f['Flujo Neto (USD)'] for f in flujos_proyectados) + flujo_anual
+            })
+        
+        df_flujos = pd.DataFrame(flujos_proyectados)
+        st.dataframe(df_flujos.style.format({
+            'Flujo Neto (USD)': '${:,.0f}',
+            'Flujo Acumulado (USD)': '${:,.0f}'
+        }), use_container_width=True)
+        
+        # Gráfico de flujos
+        fig, ax = plt.subplots(figsize=(10, 5))
+        años = df_flujos['Año']
+        flujos = df_flujos['Flujo Neto (USD)']
+        
+        # Barras para flujos anuales
+        bars = ax.bar(años, flujos, color=['#ef4444' if f < 0 else '#10b981' for f in flujos])
+        ax.set_title('Flujos de Caja Anuales', color='white')
+        ax.set_xlabel('Año', color='white')
+        ax.set_ylabel('USD', color='white')
+        ax.axhline(y=0, color='white', linewidth=1)
+        
+        # Línea para flujo acumulado
+        ax2 = ax.twinx()
+        ax2.plot(años, df_flujos['Flujo Acumulado (USD)'], color='#3b82f6', marker='o', linewidth=3)
+        ax2.set_ylabel('Flujo Acumulado (USD)', color='#3b82f6')
+        ax2.tick_params(axis='y', colors='#3b82f6')
+        
+        ax.set_facecolor('#0f172a')
+        fig.patch.set_facecolor('#0f172a')
+        ax.tick_params(colors='white')
+        
+        st.pyplot(fig)
+
+def crear_tablero_control_economico(resultados_economicos):
+    """Crea un tablero de control visual para el análisis económico"""
+    
+    st.markdown("---")
+    st.markdown('<div class="hero-banner" style="padding: 2em 1em !important;">', unsafe_allow_html=True)
+    st.markdown('<div class="hero-content"><h1 class="hero-title">📊 TABLERO DE CONTROL ECONÓMICO</h1></div>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+    
+    # ===== MÉTRICAS PRINCIPALES =====
+    st.markdown("### 🎯 MÉTRICAS CLAVE")
+    
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.markdown("""
+        <div class="dashboard-card">
+            <h4>💰 ROI FERTILIZACIÓN</h4>
+            <div class="stats-value">{roi}%</div>
+            <div class="stats-label">Retorno sobre inversión</div>
+        </div>
+        """.format(roi=resultados_economicos['roi_fertilizacion_%']), unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown("""
+        <div class="dashboard-card">
+            <h4>📈 VAN TOTAL</h4>
+            <div class="stats-value">${van:,.0f}</div>
+            <div class="stats-label">Valor Actual Neto</div>
+        </div>
+        """.format(van=resultados_economicos['van_usd']), unsafe_allow_html=True)
+    
+    with col3:
+        tir_value = resultados_economicos['tir_%']
+        st.markdown("""
+        <div class="dashboard-card">
+            <h4>🎯 TASA INTERNA</h4>
+            <div class="stats-value">{tir}</div>
+            <div class="stats-label">TIR del Proyecto</div>
+        </div>
+        """.format(tir=f"{tir_value:.1f}%" if isinstance(tir_value, (int, float)) else str(tir_value)), unsafe_allow_html=True)
+    
+    with col4:
+        st.markdown("""
+        <div class="dashboard-card">
+            <h4>📊 RELACIÓN B/C</h4>
+            <div class="stats-value">{bc:.2f}</div>
+            <div class="stats-label">Beneficio/Costo</div>
+        </div>
+        """.format(bc=resultados_economicos['relacion_bc_proy']), unsafe_allow_html=True)
+    
+    # ===== GRÁFICO DE RENTABILIDAD =====
+    st.markdown("### 📈 ANÁLISIS DE RENTABILIDAD")
+    
+    # Datos para gráficos
+    escenarios = ['Actual (sin fertilización)', 'Proyectado (con fertilización)']
+    margenes = [
+        resultados_economicos['margen_actual_ha'],
+        resultados_economicos['margen_proy_ha']
+    ]
+    ingresos = [
+        resultados_economicos['ingreso_actual_ha'],
+        resultados_economicos['ingreso_proy_ha']
+    ]
+    costos = [
+        resultados_economicos['costo_total_ha'] - resultados_economicos['costo_fertilizacion_ha'],
+        resultados_economicos['costo_total_ha']
+    ]
+    
+    fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(14, 10))
+    fig.patch.set_facecolor('#0f172a')
+    
+    # Gráfico 1: Comparativa de margen por hectárea
+    ax1.bar(escenarios, margenes, color=['#ef4444', '#10b981'])
+    ax1.set_title('Margen Neto por Hectárea', color='white', fontweight='bold')
+    ax1.set_ylabel('USD/ha', color='white')
+    ax1.tick_params(colors='white')
+    ax1.set_facecolor('#0f172a')
+    
+    # Agregar valores en las barras
+    for i, v in enumerate(margenes):
+        ax1.text(i, v + max(margenes)*0.02, f'${v:,.0f}', 
+                ha='center', color='white', fontweight='bold')
+    
+    # Gráfico 2: Composición de ingresos vs costos
+    x = np.arange(len(escenarios))
+    width = 0.35
+    
+    ax2.bar(x - width/2, ingresos, width, label='Ingresos', color='#3b82f6')
+    ax2.bar(x + width/2, costos, width, label='Costos', color='#f59e0b')
+    ax2.set_title('Ingresos vs Costos por Hectárea', color='white', fontweight='bold')
+    ax2.set_ylabel('USD/ha', color='white')
+    ax2.set_xticks(x)
+    ax2.set_xticklabels(escenarios, color='white')
+    ax2.tick_params(colors='white')
+    ax2.legend(facecolor='#0f172a', edgecolor='white', labelcolor='white')
+    ax2.set_facecolor('#0f172a')
+    
+    # Gráfico 3: Distribución de costos
+    costos_detalle = {
+        'Semilla': resultados_economicos['costo_semilla_ha'],
+        'Fertilización': resultados_economicos['costo_fertilizacion_ha'],
+        'Herbicidas': PARAMETROS_ECONOMICOS['PRECIOS_CULTIVOS'][resultados_economicos['cultivo']]['costo_herbicidas'],
+        'Inseticidas': PARAMETROS_ECONOMICOS['PRECIOS_CULTIVOS'][resultados_economicos['cultivo']]['costo_insecticidas'],
+        'Labores': PARAMETROS_ECONOMICOS['PRECIOS_CULTIVOS'][resultados_economicos['cultivo']]['costo_labores'],
+        'Cosecha': PARAMETROS_ECONOMICOS['PRECIOS_CULTIVOS'][resultados_economicos['cultivo']]['costo_cosecha'],
+        'Otros': PARAMETROS_ECONOMICOS['PRECIOS_CULTIVOS'][resultados_economicos['cultivo']]['costo_otros']
+    }
+    
+    colors_pie = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6']
+    ax3.pie(costos_detalle.values(), labels=costos_detalle.keys(), autopct='%1.1f%%',
+            colors=colors_pie, startangle=90, textprops={'color': 'white'})
+    ax3.set_title('Distribución de Costos por Hectárea', color='white', fontweight='bold')
+    
+    # Gráfico 4: ROI por componente
+    if resultados_economicos['detalles_fertilizacion']:
+        nutrientes = ['NITRÓGENO', 'FÓSFORO', 'POTASIO']
+        rois = []
+        labels = []
+        for nut in nutrientes:
+            det = resultados_economicos['detalles_fertilizacion'][nut]
+            if det['costo_usd_ha'] > 0:
+                # Calcular ROI aproximado para cada nutriente
+                if nut == 'NITRÓGENO':
+                    roi_nut = resultados_economicos['roi_fertilizacion_%'] * 0.4
+                elif nut == 'FÓSFORO':
+                    roi_nut = resultados_economicos['roi_fertilizacion_%'] * 0.3
+                else:
+                    roi_nut = resultados_economicos['roi_fertilizacion_%'] * 0.3
+                rois.append(roi_nut)
+                labels.append(nut[:3])
+        
+        if rois:
+            bars = ax4.bar(labels, rois, color=['#3b82f6', '#10b981', '#f59e0b'])
+            ax4.set_title('ROI por Nutriente', color='white', fontweight='bold')
+            ax4.set_ylabel('ROI (%)', color='white')
+            ax4.tick_params(colors='white')
+            ax4.set_facecolor('#0f172a')
+            
+            # Agregar valores en las barras
+            for bar in bars:
+                height = bar.get_height()
+                ax4.text(bar.get_x() + bar.get_width()/2., height + 2,
+                        f'{height:.0f}%', ha='center', color='white', fontweight='bold')
+    
+    plt.tight_layout()
+    st.pyplot(fig)
+    
+    # ===== TABLA RESUMEN =====
+    st.markdown("### 📋 RESUMEN ECONÓMICO")
+    
+    resumen_data = {
+        'Concepto': [
+            'Área Total Analizada',
+            'Variedad',
+            'Rendimiento Actual Promedio',
+            'Rendimiento Proyectado Promedio',
+            'Incremento Esperado',
+            'Precio de Mercado',
+            'Ingresos Actuales Totales',
+            'Ingresos Proyectados Totales',
+            'Costos Totales',
+            'Margen Actual Total',
+            'Margen Proyectado Total',
+            'Incremento de Margen Total'
+        ],
+        'Valor': [
+            f"{resultados_economicos['area_total_ha']:.2f} ha",
+            resultados_economicos['variedad'],
+            f"{resultados_economicos['rendimiento_actual_ton_ha']:.1f} ton/ha",
+            f"{resultados_economicos['rendimiento_proy_ton_ha']:.1f} ton/ha",
+            f"+{resultados_economicos['incremento_rendimiento_ton_ha']:.1f} ton/ha",
+            f"${resultados_economicos['precio_tonelada']:,.0f}/ton",
+            f"${resultados_economicos['ingreso_actual_ha'] * resultados_economicos['area_total_ha']:,.0f}",
+            f"${resultados_economicos['ingreso_proy_ha'] * resultados_economicos['area_total_ha']:,.0f}",
+            f"${resultados_economicos['costo_total_ha'] * resultados_economicos['area_total_ha']:,.0f}",
+            f"${resultados_economicos['margen_actual_ha'] * resultados_economicos['area_total_ha']:,.0f}",
+            f"${resultados_economicos['margen_proy_ha'] * resultados_economicos['area_total_ha']:,.0f}",
+            f"${resultados_economicos['incremento_margen_ha'] * resultados_economicos['area_total_ha']:,.0f}"
+        ]
+    }
+    
+    df_resumen = pd.DataFrame(resumen_data)
+    st.dataframe(df_resumen, use_container_width=True, hide_index=True)
+    
+    # ===== INDICADORES DE RIESGO =====
+    st.markdown("### ⚠️ INDICADORES DE RIESGO")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        # Riesgo por volatilidad de precios
+        riesgo_precios = "BAJO" if resultados_economicos['roi_fertilizacion_%'] > 150 else \
+                        "MODERADO" if resultados_economicos['roi_fertilizacion_%'] > 100 else "ALTO"
+        color_riesgo = "green" if riesgo_precios == "BAJO" else "orange" if riesgo_precios == "MODERADO" else "red"
+        st.markdown(f"""
+        <div class="dashboard-card">
+            <h4>📉 RIESGO PRECIOS</h4>
+            <div class="stats-value" style="color: {color_riesgo};">{riesgo_precios}</div>
+            <div class="stats-label">Sensibilidad a precios</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        # Punto de equilibrio
+        punto_eq = resultados_economicos['punto_equilibrio_ha']
+        st.markdown(f"""
+        <div class="dashboard-card">
+            <h4>⚖️ PUNTO EQUILIBRIO</h4>
+            <div class="stats-value">{punto_eq if isinstance(punto_eq, str) else f'{punto_eq:.1f} ha'}</div>
+            <div class="stats-label">Área mínima rentable</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col3:
+        # Margen de seguridad
+        if resultados_economicos['margen_proy_ha'] > 0:
+            margen_seguridad = ((resultados_economicos['margen_proy_ha'] - resultados_economicos['margen_actual_ha']) / 
+                               resultados_economicos['margen_proy_ha'] * 100)
+        else:
+            margen_seguridad = 0
+        st.markdown(f"""
+        <div class="dashboard-card">
+            <h4>🛡️ MARGEN SEGURIDAD</h4>
+            <div class="stats-value">{margen_seguridad:.1f}%</div>
+            <div class="stats-label">Tolerancia a variaciones</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # Recomendaciones económicas
+    st.markdown("---")
+    st.subheader("💡 RECOMENDACIONES ECONÓMICAS")
+    
+    rec_col1, rec_col2 = st.columns(2)
+    
+    with rec_col1:
+        st.markdown("##### ✅ ACCIONES RECOMENDADAS")
+        if resultados_economicos['roi_fertilizacion_%'] > 100:
+            st.success("**INVERTIR EN FERTILIZACIÓN:** ROI > 100% indica excelente retorno")
+        if resultados_economicos['van_usd'] > 0:
+            st.success("**PROYECTO VIABLE:** VAN positivo genera valor económico")
+        if isinstance(resultados_economicos['tir_%'], (int, float)) and resultados_economicos['tir_%'] > resultados_economicos['tasa_descuento']:
+            st.success(f"**TIR ATRACTIVA:** {resultados_economicos['tir_%']:.1f}% supera la tasa de descuento")
+        
+        # Recomendación específica por cultivo
+        if resultados_economicos['cultivo'] == "MAÍZ":
+            st.info("Para maíz: Considerar fertilización nitrogenada en dosis divididas")
+        elif resultados_economicos['cultivo'] == "SOYA":
+            st.info("Para soja: Optimizar inoculación y manejo de fósforo")
+        elif resultados_economicos['cultivo'] == "TRIGO":
+            st.info("Para trigo: Priorizar nitrógeno en macollamiento y encañazón")
+        elif resultados_economicos['cultivo'] == "GIRASOL":
+            st.info("Para girasol: Aplicar potasio para mejorar calidad de semilla")
+    
+    with rec_col2:
+        st.markdown("##### ⚠️ CONSIDERACIONES")
+        st.warning("**RIESGOS CLIMÁTICOS:** Considerar seguro agrícola")
+        st.warning("**VOLATILIDAD PRECIOS:** Diversificar cultivos si es posible")
+        st.warning("**COSTOS LOGÍSTICOS:** Incluir en análisis de rentabilidad")
+        punto_eq = resultados_economicos['punto_equilibrio_ha']
+        if isinstance(punto_eq, (int, float)) and punto_eq > 0:
+            st.info(f"**PUNTO DE EQUILIBRIO:** {punto_eq:.1f} ha para recuperar inversión")
+        elif punto_eq == float('inf') or punto_eq == '∞':
+            st.error("**NO RECOMENDABLE:** La inversión no se recupera con el área disponible")
+    
+    # Descargar análisis económico
+    st.markdown("---")
+    st.subheader("📥 EXPORTAR ANÁLISIS ECONÓMICO")
+    
+    if st.button("📊 Generar Reporte Económico (Excel)"):
+        # Crear DataFrame para Excel
+        resultados_sin_detalles = {k:v for k,v in resultados_economicos.items() 
+                                   if k not in ['detalles_fertilizacion']}
+        
+        # Crear Excel con múltiples hojas
+        excel_buffer = BytesIO()
+        with pd.ExcelWriter(excel_buffer, engine='openpyxl') as writer:
+            # Hoja 1: Resumen
+            pd.DataFrame([resultados_sin_detalles]).T.to_excel(writer, sheet_name='Resumen', header=['Valor'])
+            
+            # Hoja 2: Costos detallados
+            costos_det = pd.DataFrame({
+                'Rubro': ['Semilla', 'Fertilización', 'Herbicidas', 'Inseticidas', 'Labores', 'Cosecha', 'Otros', 'TOTAL'],
+                'USD/ha': [
+                    resultados_economicos['costo_semilla_ha'],
+                    resultados_economicos['costo_fertilizacion_ha'],
+                    PARAMETROS_ECONOMICOS['PRECIOS_CULTIVOS'][resultados_economicos['cultivo']]['costo_herbicidas'],
+                    PARAMETROS_ECONOMICOS['PRECIOS_CULTIVOS'][resultados_economicos['cultivo']]['costo_insecticidas'],
+                    PARAMETROS_ECONOMICOS['PRECIOS_CULTIVOS'][resultados_economicos['cultivo']]['costo_labores'],
+                    PARAMETROS_ECONOMICOS['PRECIOS_CULTIVOS'][resultados_economicos['cultivo']]['costo_cosecha'],
+                    PARAMETROS_ECONOMICOS['PRECIOS_CULTIVOS'][resultados_economicos['cultivo']]['costo_otros'],
+                    resultados_economicos['costo_total_ha']
+                ]
+            })
+            costos_det.to_excel(writer, sheet_name='Costos', index=False)
+            
+            # Hoja 3: Proyecciones de flujo de caja
+            financieros = PARAMETROS_ECONOMICOS['PARAMETROS_FINANCIEROS']
+            flujos_proyectados = []
+            
+            for año in range(financieros['periodo_analisis'] + 1):
+                if año == 0:
+                    flujo_anual = -resultados_economicos['costo_fertilizacion_total_usd']
+                else:
+                    flujo_anual = resultados_economicos['incremento_margen_ha'] * resultados_economicos['area_total_ha']
+                    
+                    # Ajustar por inflación
+                    factor_inflacion = (1 + financieros['inflacion_esperada']) ** (año - 1)
+                    flujo_anual *= factor_inflacion
+                    
+                    # Ajustar por impuestos y subsidios
+                    flujo_anual = flujo_anual * (1 - financieros['impuestos'])
+                    flujo_anual = flujo_anual * (1 + financieros['subsidios'])
+                
+                flujos_proyectados.append({
+                    'Año': año,
+                    'Flujo Neto (USD)': flujo_anual,
+                    'Flujo Acumulado (USD)': sum(f['Flujo Neto (USD)'] for f in flujos_proyectados) + flujo_anual
+                })
+            
+            pd.DataFrame(flujos_proyectados).to_excel(writer, sheet_name='Proyecciones', index=False)
+        
+        excel_buffer.seek(0)
+        
+        st.download_button(
+            label="📥 Descargar Análisis Económico (Excel)",
+            data=excel_buffer,
+            file_name=f"analisis_economico_{resultados_economicos['cultivo']}_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
 # ===== FUNCIONES PARA GENERAR MAPAS DE CALOR DE RENDIMIENTO =====
 def crear_mapa_calor_rendimiento_actual(gdf_analizado, cultivo):
     """Crea mapa de calor para rendimiento actual con visualización suave y profesional"""
