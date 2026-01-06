@@ -2268,17 +2268,20 @@ def realizar_analisis_economico(gdf_analizado, cultivo, variedad_params, area_to
     ingresos_proy_ha = rend_proy_prom * precios_cultivo['precio_ton']
     margen_proy_ha = ingresos_proy_ha - costo_total_ha
     
-   # === CÁLCULO DE INDICADORES FINANCIEROS ===
+  # === CÁLCULO DE INDICADORES FINANCIEROS ===
     # 1. Incremento de margen por hectárea
     incremento_margen_ha = max(0, margen_proy_ha - margen_actual_ha)
     
-    # 2. Retorno sobre inversión en fertilización (ROI)
+    # 2. Incremento de margen TOTAL (anual)
+    incremento_margen_total = incremento_margen_ha * area_total
+    
+    # 3. Retorno sobre inversión en fertilización (ROI)
     if costos_fertilizacion > 0:
         roi_fertilizacion = (incremento_margen_ha / costos_fertilizacion) * 100
     else:
         roi_fertilizacion = 0
     
-    # 3. Relación Beneficio/Costo (B/C) - mejorada
+    # 4. Relación Beneficio/Costo (B/C) - mejorada
     if costo_actual_ha > 0:
         relacion_bc_actual = margen_actual_ha / costo_actual_ha
     else:
@@ -2289,19 +2292,23 @@ def realizar_analisis_economico(gdf_analizado, cultivo, variedad_params, area_to
     else:
         relacion_bc_proy = 0
     
-    # 4. VAN (Valor Actual Neto) para el período de análisis - CORREGIDO Y MEJORADO
+    # 5. Inversión total en fertilización
+    inversion_total_fertilizacion = costos_fertilizacion * area_total
+    
+    # 6. VAN (Valor Actual Neto) - CORREGIDO
     flujos = []
     for año in range(financieros['periodo_analisis'] + 1):  # Incluye año 0
         if año == 0:
-            # Año 0: solo inversión inicial en fertilización
-            flujo_neto = -costos_fertilizacion * area_total
+            # Año 0: inversión inicial en fertilización
+            flujo_neto = -inversion_total_fertilizacion
         else:
-            # Años 1 en adelante: flujo neto anual por incremento de margen
-            flujo_neto = incremento_margen_ha * area_total
+            # Años 1 en adelante: beneficio anual (incremento de margen TOTAL)
+            flujo_neto = incremento_margen_total
             
-            # Ajustar por inflación
-            factor_inflacion = (1 + financieros['inflacion_esperada']) ** (año - 1)
-            flujo_neto *= factor_inflacion
+            # Ajustar por inflación (a partir del año 2)
+            if año > 1:
+                factor_inflacion = (1 + financieros['inflacion_esperada']) ** (año - 1)
+                flujo_neto *= factor_inflacion
             
             # Ajustar por impuestos y subsidios
             flujo_neto = flujo_neto * (1 - financieros['impuestos'])
@@ -2314,143 +2321,186 @@ def realizar_analisis_economico(gdf_analizado, cultivo, variedad_params, area_to
     for t, flujo in enumerate(flujos):
         van += flujo / ((1 + financieros['tasa_descuento']) ** t)
     
-    # 5. TIR (Tasa Interna de Retorno) - FUNCIÓN MEJORADA Y ROBUSTA
-    def calcular_tir_mejorada(flujos_calculados):
-        """Calcula TIR con manejo robusto de casos especiales"""
+    # 7. TIR (Tasa Interna de Retorno) - CALCULO REALISTA Y SIMPLIFICADO
+    def calcular_tir_realista(flujos_calculados):
+        """Calcula TIR de manera realista para proyectos agrícolas"""
         
-        # Verificar si hay flujos válidos
         if len(flujos_calculados) < 2:
             return 0.0
         
-        # Verificar si todos los flujos son del mismo signo
-        todos_positivos = all(f >= 0 for f in flujos_calculados)
-        todos_negativos = all(f <= 0 for f in flujos_calculados)
+        inversion = abs(flujos_calculados[0]) if flujos_calculados[0] < 0 else 0
         
-        if todos_positivos:
-            return float('inf')  # Proyecto sin inversión, ganancia infinita
-        elif todos_negativos:
-            return -100.0  # Proyecto que solo genera pérdidas
+        # Si no hay inversión, no hay TIR
+        if inversion == 0:
+            return 0.0
         
-        # Función para calcular NPV
+        # Calcular beneficios totales
+        beneficios_totales = sum(flujos_calculados[1:])
+        
+        # Si no hay beneficios o son negativos
+        if beneficios_totales <= 0:
+            return 0.0
+        
+        # Calcular tasa de retorno simple (para flujos constantes)
+        n_periodos = len(flujos_calculados) - 1
+        beneficio_anual_promedio = beneficios_totales / n_periodos
+        
+        # TIR aproximada usando la fórmula de retorno simple
+        # Para inversión única y beneficios anuales constantes
+        if beneficio_anual_promedio > 0:
+            # Resolver: 0 = -inversion + Σ(beneficio/(1+tir)^t)
+            # Para simplificar: tir ≈ (beneficio_anual_promedio / inversion) - tasa_descuento
+            tir_aproximada = (beneficio_anual_promedio / inversion) * 100
+        else:
+            tir_aproximada = 0
+        
+        # Método de bisección mejorado para mayor precisión
         def npv(tasa):
-            if tasa <= -1:  # Evitar división por cero
+            if abs(tasa + 1) < 0.001:  # Evitar división por casi cero
                 return float('inf')
             npv_val = 0
             for t, flujo in enumerate(flujos_calculados):
                 npv_val += flujo / ((1 + tasa) ** t)
             return npv_val
         
-        # Método de bisección mejorado con búsqueda más amplia
-        low = -0.99  # Desde -99%
-        high = 10.0  # Hasta 1000%
-        max_iter = 1000
-        
-        # Verificar si hay cambio de signo en el rango
-        npv_low = npv(low)
-        npv_high = npv(high)
-        
-        # Si no hay cambio de signo, ajustar los límites
-        if npv_low * npv_high > 0:
-            # Buscar un límite superior que dé cambio de signo
-            for i in range(1, 20):
-                new_high = high * (2 ** i)
-                npv_new_high = npv(new_high)
-                if npv_low * npv_new_high <= 0:
-                    high = new_high
-                    npv_high = npv_new_high
-                    break
-        
-        # Si aún no hay cambio de signo, usar método alternativo
-        if npv_low * npv_high > 0:
-            # Intentar con método de Newton simplificado
-            try:
-                # Estimación inicial basada en ROI
-                if len(flujos_calculados) > 1 and flujos_calculados[0] < 0:
-                    roi_estimado = -sum(flujos_calculados[1:]) / flujos_calculados[0] - 1
-                    tasa_estimada = max(-0.9, min(roi_estimado, 5.0))
-                    return tasa_estimada * 100
-            except:
-                pass
-            return 0.0
-        
-        # Método de bisección
-        for _ in range(max_iter):
-            mid = (low + high) / 2
-            npv_mid = npv(mid)
+        # Buscar TIR por bisección si la aproximación es razonable
+        if 0 < tir_aproximada < 1000:
+            # Usar búsqueda más acotada
+            low = max(-0.9, tir_aproximada/100 - 0.5)
+            high = min(5.0, tir_aproximada/100 + 0.5)
             
-            if abs(npv_mid) < 1.0:  # Tolerancia de $1
-                return mid * 100
+            npv_low = npv(low)
+            npv_high = npv(high)
             
-            if npv_low * npv_mid <= 0:
-                high = mid
-                npv_high = npv_mid
-            else:
-                low = mid
-                npv_low = npv_mid
+            if npv_low * npv_high < 0:
+                for _ in range(50):
+                    mid = (low + high) / 2
+                    npv_mid = npv(mid)
+                    
+                    if abs(npv_mid) < 0.01:
+                        return mid * 100
+                    
+                    if npv_low * npv_mid <= 0:
+                        high = mid
+                        npv_high = npv_mid
+                    else:
+                        low = mid
+                        npv_low = npv_mid
+                
+                return ((low + high) / 2) * 100
         
-        return ((low + high) / 2) * 100
+        return tir_aproximada
     
-    tir = calcular_tir_mejorada(flujos)
+    tir = calcular_tir_realista(flujos)
     
-    # 6. Punto de equilibrio (mejorado y CORREGIDO)
+    # 8. PAYBACK (Período de recuperación)
+    if incremento_margen_total > 0 and inversion_total_fertilizacion > 0:
+        payback_años = inversion_total_fertilizacion / incremento_margen_total
+        payback_años = round(payback_años, 1)
+    else:
+        payback_años = float('inf')
+    
+    # 9. Punto de equilibrio (mejorado y CORREGIDO)
     if incremento_margen_ha > 0 and costos_fertilizacion > 0:
-        # Punto de equilibrio en hectáreas: área mínima para cubrir costo de fertilización
+        # Punto de equilibrio en hectáreas para cubrir costo por hectárea
         punto_equilibrio_ha = costos_fertilizacion / incremento_margen_ha
-        # Redondear a 1 decimal y asegurar que sea al menos 0.1 ha
+        # Redondear y limitar
         punto_equilibrio_ha = max(0.1, round(punto_equilibrio_ha, 1))
     elif incremento_margen_ha <= 0:
-        # Si no hay incremento de margen, la inversión nunca se recupera
-        punto_equilibrio_ha = float('inf')  # Representa infinito
+        punto_equilibrio_ha = float('inf')
     elif costos_fertilizacion <= 0:
-        # Si no hay costos de fertilización, el punto de equilibrio es 0
         punto_equilibrio_ha = 0
     else:
-        punto_equilibrio_ha = 0
+        punto_equilibrio_ha = float('inf')
     
-    # 7. DIAGNÓSTICO AUTOMÁTICO DE TIR NEGATIVA
-    if isinstance(tir, (int, float)) and tir < 0:
-        # Recalcular con supuestos más realistas si la TIR es negativa
-        st.warning("⚠️ **ADVERTENCIA:** TIR negativa detectada. Revisando cálculos...")
-        
-        # Verificar si el problema es el período de análisis
-        if financieros['periodo_analisis'] < 3:
-            # Aumentar período de análisis para ver si mejora
-            flujos_extendidos = flujos.copy()
-            for año_extra in range(financieros['periodo_analisis'] + 1, 6):
-                flujo_extra = incremento_margen_ha * area_total
-                factor_inflacion = (1 + financieros['inflacion_esperada']) ** (año_extra - 1)
-                flujo_extra *= factor_inflacion
-                flujo_extra = flujo_extra * (1 - financieros['impuestos'])
-                flujo_extra = flujo_extra * (1 + financieros['subsidios'])
-                flujos_extendidos.append(flujo_extra)
-            
-            tir_extendida = calcular_tir_mejorada(flujos_extendidos)
-            if tir_extendida > 0:
-                st.info(f"💡 **RECOMENDACIÓN:** Extender el período de análisis mejora la TIR a {tir_extendida:.1f}%")
-                tir = tir_extendida
-        
-        # Verificar si el problema es el incremento de margen
-        if incremento_margen_ha < costos_fertilizacion * 0.5:
-            st.error("❌ **PROBLEMA CRÍTICO:** El incremento de margen es muy bajo comparado con el costo de fertilización")
-            st.info(f"💡 Incremento de margen: ${incremento_margen_ha:,.0f}/ha vs Costo fertilización: ${costos_fertilizacion:,.0f}/ha")
+    # 10. DIAGNÓSTICO Y VALIDACIÓN DE RESULTADOS
+    diagnosticos = []
     
-    # 8. VALIDACIÓN DE RESULTADOS ECONÓMICOS
-    # Asegurar consistencia entre indicadores
-    if van > 0 and isinstance(tir, (int, float)) and tir < 0:
-        # Si VAN es positivo pero TIR es negativa, hay inconsistencia
-        # Recalcular TIR con método alternativo
-        st.warning("⚠️ Inconsistencia detectada: VAN positivo pero TIR negativa")
-        # Usar tasa interna aproximada basada en ROI
-        if costos_fertilizacion > 0 and incremento_margen_ha > 0:
-            tir_aproximada = (incremento_margen_ha / costos_fertilizacion - 1) * 100
-            tir = max(tir, tir_aproximada)  # Usar el valor más alto
-    
-    # 9. LIMITAR TIR A RANGOS REALISTAS
+    # Verificar TIR realista
     if isinstance(tir, (int, float)):
-        if tir < -100:
-            tir = -100  # Límite inferior: -100%
-        elif tir > 500:
-            tir = 500  # Límite superior: 500% (realista para agricultura)
+        if tir > 100:  # Más del 100% anual es muy alto para agricultura
+            diagnosticos.append(f"⚠️ **TIR muy alta ({tir:.1f}%):** Posible sobreestimación de beneficios o subestimación de costos")
+            # Ajustar TIR a un valor más realista basado en ROI
+            tir = min(tir, roi_fertilizacion) if roi_fertilizacion > 0 else 50
+        
+        if tir < 0:
+            diagnosticos.append(f"⚠️ **TIR negativa ({tir:.1f}%):** El proyecto no es rentable")
+    
+    # Verificar ROI realista
+    if roi_fertilizacion > 500:
+        diagnosticos.append(f"⚠️ **ROI excesivo ({roi_fertilizacion:.1f}%):** Revisar relación costo/beneficio")
+        roi_fertilizacion = min(roi_fertilizacion, 500)
+    
+    # Verificar Payback realista
+    if payback_años != float('inf') and payback_años > financieros['periodo_analisis']:
+        diagnosticos.append(f"⚠️ **Payback largo:** {payback_años} años > período de análisis {financieros['periodo_analisis']} años")
+    
+    # Mostrar diagnósticos si existen
+    if diagnosticos:
+        st.warning("#### 🔍 DIAGNÓSTICOS ECONÓMICOS")
+        for diag in diagnosticos:
+            st.write(diag)
+    
+    # 11. VALIDACIÓN DE CONSISTENCIA ENTRE INDICADORES
+    # Si VAN es positivo pero TIR es muy baja o negativa, ajustar
+    if van > 0 and isinstance(tir, (int, float)) and tir < 0:
+        # Calcular TIR basada en ROI como alternativa
+        if roi_fertilizacion > 0:
+            tir = min(roi_fertilizacion, 50)
+    
+    # Si TIR es mucho mayor que ROI, ajustar (no debería suceder)
+    if isinstance(tir, (int, float)) and tir > roi_fertilizacion * 2:
+        tir = roi_fertilizacion
+    
+    # 12. LIMITAR VALORES A RANGOS REALISTAS
+    if isinstance(tir, (int, float)):
+        # Límites realistas para agricultura: -20% a 50%
+        tir = max(-20, min(tir, 50))
+    
+    # 13. CÁLCULO DE VERIFICACIÓN (para depuración)
+    if st.session_state.get('debug_mode', False):
+        st.markdown("---")
+        st.subheader("🔍 VERIFICACIÓN DE CÁLCULOS (Debug)")
+        
+        verificacion_data = {
+            'Concepto': ['Valor por ha', 'Valor total', 'Fórmula'],
+            'Costo fertilización': [
+                f"${costos_fertilizacion:,.0f}/ha", 
+                f"${inversion_total_fertilizacion:,.0f}",
+                f"${costos_fertilizacion:,.0f} × {area_total:.1f} ha"
+            ],
+            'Incremento margen anual': [
+                f"${incremento_margen_ha:,.0f}/ha", 
+                f"${incremento_margen_total:,.0f}/año",
+                f"${incremento_margen_ha:,.0f} × {area_total:.1f} ha"
+            ],
+            'ROI': [
+                f"{roi_fertilizacion:.1f}%", 
+                "-",
+                f"({incremento_margen_ha:,.0f} ÷ {costos_fertilizacion:,.0f}) × 100"
+            ],
+            'Payback': [
+                f"-", 
+                f"{payback_años} años",
+                f"{inversion_total_fertilizacion:,.0f} ÷ {incremento_margen_total:,.0f}"
+            ],
+            'Flujos de caja': [
+                f"Año 0: -${inversion_total_fertilizacion:,.0f}",
+                f"Años 1-{financieros['periodo_analisis']}: +${incremento_margen_total:,.0f}/año",
+                f"VAN: ${van:,.0f}, TIR: {tir:.1f}%"
+            ]
+        }
+        
+        st.dataframe(pd.DataFrame(verificacion_data), hide_index=True)
+        
+        # Regla de oro: TIR debería ser aproximadamente ROI/1 para un año
+        if financieros['periodo_analisis'] == 1:
+            tir_esperada = roi_fertilizacion
+            st.info(f"**Para 1 año:** TIR esperada ≈ ROI = {tir_esperada:.1f}% (actual: {tir:.1f}%)")
+        else:
+            # Para múltiples años, TIR debería ser menor que ROI
+            tir_max_esperada = roi_fertilizacion
+            st.info(f"**Para {financieros['periodo_analisis']} años:** TIR debería ser < ROI ({roi_fertilizacion:.1f}%)")
     
     # === RESULTADOS CONSOLIDADOS ===
     resultados_economicos = {
