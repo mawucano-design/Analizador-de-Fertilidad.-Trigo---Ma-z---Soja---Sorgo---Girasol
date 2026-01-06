@@ -1901,134 +1901,6 @@ def calcular_indices_npk_avanzados(gdf, cultivo, satelite):
         })
     
     return resultados
-
-# ===== FUNCIONES PARA CÁLCULO DE RENDIMIENTO MEJORADAS =====
-def obtener_parametros_rendimiento(cultivo):
-    """Obtiene parámetros de rendimiento según cultivo y variedad"""
-    if 'variedad_params' in st.session_state and st.session_state['variedad_params']:
-        variedad_params = st.session_state['variedad_params']
-        params = PARAMETROS_CULTIVOS[cultivo].copy()
-        
-        # Actualizar con parámetros de la variedad
-        params.update({
-            'RENDIMIENTO_BASE': variedad_params['RENDIMIENTO_BASE'],
-            'RENDIMIENTO_OPTIMO': variedad_params['RENDIMIENTO_OPTIMO'],
-            'RESPUESTA_N': variedad_params['RESPUESTA_N'],
-            'RESPUESTA_P': variedad_params['RESPUESTA_P'],
-            'RESPUESTA_K': variedad_params['RESPUESTA_K'],
-            'NITROGENO': {'optimo': variedad_params['NITROGENO_OPTIMO']},
-            'FOSFORO': {'optimo': variedad_params['FOSFORO_OPTIMO']},
-            'POTASIO': {'optimo': variedad_params['POTASIO_OPTIMO']}
-        })
-        return params
-    else:
-        return PARAMETROS_CULTIVOS[cultivo]
-
-def calcular_rendimiento_potencial(gdf_analizado, cultivo):
-    """Calcula el rendimiento potencial actual basado en fertilidad existente"""
-    params = obtener_parametros_rendimiento(cultivo)
-    rendimientos = []
-    
-    for idx, row in gdf_analizado.iterrows():
-        # Factor de fertilidad actual (0-1)
-        factor_fertilidad = row['npk_integrado']
-        
-        # Factor de humedad (NDWI ajustado)
-        factor_humedad = min(1.0, row['ndwi'] / 0.4) if 'ndwi' in row else 0.7
-        
-        # Factor de vigor vegetativo (NDVI)
-        factor_vigor = min(1.2, row['ndvi'] / params['NDVI_OPTIMO'])
-        
-        # Factor climático base
-        factor_clima = params['FACTOR_CLIMA']
-        
-        # Cálculo de rendimiento base
-        rendimiento_base = params['RENDIMIENTO_BASE']
-        
-        # Ajuste por fertilidad actual
-        ajuste_fertilidad = 0.5 + (factor_fertilidad * 0.5)  # Entre 0.5 y 1.0
-        
-        # Rendimiento potencial estimado
-        rendimiento_potencial = (
-            rendimiento_base * 
-            ajuste_fertilidad * 
-            factor_humedad * 
-            factor_vigor * 
-            factor_clima
-        )
-        
-        # Límite máximo por defecto
-        rendimiento_potencial = min(rendimiento_potencial, params['RENDIMIENTO_OPTIMO'] * 1.1)
-        
-        rendimientos.append(round(rendimiento_potencial, 2))
-    
-    return rendimientos
-
-def calcular_rendimiento_con_recomendaciones(gdf_analizado, cultivo):
-    """Calcula el rendimiento proyectado aplicando recomendaciones NPK"""
-    params = obtener_parametros_rendimiento(cultivo)
-    rendimientos = []
-    
-    for idx, row in gdf_analizado.iterrows():
-        # Rendimiento base actual
-        factor_fertilidad = row['npk_integrado']
-        factor_humedad = min(1.0, row['ndwi'] / 0.4) if 'ndwi' in row else 0.7
-        factor_vigor = min(1.2, row['ndvi'] / params['NDVI_OPTIMO'])
-        factor_clima = params['FACTOR_CLIMA']
-        
-        rendimiento_base = params['RENDIMIENTO_BASE']
-        ajuste_fertilidad = 0.5 + (factor_fertilidad * 0.5)
-        
-        rendimiento_actual = (
-            rendimiento_base * 
-            ajuste_fertilidad * 
-            factor_humedad * 
-            factor_vigor * 
-            factor_clima
-        )
-        
-        # Calcular incremento por fertilización
-        incremento_total = 0
-        
-        # Incremento por Nitrógeno
-        if 'valor_recomendado' in row and row['valor_recomendado'] > 0:
-            n_actual = row['nitrogeno_actual']
-            n_optimo = params['NITROGENO']['optimo']
-            if n_actual < n_optimo * 0.9:  # Si hay deficiencia significativa
-                deficiencia_n = max(0, n_optimo - n_actual)
-                eficiencia_n = params['RESPUESTA_N'] * 0.7  # 70% de eficiencia
-                incremento_n = deficiencia_n * eficiencia_n
-                incremento_total += min(incremento_n, deficiencia_n * params['RESPUESTA_N'])
-        
-        # Incremento por Fósforo
-        p_actual = row['fosforo_actual']
-        p_optimo = params['FOSFORO']['optimo']
-        if p_actual < p_optimo * 0.85:
-            deficiencia_p = max(0, p_optimo - p_actual)
-            eficiencia_p = params['RESPUESTA_P'] * 0.5  # 50% de eficiencia
-            incremento_p = deficiencia_p * eficiencia_p
-            incremento_total += incremento_p
-        
-        # Incremento por Potasio
-        k_actual = row['potasio_actual']
-        k_optimo = params['POTASIO']['optimo']
-        if k_actual < k_optimo * 0.85:
-            deficiencia_k = max(0, k_optimo - k_actual)
-            eficiencia_k = params['RESPUESTA_K'] * 0.6  # 60% de eficiencia
-            incremento_k = deficiencia_k * eficiencia_k
-            incremento_total += incremento_k
-        
-        # Rendimiento con recomendaciones
-        rendimiento_proyectado = rendimiento_actual + incremento_total
-        
-        # Límite máximo
-        rendimiento_max = params['RENDIMIENTO_OPTIMO'] * 1.2  # 20% sobre el óptimo
-        rendimiento_proyectado = min(rendimiento_proyectado, rendimiento_max)
-        
-        rendimientos.append(round(rendimiento_proyectado, 2))
-    
-    return rendimientos
-
 # ===== FUNCIONES PARA CÁLCULO DE RENDIMIENTO MEJORADAS =====
 def obtener_parametros_rendimiento(cultivo):
     """Obtiene parámetros de rendimiento según cultivo y variedad"""
@@ -2072,8 +1944,12 @@ def calcular_rendimiento_potencial(gdf_analizado, cultivo):
         # Cálculo de rendimiento base
         rendimiento_base = params['RENDIMIENTO_BASE']
         
-        # Ajuste por fertilidad actual
-        ajuste_fertilidad = 0.5 + (factor_fertilidad * 0.5)  # Entre 0.5 y 1.0
+        # Ajuste por fertilidad actual - MEJORADO
+        # Si la fertilidad es baja (npk_integrado < 0.5), reduce más el rendimiento
+        if factor_fertilidad < 0.5:
+            ajuste_fertilidad = 0.3 + (factor_fertilidad * 0.4)  # Entre 0.3 y 0.7
+        else:
+            ajuste_fertilidad = 0.7 + (factor_fertilidad * 0.3)  # Entre 0.7 y 1.0
         
         # Rendimiento potencial estimado
         rendimiento_potencial = (
@@ -2085,26 +1961,43 @@ def calcular_rendimiento_potencial(gdf_analizado, cultivo):
         )
         
         # Límite máximo por defecto
-        rendimiento_potencial = min(rendimiento_potencial, params['RENDIMIENTO_OPTIMO'] * 1.1)
+        rendimiento_maximo = params['RENDIMIENTO_OPTIMO'] * 1.1
+        rendimiento_potencial = min(rendimiento_potencial, rendimiento_maximo)
+        
+        # Asegurar que no sea negativo
+        rendimiento_potencial = max(0, rendimiento_potencial)
         
         rendimientos.append(round(rendimiento_potencial, 2))
     
     return rendimientos
 
 def calcular_rendimiento_con_recomendaciones(gdf_analizado, cultivo):
-    """Calcula el rendimiento proyectado aplicando recomendaciones NPK"""
+    """Calcula el rendimiento proyectado aplicando recomendaciones NPK - CORREGIDO"""
     params = obtener_parametros_rendimiento(cultivo)
     rendimientos = []
     
+    # Verificar si hay recomendaciones
+    tiene_recomendaciones = any(col in gdf_analizado.columns for col in ['nitrogeno_recomendado', 'fosforo_recomendado', 'potasio_recomendado'])
+    
+    if not tiene_recomendaciones:
+        st.error("⚠️ NO HAY RECOMENDACIONES DE FERTILIZACIÓN. Usando rendimiento actual.")
+        # Si no hay recomendaciones, usar rendimiento actual
+        return calcular_rendimiento_potencial(gdf_analizado, cultivo)
+    
     for idx, row in gdf_analizado.iterrows():
-        # Rendimiento base actual
+        # 1. CALCULAR RENDIMIENTO BASE ACTUAL (misma lógica que potencial)
         factor_fertilidad = row['npk_integrado']
         factor_humedad = min(1.0, row['ndwi'] / 0.4) if 'ndwi' in row and not pd.isna(row['ndwi']) else 0.7
         factor_vigor = min(1.2, row['ndvi'] / params.get('NDVI_OPTIMO', 0.8))
         factor_clima = params['FACTOR_CLIMA']
         
         rendimiento_base = params['RENDIMIENTO_BASE']
-        ajuste_fertilidad = 0.5 + (factor_fertilidad * 0.5)
+        
+        # Ajuste por fertilidad actual
+        if factor_fertilidad < 0.5:
+            ajuste_fertilidad = 0.3 + (factor_fertilidad * 0.4)
+        else:
+            ajuste_fertilidad = 0.7 + (factor_fertilidad * 0.3)
         
         rendimiento_actual = (
             rendimiento_base * 
@@ -2114,180 +2007,83 @@ def calcular_rendimiento_con_recomendaciones(gdf_analizado, cultivo):
             factor_clima
         )
         
-        # Calcular incremento por fertilización basado en deficiencias
+        # 2. CALCULAR INCREMENTO POR FERTILIZACIÓN - REVISADO Y CORREGIDO
+        
+        # Inicializar incremento total
         incremento_total = 0
         
-        # Incremento por Nitrógeno (usando la columna de recomendación)
-        if 'nitrogeno_recomendado' in row and row['nitrogeno_recomendado'] > 0:
+        # Verificar si hay deficiencias significativas y recomendaciones
+        # NITRÓGENO
+        if 'nitrogeno_actual' in row and 'nitrogeno_recomendado' in row and not pd.isna(row['nitrogeno_recomendado']):
             n_actual = row['nitrogeno_actual']
             n_optimo = params['NITROGENO']['optimo']
-            if n_actual < n_optimo * 0.9:  # Si hay deficiencia significativa
+            n_recomendado = row['nitrogeno_recomendado']
+            
+            # Solo aplicar si hay deficiencia y recomendación
+            if n_actual < n_optimo * 0.9 and n_recomendado > 0:
                 deficiencia_n = max(0, n_optimo - n_actual)
-                # El incremento es proporcional a la respuesta del cultivo y la eficiencia de aplicación
-                incremento_n = deficiencia_n * params['RESPUESTA_N'] * 0.7  # 70% de eficiencia
-                incremento_total += min(incremento_n, deficiencia_n * params['RESPUESTA_N'])
+                # El incremento es proporcional a la deficiencia y la respuesta del cultivo
+                # Usamos la recomendación como guía, pero limitamos por la deficiencia
+                n_a_aplicar = min(n_recomendado, deficiencia_n)
+                incremento_n = n_a_aplicar * params['RESPUESTA_N'] * 0.7  # 70% de eficiencia
+                incremento_total += incremento_n
         
-        # Incremento por Fósforo
-        if 'fosforo_recomendado' in row and row['fosforo_recomendado'] > 0:
+        # FÓSFORO
+        if 'fosforo_actual' in row and 'fosforo_recomendado' in row and not pd.isna(row['fosforo_recomendado']):
             p_actual = row['fosforo_actual']
             p_optimo = params['FOSFORO']['optimo']
-            if p_actual < p_optimo * 0.85:
+            p_recomendado = row['fosforo_recomendado']
+            
+            if p_actual < p_optimo * 0.85 and p_recomendado > 0:
                 deficiencia_p = max(0, p_optimo - p_actual)
-                incremento_p = deficiencia_p * params['RESPUESTA_P'] * 0.5  # 50% de eficiencia
+                p_a_aplicar = min(p_recomendado, deficiencia_p)
+                incremento_p = p_a_aplicar * params['RESPUESTA_P'] * 0.5  # 50% de eficiencia
                 incremento_total += incremento_p
         
-        # Incremento por Potasio
-        if 'potasio_recomendado' in row and row['potasio_recomendado'] > 0:
+        # POTASIO
+        if 'potasio_actual' in row and 'potasio_recomendado' in row and not pd.isna(row['potasio_recomendado']):
             k_actual = row['potasio_actual']
             k_optimo = params['POTASIO']['optimo']
-            if k_actual < k_optimo * 0.85:
+            k_recomendado = row['potasio_recomendado']
+            
+            if k_actual < k_optimo * 0.85 and k_recomendado > 0:
                 deficiencia_k = max(0, k_optimo - k_actual)
-                incremento_k = deficiencia_k * params['RESPUESTA_K'] * 0.6  # 60% de eficiencia
+                k_a_aplicar = min(k_recomendado, deficiencia_k)
+                incremento_k = k_a_aplicar * params['RESPUESTA_K'] * 0.6  # 60% de eficiencia
                 incremento_total += incremento_k
         
-        # Rendimiento con recomendaciones
+        # 3. CALCULAR RENDIMIENTO PROYECTADO
         rendimiento_proyectado = rendimiento_actual + incremento_total
         
-        # Límite máximo realista (20% sobre el óptimo)
-        rendimiento_max = params['RENDIMIENTO_OPTIMO'] * 1.2
-        rendimiento_proyectado = min(rendimiento_proyectado, rendimiento_max)
+        # 4. APLICAR LÍMITES REALISTAS
+        # Límite máximo: 30% sobre el óptimo (más realista)
+        rendimiento_maximo = params['RENDIMIENTO_OPTIMO'] * 1.3
         
-        # Asegurar que no sea menor que el rendimiento actual
-        rendimiento_proyectado = max(rendimiento_proyectado, rendimiento_actual)
+        # Límite mínimo: no menos del rendimiento actual
+        rendimiento_minimo = rendimiento_actual
+        
+        rendimiento_proyectado = max(rendimiento_minimo, min(rendimiento_proyectado, rendimiento_maximo))
+        
+        # 5. VERIFICAR QUE HAYA INCREMENTO REAL
+        # Si el incremento es muy pequeño (< 0.1 ton/ha), mantener rendimiento actual
+        if (rendimiento_proyectado - rendimiento_actual) < 0.1:
+            rendimiento_proyectado = rendimiento_actual
         
         rendimientos.append(round(rendimiento_proyectado, 2))
     
     return rendimientos
 
-# ===== FUNCIONES PARA CÁLCULO DE RENDIMIENTO MEJORADAS =====
-def obtener_parametros_rendimiento(cultivo):
-    """Obtiene parámetros de rendimiento según cultivo y variedad"""
-    if 'variedad_params' in st.session_state and st.session_state['variedad_params']:
-        variedad_params = st.session_state['variedad_params']
-        params = PARAMETROS_CULTIVOS[cultivo].copy()
-        
-        # Actualizar con parámetros de la variedad
-        params.update({
-            'RENDIMIENTO_BASE': variedad_params['RENDIMIENTO_BASE'],
-            'RENDIMIENTO_OPTIMO': variedad_params['RENDIMIENTO_OPTIMO'],
-            'RESPUESTA_N': variedad_params['RESPUESTA_N'],
-            'RESPUESTA_P': variedad_params['RESPUESTA_P'],
-            'RESPUESTA_K': variedad_params['RESPUESTA_K'],
-            'NITROGENO': {'optimo': variedad_params['NITROGENO_OPTIMO']},
-            'FOSFORO': {'optimo': variedad_params['FOSFORO_OPTIMO']},
-            'POTASIO': {'optimo': variedad_params['POTASIO_OPTIMO']}
-        })
-        return params
-    else:
-        return PARAMETROS_CULTIVOS[cultivo]
-
-def calcular_rendimiento_potencial(gdf_analizado, cultivo):
-    """Calcula el rendimiento potencial actual basado en fertilidad existente"""
-    params = obtener_parametros_rendimiento(cultivo)
-    rendimientos = []
+def calcular_incremento_rendimiento(gdf_analizado, cultivo):
+    """Calcula el incremento de rendimiento entre actual y proyectado"""
+    rend_actual = calcular_rendimiento_potencial(gdf_analizado, cultivo)
+    rend_proyectado = calcular_rendimiento_con_recomendaciones(gdf_analizado, cultivo)
     
-    for idx, row in gdf_analizado.iterrows():
-        # Factor de fertilidad actual (0-1)
-        factor_fertilidad = row['npk_integrado']
-        
-        # Factor de humedad (NDWI ajustado)
-        factor_humedad = min(1.0, row['ndwi'] / 0.4) if 'ndwi' in row and not pd.isna(row['ndwi']) else 0.7
-        
-        # Factor de vigor vegetativo (NDVI)
-        factor_vigor = min(1.2, row['ndvi'] / params.get('NDVI_OPTIMO', 0.8))
-        
-        # Factor climático base
-        factor_clima = params['FACTOR_CLIMA']
-        
-        # Cálculo de rendimiento base
-        rendimiento_base = params['RENDIMIENTO_BASE']
-        
-        # Ajuste por fertilidad actual
-        ajuste_fertilidad = 0.5 + (factor_fertilidad * 0.5)  # Entre 0.5 y 1.0
-        
-        # Rendimiento potencial estimado
-        rendimiento_potencial = (
-            rendimiento_base * 
-            ajuste_fertilidad * 
-            factor_humedad * 
-            factor_vigor * 
-            factor_clima
-        )
-        
-        # Límite máximo por defecto
-        rendimiento_potencial = min(rendimiento_potencial, params['RENDIMIENTO_OPTIMO'] * 1.1)
-        
-        rendimientos.append(round(rendimiento_potencial, 2))
+    incrementos = []
+    for actual, proyectado in zip(rend_actual, rend_proyectado):
+        incremento = proyectado - actual
+        incrementos.append(round(incremento, 2))
     
-    return rendimientos
-
-def calcular_rendimiento_con_recomendaciones(gdf_analizado, cultivo):
-    """Calcula el rendimiento proyectado aplicando recomendaciones NPK"""
-    params = obtener_parametros_rendimiento(cultivo)
-    rendimientos = []
-    
-    for idx, row in gdf_analizado.iterrows():
-        # Rendimiento base actual
-        factor_fertilidad = row['npk_integrado']
-        factor_humedad = min(1.0, row['ndwi'] / 0.4) if 'ndwi' in row and not pd.isna(row['ndwi']) else 0.7
-        factor_vigor = min(1.2, row['ndvi'] / params.get('NDVI_OPTIMO', 0.8))
-        factor_clima = params['FACTOR_CLIMA']
-        
-        rendimiento_base = params['RENDIMIENTO_BASE']
-        ajuste_fertilidad = 0.5 + (factor_fertilidad * 0.5)
-        
-        rendimiento_actual = (
-            rendimiento_base * 
-            ajuste_fertilidad * 
-            factor_humedad * 
-            factor_vigor * 
-            factor_clima
-        )
-        
-        # Calcular incremento por fertilización basado en deficiencias
-        incremento_total = 0
-        
-        # Incremento por Nitrógeno (usando la columna de recomendación)
-        if 'nitrogeno_recomendado' in row and row['nitrogeno_recomendado'] > 0:
-            n_actual = row['nitrogeno_actual']
-            n_optimo = params['NITROGENO']['optimo']
-            if n_actual < n_optimo * 0.9:  # Si hay deficiencia significativa
-                deficiencia_n = max(0, n_optimo - n_actual)
-                # El incremento es proporcional a la respuesta del cultivo y la eficiencia de aplicación
-                incremento_n = deficiencia_n * params['RESPUESTA_N'] * 0.7  # 70% de eficiencia
-                incremento_total += min(incremento_n, deficiencia_n * params['RESPUESTA_N'])
-        
-        # Incremento por Fósforo
-        if 'fosforo_recomendado' in row and row['fosforo_recomendado'] > 0:
-            p_actual = row['fosforo_actual']
-            p_optimo = params['FOSFORO']['optimo']
-            if p_actual < p_optimo * 0.85:
-                deficiencia_p = max(0, p_optimo - p_actual)
-                incremento_p = deficiencia_p * params['RESPUESTA_P'] * 0.5  # 50% de eficiencia
-                incremento_total += incremento_p
-        
-        # Incremento por Potasio
-        if 'potasio_recomendado' in row and row['potasio_recomendado'] > 0:
-            k_actual = row['potasio_actual']
-            k_optimo = params['POTASIO']['optimo']
-            if k_actual < k_optimo * 0.85:
-                deficiencia_k = max(0, k_optimo - k_actual)
-                incremento_k = deficiencia_k * params['RESPUESTA_K'] * 0.6  # 60% de eficiencia
-                incremento_total += incremento_k
-        
-        # Rendimiento con recomendaciones
-        rendimiento_proyectado = rendimiento_actual + incremento_total
-        
-        # Límite máximo realista (20% sobre el óptimo)
-        rendimiento_max = params['RENDIMIENTO_OPTIMO'] * 1.2
-        rendimiento_proyectado = min(rendimiento_proyectado, rendimiento_max)
-        
-        # Asegurar que no sea menor que el rendimiento actual
-        rendimiento_proyectado = max(rendimiento_proyectado, rendimiento_actual)
-        
-        rendimientos.append(round(rendimiento_proyectado, 2))
-    
-    return rendimientos
+    return incrementos
 
 # ===== FUNCIONES PARA ANÁLISIS ECONÓMICO =====
 def realizar_analisis_economico(gdf_analizado, cultivo, variedad_params, area_total):
