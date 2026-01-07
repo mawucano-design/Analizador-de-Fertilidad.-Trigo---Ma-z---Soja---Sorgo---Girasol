@@ -842,7 +842,7 @@ VARIEDADES_TRIGO = {
         'RENDIMIENTO_OPTIMO': 6.0,
         'RESPUESTA_N': 0.022,
         'RESPUESTA_P': 0.038,
-        'RESPUESTA_K': 0.028,
+        'RESPUESTa_K': 0.028,
         'NITROGENO_OPTIMO': 135,
         'FOSFORO_OPTIMO': 42,
         'POTASIO_OPTIMO': 90,
@@ -2390,7 +2390,7 @@ def mostrar_analisis_economico(resultados_economicos):
         elif resultados_economicos['relacion_bc_proy'] > 1.2:
             st.info("**BUENA RENTABILIDAD:** La inversión es recomendable (B/C > 1.2)")
         elif resultados_economicos['relacion_bc_proy'] > 1.0:
-            st.warning("**RENTABILIDAD LIMITE:** La inversión apenas cubre costos (B/C > 1.0)")
+            st.warning("**RENTABILIDAD LIMITE:** La inversión apenas cubre costos (B/C > 1.0)") 
         else:
             st.error("**NO RENTABLE:** La inversión no se recomienda (B/C < 1.0)")
     
