@@ -2232,6 +2232,23 @@ def realizar_analisis_economico(gdf_analizado, cultivo, variedad_params, area_to
 def mostrar_analisis_economico(resultados_economicos):
     """Muestra el análisis económico en una interfaz atractiva"""
     
+    # Calcular flujos proyectados
+    financieros = PARAMETROS_ECONOMICOS['PARAMETROS_FINANCIEROS']
+    flujos_proyectados = []
+    
+    for año in range(financieros['periodo_analisis']):
+        factor_inflacion = (1 + financieros['inflacion_esperada']) ** año
+        flujo_anual = resultados_economicos['incremento_margen_ha'] * resultados_economicos['area_total_ha'] * factor_inflacion
+        
+        if año == 0:
+            flujo_anual -= resultados_economicos['costo_fertilizacion_total_usd']
+        
+        flujos_proyectados.append({
+            'Año': año + 1,
+            'Flujo Neto (USD)': flujo_anual,
+            'Flujo Acumulado (USD)': sum(f['Flujo Neto (USD)'] for f in flujos_proyectados) + flujo_anual
+        })
+    
     st.markdown("---")
     st.subheader("💰 ANÁLISIS ECONÓMICO AGRÍCOLA")
     
@@ -2390,31 +2407,12 @@ def mostrar_analisis_economico(resultados_economicos):
         elif resultados_economicos['relacion_bc_proy'] > 1.2:
             st.info("**BUENA RENTABILIDAD:** La inversión es recomendable (B/C > 1.2)")
         elif resultados_economicos['relacion_bc_proy'] > 1.0:
-            st.warning("**RENTABILIDAD LIMITE:** La inversión apenas cubre costos (B/C > 1.0)") 
-        else:
-            st.error("**NO RENTABLE:** La inversión no se recomienda (B/C < 1.0)")
-    
+            st.warning("**RENTABILIDAD LIMITE:** La inversión apenas cubre costos (B/C > 1.0)")
+
     with tab4:
-        # Proyección de flujos de caja
         st.markdown("#### 📅 PROYECCIÓN DE FLUJOS DE CAJA (5 AÑOS)")
         
-        # Calcular flujos para la proyección
-        financieros = PARAMETROS_ECONOMICOS['PARAMETROS_FINANCIEROS']
-        flujos_proyectados = []
-        
-        for año in range(financieros['periodo_analisis']):
-            factor_inflacion = (1 + financieros['inflacion_esperada']) ** año
-            flujo_anual = resultados_economicos['incremento_margen_ha'] * resultados_economicos['area_total_ha'] * factor_inflacion
-            
-            if año == 0:
-                flujo_anual -= resultados_economicos['costo_fertilizacion_total_usd']
-            
-            flujos_proyectados.append({
-                'Año': año + 1,
-                'Flujo Neto (USD)': flujo_anual,
-                'Flujo Acumulado (USD)': sum(f['Flujo Neto (USD)'] for f in flujos_proyectados) + flujo_anual
-            })
-        
+        # Usar flujos_proyectados ya calculados
         df_flujos = pd.DataFrame(flujos_proyectados)
         st.dataframe(df_flujos.style.format({
             'Flujo Neto (USD)': '${:,.0f}',
@@ -2503,8 +2501,7 @@ def mostrar_analisis_economico(resultados_economicos):
             costos_det.to_excel(writer, sheet_name='Costos', index=False)
             
             # Hoja 3: Proyecciones
-            if 'flujos_proyectados' in locals():
-                pd.DataFrame(flujos_proyectados).to_excel(writer, sheet_name='Proyecciones', index=False)
+            pd.DataFrame(flujos_proyectados).to_excel(writer, sheet_name='Proyecciones', index=False)
         
         excel_buffer.seek(0)
         
