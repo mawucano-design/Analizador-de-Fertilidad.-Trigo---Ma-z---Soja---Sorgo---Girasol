@@ -4061,7 +4061,6 @@ def generar_reporte_docx(gdf_analizado, cultivo, analisis_tipo, area_total,
         import traceback
         st.error(f"Detalle: {traceback.format_exc()}")
         return None
-
 # ===== FUNCIÓN CORREGIDA crear_mapa_npk_con_esri =====
 def crear_mapa_npk_con_esri(gdf_analizado, nutriente, cultivo, satelite):
     """Crea mapa de NPK con fondo ESRI Satellite - CORREGIDO"""
