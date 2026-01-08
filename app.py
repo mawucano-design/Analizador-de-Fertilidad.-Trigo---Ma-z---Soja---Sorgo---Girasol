@@ -3541,6 +3541,16 @@ def generar_resumen_estadisticas(gdf_analizado, analisis_tipo, cultivo, df_power
             if 'materia_organica' in gdf_analizado.columns:
                 estadisticas['Materia Orgánica Promedio'] = f"{gdf_analizado['materia_organica'].mean():.1f}%"
             
+            # ✅ NUEVO: Estadísticas de rendimiento para análisis económico
+            if 'rendimiento_actual' in gdf_analizado.columns:
+                estadisticas['Rendimiento Actual Promedio'] = f"{gdf_analizado['rendimiento_actual'].mean():.1f} ton/ha"
+            if 'rendimiento_proyectado' in gdf_analizado.columns:
+                estadisticas['Rendimiento Proyectado Promedio'] = f"{gdf_analizado['rendimiento_proyectado'].mean():.1f} ton/ha"
+            if 'incremento_rendimiento' in gdf_analizado.columns:
+                incremento = gdf_analizado['incremento_rendimiento'].mean()
+                porcentaje = (incremento / gdf_analizado['rendimiento_actual'].mean() * 100) if gdf_analizado['rendimiento_actual'].mean() > 0 else 0
+                estadisticas['Incremento Esperado'] = f"{incremento:.1f} ton/ha ({porcentaje:.1f}%)"
+            
             # Información de variedad para maíz
             if cultivo == "MAÍZ" and 'variedad_maiz' in st.session_state:
                 estadisticas['Variedad de Maíz'] = st.session_state['variedad_maiz']
@@ -3636,6 +3646,20 @@ def generar_recomendaciones_generales(gdf_analizado, analisis_tipo, cultivo):
             recomendaciones.append("Para girasol: Aplicar potasio para mejorar calidad de semilla.")
             recomendaciones.append("Mantener buen drenaje, sensible a encharcamiento.")
         
+        # ✅ NUEVO: Recomendaciones económicas para análisis NPK
+        if analisis_tipo == "RECOMENDACIONES NPK":
+            if 'incremento_rendimiento' in gdf_analizado.columns:
+                incremento_prom = gdf_analizado['incremento_rendimiento'].mean()
+                if incremento_prom > 2.0:
+                    recomendaciones.append("🔥 POTENCIAL ALTO: La fertilización puede incrementar significativamente la rentabilidad")
+                elif incremento_prom > 1.0:
+                    recomendaciones.append("📈 POTENCIAL MODERADO: La inversión en fertilización es económicamente viable")
+                else:
+                    recomendaciones.append("⚠️ POTENCIAL LIMITADO: Evaluar cuidadosamente la relación costo-beneficio")
+            
+            recomendaciones.append("💰 Realizar análisis de rentabilidad específico para cada zona de manejo")
+            recomendaciones.append("📊 Considerar VAN y TIR para decisiones de inversión a largo plazo")
+        
         recomendaciones.append("Realizar análisis de suelo de laboratorio para validar resultados satelitales")
         recomendaciones.append("Considerar agricultura de precisión para aplicación variable de insumos")
         
@@ -3671,7 +3695,8 @@ def limpiar_texto_para_pdf(texto):
 
 def generar_reporte_pdf(gdf_analizado, cultivo, analisis_tipo, area_total,
                         nutriente=None, satelite=None, indice=None,
-                        mapa_buffer=None, estadisticas=None, recomendaciones=None):
+                        mapa_buffer=None, estadisticas=None, recomendaciones=None,
+                        analisis_economico=None):  # ✅ NUEVO: Parámetro añadido
     try:
         pdf = FPDF()
         pdf.add_page()
@@ -3711,6 +3736,25 @@ Tipo de Análisis: {analisis_tipo}"""
             pdf.set_font('Arial', '', 12)
             for key, value in estadisticas.items():
                 linea = f"- {key}: {value}"
+                pdf.cell(0, 8, limpiar_texto_para_pdf(linea), 0, 1)
+            pdf.ln(5)
+        
+        # ✅✅✅ NUEVO: SECCIÓN DE ANÁLISIS ECONÓMICO EN PDF
+        if analisis_tipo == "RECOMENDACIONES NPK" and analisis_economico:
+            pdf.set_font('Arial', 'B', 14)
+            pdf.cell(0, 10, 'ANÁLISIS ECONÓMICO DETALLADO', 0, 1)
+            pdf.set_font('Arial', '', 12)
+            
+            # Resumen económico
+            info_economico = f"""💰 INDICADORES FINANCIEROS:
+• ROI Fertilización: {analisis_economico['roi_fertilizacion_%']:.1f}%
+• VAN Proyecto: ${analisis_economico['van_usd']:,.0f}
+• TIR: {analisis_economico['tir_%']:.1f}%
+• Relación B/C: {analisis_economico['relacion_bc_proy']:.2f}
+• Incremento Ingreso Total: ${analisis_economico['incremento_ingreso_total_usd']:,.0f}
+• Costo Fertilización Total: ${analisis_economico['costo_fertilizacion_total_usd']:,.0f}
+"""
+            for linea in info_economico.strip().split('\n'):
                 pdf.cell(0, 8, limpiar_texto_para_pdf(linea), 0, 1)
             pdf.ln(5)
         
@@ -3768,7 +3812,7 @@ Porcentaje de Aumento: {porcentaje:.1f}%
             if 'ndwi' in gdf_analizado.columns:
                 columnas_mostrar.append('ndwi')
             if 'rendimiento_actual' in gdf_analizado.columns:
-                columnas_mostrar.extend(['rendimiento_actual', 'rendimiento_proyectado'])
+                columnas_mostrar.extend(['rendimiento_actual', 'rendimiento_proyectado', 'incremento_rendimiento'])
             
             columnas_mostrar = [col for col in columnas_mostrar if col in gdf_analizado.columns]
             if columnas_mostrar:
@@ -3783,7 +3827,7 @@ Porcentaje de Aumento: {porcentaje:.1f}%
                                     fila.append(f"{valor:.3f}")
                                 elif col in ['nitrogeno_actual', 'fosforo_actual', 'potasio_actual', 'valor_recomendado']:
                                     fila.append(f"{valor:.1f}")
-                                elif col in ['rendimiento_actual', 'rendimiento_proyectado']:
+                                elif col in ['rendimiento_actual', 'rendimiento_proyectado', 'incremento_rendimiento']:
                                     fila.append(f"{valor:.1f}")
                                 else:
                                     fila.append(f"{valor:.2f}")
@@ -3812,7 +3856,7 @@ Porcentaje de Aumento: {porcentaje:.1f}%
         pdf.cell(0, 10, '6. METADATOS TÉCNICOS', 0, 1)
         pdf.set_font('Arial', '', 10)
         metadatos = f"""Generado por: Analizador Multi-Cultivo Satellital
-Versión: 2.0 (Con metodologías científicas NPK)
+Versión: 2.0 (Con metodologías científicas NPK y Análisis Económico)
 Fecha de generación: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 Sistema de coordenadas: EPSG:4326 (WGS84)
 Número de zonas: {len(gdf_analizado)}"""
@@ -3831,7 +3875,8 @@ Número de zonas: {len(gdf_analizado)}"""
 
 def generar_reporte_docx(gdf_analizado, cultivo, analisis_tipo, area_total,
                          nutriente=None, satelite=None, indice=None,
-                         mapa_buffer=None, estadisticas=None, recomendaciones=None):
+                         mapa_buffer=None, estadisticas=None, recomendaciones=None,
+                         analisis_economico=None):  # ✅ NUEVO: Parámetro añadido
     try:
         doc = Document()
         title = doc.add_heading(f'REPORTE DE ANÁLISIS AGRÍCOLA - {cultivo}', 0)
@@ -3887,6 +3932,27 @@ def generar_reporte_docx(gdf_analizado, cultivo, analisis_tipo, area_total,
                 p.add_run(str(value))
             doc.add_paragraph()
         
+        # ✅✅✅ NUEVO: SECCIÓN DE ANÁLISIS ECONÓMICO EN DOCX
+        if analisis_tipo == "RECOMENDACIONES NPK" and analisis_economico:
+            doc.add_heading('ANÁLISIS ECONÓMICO DETALLADO', level=1)
+            economico_table = doc.add_table(rows=6, cols=2)
+            economico_table.style = 'Table Grid'
+            
+            economico_table.cell(0, 0).text = 'ROI Fertilización'
+            economico_table.cell(0, 1).text = f"{analisis_economico['roi_fertilizacion_%']:.1f}%"
+            economico_table.cell(1, 0).text = 'VAN Proyecto'
+            economico_table.cell(1, 1).text = f"${analisis_economico['van_usd']:,.0f}"
+            economico_table.cell(2, 0).text = 'TIR'
+            economico_table.cell(2, 1).text = f"{analisis_economico['tir_%']:.1f}%"
+            economico_table.cell(3, 0).text = 'Relación B/C'
+            economico_table.cell(3, 1).text = f"{analisis_economico['relacion_bc_proy']:.2f}"
+            economico_table.cell(4, 0).text = 'Incremento Ingreso Total'
+            economico_table.cell(4, 1).text = f"${analisis_economico['incremento_ingreso_total_usd']:,.0f}"
+            economico_table.cell(5, 0).text = 'Costo Fertilización Total'
+            economico_table.cell(5, 1).text = f"${analisis_economico['costo_fertilizacion_total_usd']:,.0f}"
+            
+            doc.add_paragraph()
+        
         # === ANÁLISIS DE RENDIMIENTO ===
         if analisis_tipo == "RECOMENDACIONES NPK" and 'rendimiento_actual' in gdf_analizado.columns:
             doc.add_heading('ANÁLISIS DE POTENCIAL DE COSECHA', level=1)
@@ -3938,7 +4004,7 @@ def generar_reporte_docx(gdf_analizado, cultivo, analisis_tipo, area_total,
             if 'ndwi' in gdf_analizado.columns:
                 columnas_mostrar.append('ndwi')
             if 'rendimiento_actual' in gdf_analizado.columns:
-                columnas_mostrar.extend(['rendimiento_actual', 'rendimiento_proyectado'])
+                columnas_mostrar.extend(['rendimiento_actual', 'rendimiento_proyectado', 'incremento_rendimiento'])
             
             columnas_mostrar = [col for col in columnas_mostrar if col in gdf_analizado.columns]
             if columnas_mostrar:
@@ -3956,7 +4022,7 @@ def generar_reporte_docx(gdf_analizado, cultivo, analisis_tipo, area_total,
                                     row_cells[i].text = f"{valor:.3f}"
                                 elif col in ['nitrogeno_actual', 'fosforo_actual', 'potasio_actual', 'valor_recomendado']:
                                     row_cells[i].text = f"{valor:.1f}"
-                                elif col in ['rendimiento_actual', 'rendimiento_proyectado']:
+                                elif col in ['rendimiento_actual', 'rendimiento_proyectado', 'incremento_rendimiento']:
                                     row_cells[i].text = f"{valor:.1f}"
                                 else:
                                     row_cells[i].text = f"{valor:.2f}"
@@ -3975,7 +4041,7 @@ def generar_reporte_docx(gdf_analizado, cultivo, analisis_tipo, area_total,
         doc.add_heading('6. METADATOS TÉCNICOS', level=1)
         metadatos = [
             ('Generado por', 'Analizador Multi-Cultivo Satellital'),
-            ('Versión', '2.0 (Con metodologías científicas NPK)'),
+            ('Versión', '2.0 (Con metodologías científicas NPK y Análisis Económico)'),
             ('Fecha de generación', datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
             ('Sistema de coordenadas', 'EPSG:4326 (WGS84)'),
             ('Número de zonas', str(len(gdf_analizado)))
@@ -4332,7 +4398,7 @@ def ejecutar_analisis(gdf, nutriente, analisis_tipo, n_divisiones, cultivo,
             
             gdf_analizado['area_ha'] = areas_ha_list
             
-            # Calcular recomendaciones si es necesario
+                    # Calcular recomendaciones si es necesario
             if analisis_tipo == "RECOMENDACIONES NPK":
                 recomendaciones_npk = calcular_recomendaciones_npk_cientificas(gdf_analizado, nutriente, cultivo)
                 gdf_analizado['valor_recomendado'] = recomendaciones_npk
@@ -4343,14 +4409,28 @@ def ejecutar_analisis(gdf, nutriente, analisis_tipo, n_divisiones, cultivo,
                 gdf_analizado['rendimiento_actual'] = rendimientos_actual
                 gdf_analizado['rendimiento_proyectado'] = rendimientos_proyectado
                 gdf_analizado['incremento_rendimiento'] = gdf_analizado['rendimiento_proyectado'] - gdf_analizado['rendimiento_actual']
+                
+                # ✅✅✅ NUEVO: REALIZAR ANÁLISIS ECONÓMICO AQUÍ MISMO
+                # Obtener parámetros de la variedad o del cultivo por defecto
+                if 'variedad_params' in st.session_state and st.session_state['variedad_params']:
+                    variedad_params = st.session_state['variedad_params']
+                else:
+                    variedad_params = obtener_parametros_rendimiento(cultivo)
+                
+                # Calcular análisis económico
+                resultados_economicos = realizar_analisis_economico(
+                    gdf_analizado, 
+                    cultivo, 
+                    variedad_params, 
+                    area_total
+                )
+                resultados['analisis_economico'] = resultados_economicos
             
             # ✅ NUEVO: Para fertilidad actual también calcular rendimiento
             elif analisis_tipo == "FERTILIDAD ACTUAL":
                 rendimientos_actual = calcular_rendimiento_potencial(gdf_analizado, cultivo)
                 gdf_analizado['rendimiento_actual'] = rendimientos_actual
-            
-            resultados['gdf_analizado'] = gdf_analizado
-            resultados['exitoso'] = True
+
             
             # === DATOS DE NASA POWER ===
             if satelite:
