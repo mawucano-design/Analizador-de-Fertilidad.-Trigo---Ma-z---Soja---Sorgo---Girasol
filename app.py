@@ -984,75 +984,71 @@ PARAMETROS_ECONOMICOS = {
 }
 }
 # ===== NUEVA CLASIFICACIÓN USDA PARA TEXTURA DE SUELO =====
-def dividir_parcela_en_zonas(gdf, n_zonas):
-    """
-    Divide la parcela en zonas de manejo regulares (grid) para análisis zonal.
-    """
 def clasificar_textura_usda(arena, limo, arcilla):
-"""
-Clasifica la textura del suelo según el sistema USDA
-"""
-try:
-total = arena + limo + arcilla
-if total == 0:
-return "Sin datos"
-# Normalizar porcentajes
-arena_pct = (arena / total) * 100
-limo_pct = (limo / total) * 100
-arcilla_pct = (arcilla / total) * 100
-# Clasificación USDA según el triángulo de texturas
-if arcilla_pct > 40:
-if limo_pct >= 40:
-return "Arcilla limosa"
-elif arena_pct <= 45:
-return "Arcilla"
-else:
-return "Arcilla arenosa"
-elif arcilla_pct >= 27 and arcilla_pct <= 40:
-if limo_pct >= 40:
-return "Franco arcilloso limoso"
-elif arena_pct <= 20:
-return "Franco arcilloso"
-else:
-return "Franco arcilloso arenoso"
-elif arcilla_pct >= 20 and arcilla_pct < 27:
-if limo_pct < 28:
-if arena_pct >= 52:
-return "Arena franca"
-else:
-return "Franco arenoso"
-else:
-if arena_pct >= 52:
-return "Franco limoso arenoso"
-else:
-return "Franco limoso"
-elif arcilla_pct >= 10 and arcilla_pct < 20:
-if limo_pct >= 50:
-return "Limo"
-elif limo_pct >= 30:
-if arena_pct >= 50:
-return "Franco limoso arenoso"
-else:
-return "Franco limoso"
-else:
-if arena_pct >= 70:
-return "Arena"
-elif arena_pct >= 50:
-return "Arena franca"
-else:
-return "Franco arenoso"
-else:  # arcilla_pct < 10
-if limo_pct >= 80:
-return "Limo"
-elif limo_pct >= 50:
-return "Limo arenoso"
-else:
-if arena_pct >= 85:
-return "Arena"
-else:
-return "Arena franca"
-except Exception as e:
-return "Sin datos"
+    """
+    Clasifica la textura del suelo según el sistema USDA
+    """
+    try:
+        total = arena + limo + arcilla
+        if total == 0:
+            return "Sin datos"
+        # Normalizar porcentajes
+        arena_pct = (arena / total) * 100
+        limo_pct = (limo / total) * 100
+        arcilla_pct = (arcilla / total) * 100
+        # Clasificación USDA según el triángulo de texturas
+        if arcilla_pct > 40:
+            if limo_pct >= 40:
+                return "Arcilla limosa"
+            elif arena_pct <= 45:
+                return "Arcilla"
+            else:
+                return "Arcilla arenosa"
+        elif arcilla_pct >= 27 and arcilla_pct <= 40:
+            if limo_pct >= 40:
+                return "Franco arcilloso limoso"
+            elif arena_pct <= 20:
+                return "Franco arcilloso"
+            else:
+                return "Franco arcilloso arenoso"
+        elif arcilla_pct >= 20 and arcilla_pct < 27:
+            if limo_pct < 28:
+                if arena_pct >= 52:
+                    return "Arena franca"
+                else:
+                    return "Franco arenoso"
+            else:
+                if arena_pct >= 52:
+                    return "Franco limoso arenoso"
+                else:
+                    return "Franco limoso"
+        elif arcilla_pct >= 10 and arcilla_pct < 20:
+            if limo_pct >= 50:
+                return "Limo"
+            elif limo_pct >= 30:
+                if arena_pct >= 50:
+                    return "Franco limoso arenoso"
+                else:
+                    return "Franco limoso"
+            else:
+                if arena_pct >= 70:
+                    return "Arena"
+                elif arena_pct >= 50:
+                    return "Arena franca"
+                else:
+                    return "Franco arenoso"
+        else:  # arcilla_pct < 10
+            if limo_pct >= 80:
+                return "Limo"
+            elif limo_pct >= 50:
+                return "Limo arenoso"
+            else:
+                if arena_pct >= 85:
+                    return "Arena"
+                else:
+                    return "Arena franca"
+    except Exception as e:
+        return "Sin datos"
 # ===== PARÁMETROS DE TEXTURA DEL SUELO POR CULTIVO - ACTUALIZADO A USDA =====
 TEXTURA_SUELO_OPTIMA = {
 'MAÍZ': {
