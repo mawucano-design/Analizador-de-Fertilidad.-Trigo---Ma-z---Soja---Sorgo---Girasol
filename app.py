@@ -984,6 +984,10 @@ PARAMETROS_ECONOMICOS = {
 }
 }
 # ===== NUEVA CLASIFICACIÓN USDA PARA TEXTURA DE SUELO =====
+def dividir_parcela_en_zonas(gdf, n_zonas):
+    """
+    Divide la parcela en zonas de manejo regulares (grid) para análisis zonal.
+    """
 def clasificar_textura_usda(arena, limo, arcilla):
 """
 Clasifica la textura del suelo según el sistema USDA
