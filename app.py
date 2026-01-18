@@ -33,6 +33,8 @@ import contextily as ctx
 from pyproj import CRS
 warnings.filterwarnings('ignore')
 
+# ===== USAR TODO EL ANCHO DE LA PANTALLA =====
+st.set_page_config(layout="wide")
 # === ESTILOS PERSONALIZADOS - VERSIÓN PREMIUM MODERNA ===
 st.markdown("""
 <style>
