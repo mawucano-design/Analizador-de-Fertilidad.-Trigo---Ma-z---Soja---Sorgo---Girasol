@@ -3898,7 +3898,7 @@ def generar_reporte_docx(gdf_analizado, cultivo, analisis_tipo, area_total,
 
 # ===== FUNCIÓN CORREGIDA crear_mapa_npk_con_esri =====
 def crear_mapa_npk_con_esri(gdf_analizado, nutriente, cultivo, satelite, mostrar_capa_inta=False):
-    """Crea mapa de NPK con fondo ESRI Satellite + capa opcional del INTA"""
+    """Crea mapa de NPK con fondo ESRI Satellite + capa opcional del INTA - DEVUELVE BytesIO"""
     try:
         if gdf_analizado.empty or 'id_zona' not in gdf_analizado.columns:
             return None
@@ -3981,19 +3981,13 @@ def crear_mapa_npk_con_esri(gdf_analizado, nutriente, cultivo, satelite, mostrar
         plt.savefig(buf, format='png', dpi=150, bbox_inches='tight', facecolor='#0f172a')
         plt.close(fig)  # ← Cerrar figura específica
         buf.seek(0)
-        return buf  # ← DEVOLVER BytesIO, NO bytes
+        return buf  # ← DEVOLVER BytesIO
 
     except Exception as e:
         st.error(f"Error creando mapa NPK: {str(e)}")
         return None
-
 def crear_mapa_fertilidad_integrada(gdf_analizado, cultivo, satelite, mostrar_capa_inta=False):
-    """Crea mapa de fertilidad integrada (NPK combinado)"""
-    import matplotlib.pyplot as plt
-    import contextily as ctx
-    import io
-    from matplotlib.colors import LinearSegmentedColormap
-
+    """Crea mapa de fertilidad integrada (NPK combinado) - DEVUELVE BytesIO"""
     try:
         if gdf_analizado.empty or 'npk_integrado' not in gdf_analizado.columns:
             return None
@@ -4044,21 +4038,17 @@ def crear_mapa_fertilidad_integrada(gdf_analizado, cultivo, satelite, mostrar_ca
         plt.tight_layout()
         buf = io.BytesIO()
         plt.savefig(buf, format='png', dpi=150, bbox_inches='tight', facecolor='#0f172a')
-        plt.close(fig)
+        plt.close(fig)  # IMPORTANTE: Cerrar la figura
         buf.seek(0)
-        return buf.read()  # ← BYTES
+        return buf  # ← DEVOLVER BytesIO, NO bytes
 
-    except Exception:
+    except Exception as e:
+        st.error(f"Error creando mapa de fertilidad: {str(e)}")
         return None
 
 
 def crear_mapa_texturas_con_esri(gdf_analizado, cultivo, mostrar_capa_inta=False):
-    """Crea mapa de texturas con fondo ESRI Satellite"""
-    import matplotlib.pyplot as plt
-    import contextily as ctx
-    import io
-    from matplotlib.patches import Patch
-
+    """Crea mapa de texturas con fondo ESRI Satellite - DEVUELVE BytesIO"""
     try:
         if gdf_analizado.empty or 'textura_suelo' not in gdf_analizado.columns:
             return None
@@ -4128,11 +4118,12 @@ def crear_mapa_texturas_con_esri(gdf_analizado, cultivo, mostrar_capa_inta=False
         plt.tight_layout()
         buf = io.BytesIO()
         plt.savefig(buf, format='png', dpi=150, bbox_inches='tight', facecolor='#0f172a')
-        plt.close(fig)
+        plt.close(fig)  # ← Cerrar la figura
         buf.seek(0)
-        return buf.read()  # ← BYTES
+        return buf  # ← DEVOLVER BytesIO
 
-    except Exception:
+    except Exception as e:
+        st.error(f"Error creando mapa de texturas: {str(e)}")
         return None
 
 # ===== FUNCIONES DE GRÁFICOS NASA POWER CON ESTILO OSCURO =====
@@ -4666,16 +4657,6 @@ def mostrar_resultados_fertilidad(gdf_analizado, cultivo, area_total, satelite, 
             k_prom = gdf_analizado['potasio_actual'].mean()
             st.metric("⚡ Potasio", f"{k_prom:.1f} kg/ha")
     
-    # Agregar métricas de NDVI y NDWI si existen
-    if 'ndvi' in gdf_analizado.columns or 'ndwi' in gdf_analizado.columns:
-        col5, col6 = st.columns(2)
-        with col5:
-            if 'ndvi' in gdf_analizado.columns:
-                st.metric("🌿 NDVI Promedio", f"{gdf_analizado['ndvi'].mean():.3f}")
-        with col6:
-            if 'ndwi' in gdf_analizado.columns:
-                st.metric("💧 NDWI Promedio", f"{gdf_analizado['ndwi'].mean():.3f}")
-    
     # Mapa de fertilidad integrada
     st.subheader("🗺️ MAPA DE FERTILIDAD INTEGRADA (NPK)")
     mapa_fertilidad = crear_mapa_fertilidad_integrada(
@@ -4683,43 +4664,36 @@ def mostrar_resultados_fertilidad(gdf_analizado, cultivo, area_total, satelite, 
     )
     
     if mapa_fertilidad:
-        st.image(mapa_fertilidad, use_container_width=True)
+        # Verificar si es bytes o BytesIO y convertirlo si es necesario
+        if isinstance(mapa_fertilidad, bytes):
+            mapa_bytes = mapa_fertilidad
+            mapa_buffer = io.BytesIO(mapa_fertilidad)
+        else:
+            mapa_buffer = mapa_fertilidad
+            mapa_bytes = mapa_fertilidad.getvalue()
+        
+        st.image(mapa_buffer, use_container_width=True)
         
         # Botón para descargar
-        mapa_bytes = mapa_fertilidad.getvalue()
         st.download_button(
             label="📥 Descargar Mapa de Fertilidad",
             data=mapa_bytes,
             file_name=f"fertilidad_{cultivo}_{datetime.now().strftime('%Y%m%d_%H%M')}.png",
             mime="image/png"
         )
+    else:
+        st.warning("No se pudo generar el mapa de fertilidad.")
     
     # Tabla de resultados
     st.subheader("📋 RESULTADOS POR ZONA")
     columnas_mostrar = ['id_zona', 'area_ha', 'npk_integrado', 
                        'nitrogeno_actual', 'fosforo_actual', 'potasio_actual']
-    # Agregar NDVI y NDWI si están disponibles
-    if 'ndvi' in gdf_analizado.columns:
-        columnas_mostrar.append('ndvi')
-    if 'ndwi' in gdf_analizado.columns:
-        columnas_mostrar.append('ndwi')
-        
     columnas_mostrar = [col for col in columnas_mostrar if col in gdf_analizado.columns]
     
     if columnas_mostrar:
         df_mostrar = gdf_analizado[columnas_mostrar].copy()
-        # Renombrar columnas para mostrar
-        nombres_columnas = {
-            'id_zona': 'Zona',
-            'area_ha': 'Área (ha)',
-            'npk_integrado': 'Índice NPK',
-            'nitrogeno_actual': 'Nitrógeno (kg/ha)',
-            'fosforo_actual': 'Fósforo (kg/ha)',
-            'potasio_actual': 'Potasio (kg/ha)',
-            'ndvi': 'NDVI',
-            'ndwi': 'NDWI'
-        }
-        df_mostrar.rename(columns=nombres_columnas, inplace=True)
+        df_mostrar.columns = ['Zona', 'Área (ha)', 'Índice NPK', 
+                             'Nitrógeno (kg/ha)', 'Fósforo (kg/ha)', 'Potasio (kg/ha)']
         st.dataframe(df_mostrar)
         
         # Descargar CSV
