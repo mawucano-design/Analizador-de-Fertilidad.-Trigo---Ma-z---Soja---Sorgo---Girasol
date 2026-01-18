@@ -4105,10 +4105,12 @@ def crear_mapa_texturas_con_esri(gdf_analizado, cultivo, mostrar_capa_inta=False
         ax.tick_params(colors='white')
         ax.grid(True, alpha=0.3, color='#475569')
 
-        # Leyenda
+        # Leyenda - CORREGIDO: usar mpatches.Patch
         texturas_presentes = [t for t in gdf_analizado['textura_suelo'].unique() if t in colores_textura]
         if texturas_presentes:
-            legend_elements = [Patch(facecolor=colores_textura[t], edgecolor='white', label=t) for t in texturas_presentes]
+            # Cambia Patch por mpatches.Patch
+            legend_elements = [mpatches.Patch(facecolor=colores_textura[t], edgecolor='white', label=t) 
+                              for t in texturas_presentes]
             legend = ax.legend(handles=legend_elements, title='Texturas USDA',
                                loc='upper left', bbox_to_anchor=(1.05, 1), fontsize=9)
             legend.get_title().set_color('white')
@@ -4120,9 +4122,9 @@ def crear_mapa_texturas_con_esri(gdf_analizado, cultivo, mostrar_capa_inta=False
         plt.tight_layout()
         buf = io.BytesIO()
         plt.savefig(buf, format='png', dpi=150, bbox_inches='tight', facecolor='#0f172a')
-        plt.close(fig)  # ← Cerrar la figura
+        plt.close(fig)
         buf.seek(0)
-        return buf  # ← DEVOLVER BytesIO
+        return buf
 
     except Exception as e:
         st.error(f"Error creando mapa de texturas: {str(e)}")
