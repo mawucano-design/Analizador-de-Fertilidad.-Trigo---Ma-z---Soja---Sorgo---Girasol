@@ -4692,8 +4692,8 @@ if 'uploaded_file' in locals() and uploaded_file:
                         st.write(f"- Resolución DEM: {resolucion_dem} m")
 
                if st.button("🚀 EJECUTAR ANÁLISIS COMPLETO", type="primary"):
-    resultados = None
-    if analisis_tipo in ["FERTILIDAD ACTUAL", "RECOMENDACIONES NPK"]:
+                resultados = None
+                if analisis_tipo in ["FERTILIDAD ACTUAL", "RECOMENDACIONES NPK"]:
         resultados = ejecutar_analisis(
             gdf, nutriente, analisis_tipo, n_divisiones,
             cultivo, satelite_seleccionado, indice_seleccionado,
