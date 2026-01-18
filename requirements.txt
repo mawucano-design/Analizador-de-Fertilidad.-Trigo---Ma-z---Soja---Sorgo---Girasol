@@ -13,3 +13,4 @@ pyproj>=3.6.0
 rtree>=1.0.0
 scipy>=1.11.0
 lxml>=4.9.0
+scipy
