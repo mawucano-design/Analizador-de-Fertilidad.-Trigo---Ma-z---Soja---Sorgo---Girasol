@@ -4691,115 +4691,117 @@ if 'uploaded_file' in locals() and uploaded_file:
                         st.write(f"- Intervalo curvas: {intervalo_curvas} m")
                         st.write(f"- Resolución DEM: {resolucion_dem} m")
 
-               if st.button("🚀 EJECUTAR ANÁLISIS COMPLETO", type="primary"):
-                resultados = None
-                if analisis_tipo in ["FERTILIDAD ACTUAL", "RECOMENDACIONES NPK"]:
-        resultados = ejecutar_analisis(
-            gdf, nutriente, analisis_tipo, n_divisiones,
-            cultivo, satelite_seleccionado, indice_seleccionado,
-            fecha_inicio, fecha_fin,
-            usar_inta=st.session_state.get('usar_inta', True),
-            mostrar_capa_inta=st.session_state.get('mostrar_mapa_inta', False)
-        )
-    elif analisis_tipo == "ANÁLISIS DE CURVAS DE NIVEL":
-        resultados = ejecutar_analisis(
-            gdf, None, analisis_tipo, n_divisiones,
-            cultivo, None, None, None, None,
-            intervalo_curvas, resolucion_dem,
-            usar_inta=st.session_state.get('usar_inta', True),
-            mostrar_capa_inta=st.session_state.get('mostrar_mapa_inta', False)
-        )
-    else:  # ANÁLISIS DE TEXTURA
-        resultados = ejecutar_analisis(
-            gdf, None, analisis_tipo, n_divisiones,
-            cultivo, None, None, None, None,
-            usar_inta=st.session_state.get('usar_inta', True),
-            mostrar_capa_inta=st.session_state.get('mostrar_mapa_inta', False)
-        )
+                    if st.button("🚀 EJECUTAR ANÁLISIS COMPLETO", type="primary"):
+                        resultados = None
+                        if analisis_tipo in ["FERTILIDAD ACTUAL", "RECOMENDACIONES NPK"]:
+                            resultados = ejecutar_analisis(
+                                gdf, nutriente, analisis_tipo, n_divisiones,
+                                cultivo, satelite_seleccionado, indice_seleccionado,
+                                fecha_inicio, fecha_fin,
+                                usar_inta=st.session_state.get('usar_inta', True),
+                                mostrar_capa_inta=st.session_state.get('mostrar_mapa_inta', False)
+                            )
+                        elif analisis_tipo == "ANÁLISIS DE CURVAS DE NIVEL":
+                            resultados = ejecutar_analisis(
+                                gdf, None, analisis_tipo, n_divisiones,
+                                cultivo, None, None, None, None,
+                                intervalo_curvas, resolucion_dem,
+                                usar_inta=st.session_state.get('usar_inta', True),
+                                mostrar_capa_inta=st.session_state.get('mostrar_mapa_inta', False)
+                            )
+                        else:  # ANÁLISIS DE TEXTURA
+                            resultados = ejecutar_analisis(
+                                gdf, None, analisis_tipo, n_divisiones,
+                                cultivo, None, None, None, None,
+                                usar_inta=st.session_state.get('usar_inta', True),
+                                mostrar_capa_inta=st.session_state.get('mostrar_mapa_inta', False)
+                            )
 
-    # GUARDAR RESULTADOS EN SESSION STATE
-    if resultados and resultados['exitoso']:
-        st.session_state['resultados_guardados'] = {
-            'gdf_analizado': resultados['gdf_analizado'],
-            'analisis_tipo': analisis_tipo,
-            'cultivo': cultivo,
-            'area_total': resultados['area_total'],
-            'nutriente': nutriente,
-            'satelite_seleccionado': satelite_seleccionado,
-            'indice_seleccionado': indice_seleccionado,
-            'mapa_buffer': resultados.get('mapa_buffer'),
-            'X': None,
-            'Y': None,
-            'Z': None,
-            'pendiente_grid': None,
-            'gdf_original': gdf if analisis_tipo == "ANÁLISIS DE CURVAS DE NIVEL" else None,
-            'df_power': resultados.get('df_power'),
-            'usar_inta': st.session_state.get('usar_inta', True),
-            'mostrar_mapa_inta': st.session_state.get('mostrar_mapa_inta', False)
-        }
+                        # GUARDAR RESULTADOS EN SESSION STATE
+                        if resultados and resultados['exitoso']:
+                            st.session_state['resultados_guardados'] = {
+                                'gdf_analizado': resultados['gdf_analizado'],
+                                'analisis_tipo': analisis_tipo,
+                                'cultivo': cultivo,
+                                'area_total': resultados['area_total'],
+                                'nutriente': nutriente,
+                                'satelite_seleccionado': satelite_seleccionado,
+                                'indice_seleccionado': indice_seleccionado,
+                                'mapa_buffer': resultados.get('mapa_buffer'),
+                                'X': None,
+                                'Y': None,
+                                'Z': None,
+                                'pendiente_grid': None,
+                                'gdf_original': gdf if analisis_tipo == "ANÁLISIS DE CURVAS DE NIVEL" else None,
+                                'df_power': resultados.get('df_power'),
+                                'usar_inta': st.session_state.get('usar_inta', True),
+                                'mostrar_mapa_inta': st.session_state.get('mostrar_mapa_inta', False)
+                            }
 
-        if analisis_tipo == "ANÁLISIS DE TEXTURA":
-            mostrar_resultados_textura(resultados['gdf_analizado'], cultivo, resultados['area_total'], st.session_state.get('mostrar_mapa_inta', False))
-        elif analisis_tipo == "ANÁLISIS DE CURVAS DE NIVEL":
-            X, Y, Z, _ = generar_dem_sintetico(gdf, resolucion_dem)
-            pendiente_grid = calcular_pendiente_simple(X, Y, Z, resolucion_dem)
-            curvas, elevaciones = generar_curvas_nivel_simple(X, Y, Z, intervalo_curvas, gdf)
-            st.session_state['resultados_guardados'].update({
-                'X': X, 'Y': Y, 'Z': Z, 'pendiente_grid': pendiente_grid
-            })
-            mostrar_resultados_curvas_nivel(X, Y, Z, pendiente_grid, curvas, elevaciones, gdf, cultivo, resultados['area_total'])
-        else:
-            # Mostrar resultados GEE con metodologías científicas
-            gdf_analizado = resultados['gdf_analizado']
-            
-            # Mostrar información del INTA
-            if 'region_inta' in gdf_analizado.columns:
-                region_inta = gdf_analizado['region_inta'].iloc[0]
-                fuente_mo = gdf_analizado['fuente_materia_organica'].iloc[0]
-                st.info(f"🌱 **Origen de materia orgánica:** {fuente_mo} | Región: {region_inta}")
-            
-            # Mostrar metodología científica
-            if satelite_seleccionado in METODOLOGIAS_NPK and nutriente in METODOLOGIAS_NPK[satelite_seleccionado]:
-                metodologia = METODOLOGIAS_NPK[satelite_seleccionado][nutriente]
-                st.subheader("🔬 METODOLOGÍA CIENTÍFICA APLICADA")
-                col_m1, col_m2 = st.columns(2)
-                with col_m1:
-                    st.info(f"**Método:** {metodologia['metodo']}")
-                    st.write(f"**Fórmula:** {metodologia['formula']}")
-                with col_m2:
-                    st.write(f"**Bandas utilizadas:** {', '.join(metodologia['bandas'])}")
-                    st.write(f"**Referencia:** {metodologia['referencia']}")
+                            if analisis_tipo == "ANÁLISIS DE TEXTURA":
+                                mostrar_resultados_textura(resultados['gdf_analizado'], cultivo, resultados['area_total'], st.session_state.get('mostrar_mapa_inta', False))
+                            elif analisis_tipo == "ANÁLISIS DE CURVAS DE NIVEL":
+                                X, Y, Z, _ = generar_dem_sintetico(gdf, resolucion_dem)
+                                pendiente_grid = calcular_pendiente_simple(X, Y, Z, resolucion_dem)
+                                curvas, elevaciones = generar_curvas_nivel_simple(X, Y, Z, intervalo_curvas, gdf)
+                                st.session_state['resultados_guardados'].update({
+                                    'X': X, 'Y': Y, 'Z': Z, 'pendiente_grid': pendiente_grid
+                                })
+                                mostrar_resultados_curvas_nivel(X, Y, Z, pendiente_grid, curvas, elevaciones, gdf, cultivo, resultados['area_total'])
+                            else:
+                                # Mostrar resultados GEE con metodologías científicas
+                                gdf_analizado = resultados['gdf_analizado']
+                                
+                                # Mostrar información del INTA
+                                if 'region_inta' in gdf_analizado.columns:
+                                    region_inta = gdf_analizado['region_inta'].iloc[0]
+                                    fuente_mo = gdf_analizado['fuente_materia_organica'].iloc[0]
+                                    st.info(f"🌱 **Origen de materia orgánica:** {fuente_mo} | Región: {region_inta}")
+                                
+                                # Mostrar metodología científica
+                                if satelite_seleccionado in METODOLOGIAS_NPK and nutriente in METODOLOGIAS_NPK[satelite_seleccionado]:
+                                    metodologia = METODOLOGIAS_NPK[satelite_seleccionado][nutriente]
+                                    st.subheader("🔬 METODOLOGÍA CIENTÍFICA APLICADA")
+                                    col_m1, col_m2 = st.columns(2)
+                                    with col_m1:
+                                        st.info(f"**Método:** {metodologia['metodo']}")
+                                        st.write(f"**Fórmula:** {metodologia['formula']}")
+                                    with col_m2:
+                                        st.write(f"**Bandas utilizadas:** {', '.join(metodologia['bandas'])}")
+                                        st.write(f"**Referencia:** {metodologia['referencia']}")
 
-            # Información de variedad para maíz
-            if cultivo == "MAÍZ" and 'variedad' in st.session_state:
-                variedad = st.session_state['variedad']
-                variedad_params = VARIEDADES_MAIZ[variedad]
-                st.info(f"**🌽 VARIEDAD SELECCIONADA: {variedad}**")
-                col_v1, col_v2 = st.columns(2)
-                with col_v1:
-                    st.write(f"**Potencial Base:** {variedad_params['RENDIMIENTO_BASE']} - {variedad_params['RENDIMIENTO_OPTIMO']} ton/ha")
-                    st.write(f"**Respuesta N:** {variedad_params['RESPUESTA_N']:.3f} ton/kg N")
-                with col_v2:
-                    st.write(f"**N Óptimo:** {variedad_params['NITROGENO_OPTIMO']} kg/ha")
-                    st.write(f"**P Óptimo:** {variedad_params['FOSFORO_OPTIMO']} kg/ha")
+                                # Información de variedad para maíz
+                                if cultivo == "MAÍZ" and 'variedad' in st.session_state:
+                                    variedad = st.session_state['variedad']
+                                    variedad_params = VARIEDADES_MAIZ[variedad]
+                                    st.info(f"**🌽 VARIEDAD SELECCIONADA: {variedad}**")
+                                    col_v1, col_v2 = st.columns(2)
+                                    with col_v1:
+                                        st.write(f"**Potencial Base:** {variedad_params['RENDIMIENTO_BASE']} - {variedad_params['RENDIMIENTO_OPTIMO']} ton/ha")
+                                        st.write(f"**Respuesta N:** {variedad_params['RESPUESTA_N']:.3f} ton/kg N")
+                                    with col_v2:
+                                        st.write(f"**N Óptimo:** {variedad_params['NITROGENO_OPTIMO']} kg/ha")
+                                        st.write(f"**P Óptimo:** {variedad_params['FOSFORO_OPTIMO']} kg/ha")
 
-            # Métricas principales
-            col1, col2, col3, col4 = st.columns(4)
-            with col1:
-                st.metric("Zonas Analizadas", len(gdf_analizado))
-            with col2:
-                st.metric("Área Total", f"{resultados['area_total']:.1f} ha")
-            with col3:
-                if analisis_tipo == "FERTILIDAD ACTUAL":
-                    valor_prom = gdf_analizado['npk_integrado'].mean()
-                    st.metric("Índice NPK Integrado", f"{valor_prom:.3f}")
-                else:
-                    valor_prom = gdf_analizado['valor_recomendado'].mean()
-                    st.metric(f"{nutriente} Recomendado", f"{valor_prom:.1f} kg/ha")
-            with col4:
-                if analisis_tipo == "FERTILIDAD ACTUAL" and 'nitrogeno_actual' in gdf_analizado.columns:
-                    n_prom = gdf_analizado['nitrogeno_actual'].mean()
-                    st.metric("Nitrógeno Promedio", f"{n_prom:.1f} kg/ha")
+                                # Métricas principales
+                                col1, col2, col3, col4 = st.columns(4)
+                                with col1:
+                                    st.metric("Zonas Analizadas", len(gdf_analizado))
+                                with col2:
+                                    st.metric("Área Total", f"{resultados['area_total']:.1f} ha")
+                                with col3:
+                                    if analisis_tipo == "FERTILIDAD ACTUAL":
+                                        valor_prom = gdf_analizado['npk_integrado'].mean()
+                                        st.metric("Índice NPK Integrado", f"{valor_prom:.3f}")
+                                    else:
+                                        valor_prom = gdf_analizado['valor_recomendado'].mean()
+                                        st.metric(f"{nutriente} Recomendado", f"{valor_prom:.1f} kg/ha")
+                                with col4:
+                                    if analisis_tipo == "FERTILIDAD ACTUAL" and 'nitrogeno_actual' in gdf_analizado.columns:
+                                        n_prom = gdf_analizado['nitrogeno_actual'].mean()
+                                        st.metric("Nitrógeno Promedio", f"{n_prom:.1f} kg/ha")
+        except Exception as e:
+            st.error(f"❌ Error al procesar la parcela: {str(e)}")
 
             # === DATOS DE NASA POWER ===
             if resultados.get('df_power') is not None:
