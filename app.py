@@ -3899,13 +3899,8 @@ def generar_reporte_docx(gdf_analizado, cultivo, analisis_tipo, area_total,
 # ===== FUNCIÓN CORREGIDA crear_mapa_npk_con_esri =====
 def crear_mapa_npk_con_esri(gdf_analizado, nutriente, cultivo, satelite, mostrar_capa_inta=False):
     """Crea mapa de NPK con fondo ESRI Satellite + capa opcional del INTA"""
-    import matplotlib.pyplot as plt
-    import contextily as ctx
-    import io
-    from matplotlib.colors import LinearSegmentedColormap
-
     try:
-        if gdf_analizado.empty:
+        if gdf_analizado.empty or 'id_zona' not in gdf_analizado.columns:
             return None
 
         # Convertir a Web Mercator para el mapa base
@@ -3986,11 +3981,11 @@ def crear_mapa_npk_con_esri(gdf_analizado, nutriente, cultivo, satelite, mostrar
         plt.savefig(buf, format='png', dpi=150, bbox_inches='tight', facecolor='#0f172a')
         plt.close(fig)  # ← Cerrar figura específica
         buf.seek(0)
-        return buf.read()  # ← DEVOLVER BYTES
+        return buf  # ← DEVOLVER BytesIO, NO bytes
 
-    except Exception:
+    except Exception as e:
+        st.error(f"Error creando mapa NPK: {str(e)}")
         return None
-
 
 def crear_mapa_fertilidad_integrada(gdf_analizado, cultivo, satelite, mostrar_capa_inta=False):
     """Crea mapa de fertilidad integrada (NPK combinado)"""
