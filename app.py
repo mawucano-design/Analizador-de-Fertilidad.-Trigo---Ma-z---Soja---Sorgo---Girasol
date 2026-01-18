@@ -3899,7 +3899,15 @@ def generar_reporte_docx(gdf_analizado, cultivo, analisis_tipo, area_total,
 # ===== FUNCIÓN CORREGIDA crear_mapa_npk_con_esri =====
 def crear_mapa_npk_con_esri(gdf_analizado, nutriente, cultivo, satelite, mostrar_capa_inta=False):
     """Crea mapa de NPK con fondo ESRI Satellite + capa opcional del INTA"""
+    import matplotlib.pyplot as plt
+    import contextily as ctx
+    import io
+    from matplotlib.colors import LinearSegmentedColormap
+
     try:
+        if gdf_analizado.empty:
+            return None
+
         # Convertir a Web Mercator para el mapa base
         gdf_plot = gdf_analizado.to_crs(epsg=3857)
         fig, ax = plt.subplots(1, 1, figsize=(12, 8))
@@ -3908,7 +3916,7 @@ def crear_mapa_npk_con_esri(gdf_analizado, nutriente, cultivo, satelite, mostrar
         fig.patch.set_facecolor('#0f172a')
         ax.set_facecolor('#0f172a')
 
-        # Mapear nutriente con tilde a clave sin tilde
+        # Mapeo de nutrientes
         mapeo_nutriente = {
             'NITRÓGENO': ('nitrogeno_actual', 'NITROGENO', 'NITRÓGENO (kg/ha)'),
             'FÓSFORO': ('fosforo_actual', 'FOSFORO', 'FÓSFORO (kg/ha)'),
@@ -3916,50 +3924,45 @@ def crear_mapa_npk_con_esri(gdf_analizado, nutriente, cultivo, satelite, mostrar
         }
 
         if nutriente not in mapeo_nutriente:
-            st.error(f"❌ Nutriente '{nutriente}' no reconocido")
             return None
 
         columna, clave_param, titulo_nutriente = mapeo_nutriente[nutriente]
 
-        # Seleccionar columna y paleta según nutriente
-        if nutriente == "NITRÓGENO":
-            cmap = LinearSegmentedColormap.from_list('nitrogeno_gee', PALETAS_GEE['NITROGENO'])
-            vmin = PARAMETROS_CULTIVOS[cultivo]['NITROGENO']['min'] * 0.7
-            vmax = PARAMETROS_CULTIVOS[cultivo]['NITROGENO']['max'] * 1.2
-        elif nutriente == "FÓSFORO":
-            cmap = LinearSegmentedColormap.from_list('fosforo_gee', PALETAS_GEE['FOSFORO'])
-            vmin = PARAMETROS_CULTIVOS[cultivo]['FOSFORO']['min'] * 0.7
-            vmax = PARAMETROS_CULTIVOS[cultivo]['FOSFORO']['max'] * 1.2
-        else:  # POTASIO
-            cmap = LinearSegmentedColormap.from_list('potasio_gee', PALETAS_GEE['POTASIO'])
-            vmin = PARAMETROS_CULTIVOS[cultivo]['POTASIO']['min'] * 0.7
-            vmax = PARAMETROS_CULTIVOS[cultivo]['POTASIO']['max'] * 1.2
+        if columna not in gdf_analizado.columns:
+            return None
 
-        # Plot de las zonas con colores según valor
+        # Rangos dinámicos
+        vmin = PARAMETROS_CULTIVOS[cultivo][clave_param]['min'] * 0.7
+        vmax = PARAMETROS_CULTIVOS[cultivo][clave_param]['max'] * 1.2
+        if vmin >= vmax:
+            vmin, vmax = 0, 100  # fallback seguro
+
+        cmap = LinearSegmentedColormap.from_list('nutriente_gee', PALETAS_GEE[clave_param])
+
+        # Plotear zonas
         for idx, row in gdf_plot.iterrows():
-            valor = row[columna]
-            valor_norm = (valor - vmin) / (vmax - vmin) if vmax != vmin else 0.5
-            valor_norm = max(0, min(1, valor_norm))
+            valor = row.get(columna, 0)
+            valor_norm = max(0, min(1, (valor - vmin) / (vmax - vmin))) if vmax != vmin else 0.5
             color = cmap(valor_norm)
             gdf_plot.iloc[[idx]].plot(ax=ax, color=color, edgecolor='white', linewidth=1.5, alpha=0.7)
 
-            # Etiqueta de zona
             centroid = row.geometry.centroid
             ax.annotate(f"Z{row['id_zona']}\n{valor:.0f}", (centroid.x, centroid.y),
                         xytext=(5, 5), textcoords="offset points",
                         fontsize=8, color='white', weight='bold',
                         bbox=dict(boxstyle="round,pad=0.3", facecolor=(30/255, 41/255, 59/255, 0.9), edgecolor='white'))
 
-        # Agregar mapa base ESRI Satellite
+        # Mapa base
         try:
             ctx.add_basemap(ax, source=ctx.providers.Esri.WorldImagery, alpha=0.3)
-        except:
-            st.warning("⚠️ No se pudo cargar el mapa base ESRI. Verifica la conexión a internet.")
+        except Exception:
+            pass  # Silencioso: no interrumpe
 
-        # Capa del INTA (opcional)
+        # Capa INTA
         if mostrar_capa_inta:
             agregar_capa_inta(ax, alpha=0.5)
 
+        # Título
         info_satelite = SATELITES_DISPONIBLES.get(satelite, SATELITES_DISPONIBLES['DATOS_SIMULADOS'])
         ax.set_title(f'{ICONOS_CULTIVOS[cultivo]} ANÁLISIS DE {nutriente} - {cultivo}\n'
                      f'{info_satelite["icono"]} {info_satelite["nombre"]} - {titulo_nutriente}',
@@ -3981,19 +3984,25 @@ def crear_mapa_npk_con_esri(gdf_analizado, nutriente, cultivo, satelite, mostrar
         plt.tight_layout()
         buf = io.BytesIO()
         plt.savefig(buf, format='png', dpi=150, bbox_inches='tight', facecolor='#0f172a')
+        plt.close(fig)  # ← Cerrar figura específica
         buf.seek(0)
-        plt.close()
-        return buf
+        return buf.read()  # ← DEVOLVER BYTES
 
-    except Exception as e:
-        st.error(f"❌ Error creando mapa NPK con ESRI: {str(e)}")
-        import traceback
-        st.error(f"Detalle: {traceback.format_exc()}")
+    except Exception:
         return None
+
 
 def crear_mapa_fertilidad_integrada(gdf_analizado, cultivo, satelite, mostrar_capa_inta=False):
     """Crea mapa de fertilidad integrada (NPK combinado)"""
+    import matplotlib.pyplot as plt
+    import contextily as ctx
+    import io
+    from matplotlib.colors import LinearSegmentedColormap
+
     try:
+        if gdf_analizado.empty or 'npk_integrado' not in gdf_analizado.columns:
+            return None
+
         gdf_plot = gdf_analizado.to_crs(epsg=3857)
         fig, ax = plt.subplots(1, 1, figsize=(12, 8))
         fig.patch.set_facecolor('#0f172a')
@@ -4003,7 +4012,7 @@ def crear_mapa_fertilidad_integrada(gdf_analizado, cultivo, satelite, mostrar_ca
 
         for idx, row in gdf_plot.iterrows():
             valor = row['npk_integrado']
-            color = cmap(valor)
+            color = cmap(max(0, min(1, valor)))  # npk_integrado ya está normalizado [0,1]
             gdf_plot.iloc[[idx]].plot(ax=ax, color=color, edgecolor='white', linewidth=1.5, alpha=0.7)
 
             centroid = row.geometry.centroid
@@ -4014,10 +4023,9 @@ def crear_mapa_fertilidad_integrada(gdf_analizado, cultivo, satelite, mostrar_ca
 
         try:
             ctx.add_basemap(ax, source=ctx.providers.Esri.WorldImagery, alpha=0.3)
-        except:
+        except Exception:
             pass
 
-        # Capa del INTA (opcional)
         if mostrar_capa_inta:
             agregar_capa_inta(ax, alpha=0.5)
 
@@ -4041,22 +4049,27 @@ def crear_mapa_fertilidad_integrada(gdf_analizado, cultivo, satelite, mostrar_ca
         plt.tight_layout()
         buf = io.BytesIO()
         plt.savefig(buf, format='png', dpi=150, bbox_inches='tight', facecolor='#0f172a')
+        plt.close(fig)
         buf.seek(0)
-        plt.close()
-        return buf
+        return buf.read()  # ← BYTES
 
-    except Exception as e:
-        st.error(f"❌ Error creando mapa fertilidad: {str(e)}")
+    except Exception:
         return None
+
 
 def crear_mapa_texturas_con_esri(gdf_analizado, cultivo, mostrar_capa_inta=False):
     """Crea mapa de texturas con fondo ESRI Satellite"""
+    import matplotlib.pyplot as plt
+    import contextily as ctx
+    import io
+    from matplotlib.patches import Patch
+
     try:
-        # Convertir a Web Mercator
+        if gdf_analizado.empty or 'textura_suelo' not in gdf_analizado.columns:
+            return None
+
         gdf_plot = gdf_analizado.to_crs(epsg=3857)
         fig, ax = plt.subplots(1, 1, figsize=(12, 8))
-
-        # Configurar estilo oscuro
         fig.patch.set_facecolor('#0f172a')
         ax.set_facecolor('#0f172a')
 
@@ -4078,13 +4091,11 @@ def crear_mapa_texturas_con_esri(gdf_analizado, cultivo, mostrar_capa_inta=False
             'Sin datos': '#999999'
         }
 
-        # Plot de cada zona con su color según textura
         for idx, row in gdf_plot.iterrows():
             textura = row['textura_suelo']
             color = colores_textura.get(textura, '#999999')
             gdf_plot.iloc[[idx]].plot(ax=ax, color=color, edgecolor='white', linewidth=1.5, alpha=0.8)
 
-            # Etiqueta de zona (abreviada si es muy larga)
             textura_abrev = textura[:12] + '...' if len(textura) > 15 else textura
             centroid = row.geometry.centroid
             ax.annotate(f"Z{row['id_zona']}\n{textura_abrev}", (centroid.x, centroid.y),
@@ -4092,13 +4103,11 @@ def crear_mapa_texturas_con_esri(gdf_analizado, cultivo, mostrar_capa_inta=False
                         fontsize=8, color='black', weight='bold',
                         bbox=dict(boxstyle="round,pad=0.3", facecolor='white', alpha=0.9))
 
-        # Agregar mapa base ESRI Satellite
         try:
             ctx.add_basemap(ax, source=ctx.providers.Esri.WorldImagery, alpha=0.3)
-        except:
-            st.warning("⚠️ No se pudo cargar el mapa base ESRI. Verifica la conexión a internet.")
+        except Exception:
+            pass
 
-        # Capa del INTA (opcional)
         if mostrar_capa_inta:
             agregar_capa_inta(ax, alpha=0.5)
 
@@ -4109,14 +4118,10 @@ def crear_mapa_texturas_con_esri(gdf_analizado, cultivo, mostrar_capa_inta=False
         ax.tick_params(colors='white')
         ax.grid(True, alpha=0.3, color='#475569')
 
-        # Leyenda (solo las texturas presentes en el mapa)
-        from matplotlib.patches import Patch
-        texturas_presentes = gdf_analizado['textura_suelo'].unique()
-        legend_elements = [Patch(facecolor=colores_textura.get(textura, '#999999'),
-                                 edgecolor='white', label=textura)
-                           for textura in texturas_presentes if textura in colores_textura]
-
-        if legend_elements:
+        # Leyenda
+        texturas_presentes = [t for t in gdf_analizado['textura_suelo'].unique() if t in colores_textura]
+        if texturas_presentes:
+            legend_elements = [Patch(facecolor=colores_textura[t], edgecolor='white', label=t) for t in texturas_presentes]
             legend = ax.legend(handles=legend_elements, title='Texturas USDA',
                                loc='upper left', bbox_to_anchor=(1.05, 1), fontsize=9)
             legend.get_title().set_color('white')
@@ -4128,12 +4133,11 @@ def crear_mapa_texturas_con_esri(gdf_analizado, cultivo, mostrar_capa_inta=False
         plt.tight_layout()
         buf = io.BytesIO()
         plt.savefig(buf, format='png', dpi=150, bbox_inches='tight', facecolor='#0f172a')
+        plt.close(fig)
         buf.seek(0)
-        plt.close()
-        return buf
+        return buf.read()  # ← BYTES
 
-    except Exception as e:
-        st.error(f"Error creando mapa de texturas: {str(e)}")
+    except Exception:
         return None
 
 # ===== FUNCIONES DE GRÁFICOS NASA POWER CON ESTILO OSCURO =====
