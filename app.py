@@ -4691,83 +4691,336 @@ if 'uploaded_file' in locals() and uploaded_file:
                         st.write(f"- Intervalo curvas: {intervalo_curvas} m")
                         st.write(f"- Resolución DEM: {resolucion_dem} m")
 
-                if st.button("🚀 EJECUTAR ANÁLISIS COMPLETO", type="primary"):
-                    resultados = None
-                    if analisis_tipo in ["FERTILIDAD ACTUAL", "RECOMENDACIONES NPK"]:
-                        resultados = ejecutar_analisis(
-                            gdf, nutriente, analisis_tipo, n_divisiones,
-                            cultivo, satelite_seleccionado, indice_seleccionado,
-                            fecha_inicio, fecha_fin,
-                            usar_inta=st.session_state.get('usar_inta', True),
-                            mostrar_capa_inta=st.session_state.get('mostrar_mapa_inta', False)
+               if st.button("🚀 EJECUTAR ANÁLISIS COMPLETO", type="primary"):
+    resultados = None
+    if analisis_tipo in ["FERTILIDAD ACTUAL", "RECOMENDACIONES NPK"]:
+        resultados = ejecutar_analisis(
+            gdf, nutriente, analisis_tipo, n_divisiones,
+            cultivo, satelite_seleccionado, indice_seleccionado,
+            fecha_inicio, fecha_fin,
+            usar_inta=st.session_state.get('usar_inta', True),
+            mostrar_capa_inta=st.session_state.get('mostrar_mapa_inta', False)
+        )
+    elif analisis_tipo == "ANÁLISIS DE CURVAS DE NIVEL":
+        resultados = ejecutar_analisis(
+            gdf, None, analisis_tipo, n_divisiones,
+            cultivo, None, None, None, None,
+            intervalo_curvas, resolucion_dem,
+            usar_inta=st.session_state.get('usar_inta', True),
+            mostrar_capa_inta=st.session_state.get('mostrar_mapa_inta', False)
+        )
+    else:  # ANÁLISIS DE TEXTURA
+        resultados = ejecutar_analisis(
+            gdf, None, analisis_tipo, n_divisiones,
+            cultivo, None, None, None, None,
+            usar_inta=st.session_state.get('usar_inta', True),
+            mostrar_capa_inta=st.session_state.get('mostrar_mapa_inta', False)
+        )
+
+    # GUARDAR RESULTADOS EN SESSION STATE
+    if resultados and resultados['exitoso']:
+        st.session_state['resultados_guardados'] = {
+            'gdf_analizado': resultados['gdf_analizado'],
+            'analisis_tipo': analisis_tipo,
+            'cultivo': cultivo,
+            'area_total': resultados['area_total'],
+            'nutriente': nutriente,
+            'satelite_seleccionado': satelite_seleccionado,
+            'indice_seleccionado': indice_seleccionado,
+            'mapa_buffer': resultados.get('mapa_buffer'),
+            'X': None,
+            'Y': None,
+            'Z': None,
+            'pendiente_grid': None,
+            'gdf_original': gdf if analisis_tipo == "ANÁLISIS DE CURVAS DE NIVEL" else None,
+            'df_power': resultados.get('df_power'),
+            'usar_inta': st.session_state.get('usar_inta', True),
+            'mostrar_mapa_inta': st.session_state.get('mostrar_mapa_inta', False)
+        }
+
+        if analisis_tipo == "ANÁLISIS DE TEXTURA":
+            mostrar_resultados_textura(resultados['gdf_analizado'], cultivo, resultados['area_total'], st.session_state.get('mostrar_mapa_inta', False))
+        elif analisis_tipo == "ANÁLISIS DE CURVAS DE NIVEL":
+            X, Y, Z, _ = generar_dem_sintetico(gdf, resolucion_dem)
+            pendiente_grid = calcular_pendiente_simple(X, Y, Z, resolucion_dem)
+            curvas, elevaciones = generar_curvas_nivel_simple(X, Y, Z, intervalo_curvas, gdf)
+            st.session_state['resultados_guardados'].update({
+                'X': X, 'Y': Y, 'Z': Z, 'pendiente_grid': pendiente_grid
+            })
+            mostrar_resultados_curvas_nivel(X, Y, Z, pendiente_grid, curvas, elevaciones, gdf, cultivo, resultados['area_total'])
+        else:
+            # Mostrar resultados GEE con metodologías científicas
+            gdf_analizado = resultados['gdf_analizado']
+            
+            # Mostrar información del INTA
+            if 'region_inta' in gdf_analizado.columns:
+                region_inta = gdf_analizado['region_inta'].iloc[0]
+                fuente_mo = gdf_analizado['fuente_materia_organica'].iloc[0]
+                st.info(f"🌱 **Origen de materia orgánica:** {fuente_mo} | Región: {region_inta}")
+            
+            # Mostrar metodología científica
+            if satelite_seleccionado in METODOLOGIAS_NPK and nutriente in METODOLOGIAS_NPK[satelite_seleccionado]:
+                metodologia = METODOLOGIAS_NPK[satelite_seleccionado][nutriente]
+                st.subheader("🔬 METODOLOGÍA CIENTÍFICA APLICADA")
+                col_m1, col_m2 = st.columns(2)
+                with col_m1:
+                    st.info(f"**Método:** {metodologia['metodo']}")
+                    st.write(f"**Fórmula:** {metodologia['formula']}")
+                with col_m2:
+                    st.write(f"**Bandas utilizadas:** {', '.join(metodologia['bandas'])}")
+                    st.write(f"**Referencia:** {metodologia['referencia']}")
+
+            # Información de variedad para maíz
+            if cultivo == "MAÍZ" and 'variedad' in st.session_state:
+                variedad = st.session_state['variedad']
+                variedad_params = VARIEDADES_MAIZ[variedad]
+                st.info(f"**🌽 VARIEDAD SELECCIONADA: {variedad}**")
+                col_v1, col_v2 = st.columns(2)
+                with col_v1:
+                    st.write(f"**Potencial Base:** {variedad_params['RENDIMIENTO_BASE']} - {variedad_params['RENDIMIENTO_OPTIMO']} ton/ha")
+                    st.write(f"**Respuesta N:** {variedad_params['RESPUESTA_N']:.3f} ton/kg N")
+                with col_v2:
+                    st.write(f"**N Óptimo:** {variedad_params['NITROGENO_OPTIMO']} kg/ha")
+                    st.write(f"**P Óptimo:** {variedad_params['FOSFORO_OPTIMO']} kg/ha")
+
+            # Métricas principales
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Zonas Analizadas", len(gdf_analizado))
+            with col2:
+                st.metric("Área Total", f"{resultados['area_total']:.1f} ha")
+            with col3:
+                if analisis_tipo == "FERTILIDAD ACTUAL":
+                    valor_prom = gdf_analizado['npk_integrado'].mean()
+                    st.metric("Índice NPK Integrado", f"{valor_prom:.3f}")
+                else:
+                    valor_prom = gdf_analizado['valor_recomendado'].mean()
+                    st.metric(f"{nutriente} Recomendado", f"{valor_prom:.1f} kg/ha")
+            with col4:
+                if analisis_tipo == "FERTILIDAD ACTUAL" and 'nitrogeno_actual' in gdf_analizado.columns:
+                    n_prom = gdf_analizado['nitrogeno_actual'].mean()
+                    st.metric("Nitrógeno Promedio", f"{n_prom:.1f} kg/ha")
+
+            # === DATOS DE NASA POWER ===
+            if resultados.get('df_power') is not None:
+                df_power = resultados['df_power']
+                st.subheader("🌤️ DATOS METEOROLÓGICOS (NASA POWER)")
+                col5, col6, col7 = st.columns(3)
+                with col5:
+                    st.metric("☀️ Radiación Solar", f"{df_power['radiacion_solar'].mean():.1f} kWh/m²/día")
+                with col6:
+                    st.metric("💨 Viento a 2m", f"{df_power['viento_2m'].mean():.2f} m/s")
+                with col7:
+                    st.metric("💧 NDWI Promedio", f"{gdf_analizado['ndwi'].mean():.3f}")
+
+            # === MAPAS DE NPK ===
+            st.subheader("🗺️ MAPAS DE NPK CON ESRI SATELLITE")
+            if analisis_tipo == "FERTILIDAD ACTUAL":
+                # Mapa de fertilidad integrada
+                mapa_fertilidad = crear_mapa_fertilidad_integrada(
+                    gdf_analizado, 
+                    cultivo, 
+                    satelite_seleccionado,
+                    st.session_state.get('mostrar_mapa_inta', False)
+                )
+                if mapa_fertilidad:
+                    st.image(mapa_fertilidad, use_container_width=True)
+                    st.download_button(
+                        "📥 Descargar Mapa de Fertilidad",
+                        mapa_fertilidad,
+                        f"mapa_fertilidad_{cultivo}_{datetime.now().strftime('%Y%m%d')}.png",
+                        "image/png"
+                    )
+
+                # Mapas individuales de NPK
+                tab_n, tab_p, tab_k = st.tabs(["🌱 Nitrógeno", "🧪 Fósforo", "⚡ Potasio"])
+                with tab_n:
+                    mapa_n = crear_mapa_npk_con_esri(
+                        gdf_analizado, 
+                        "NITRÓGENO", 
+                        cultivo, 
+                        satelite_seleccionado,
+                        st.session_state.get('mostrar_mapa_inta', False)
+                    )
+                    if mapa_n:
+                        st.image(mapa_n, use_container_width=True)
+                with tab_p:
+                    mapa_p = crear_mapa_npk_con_esri(
+                        gdf_analizado, 
+                        "FÓSFORO", 
+                        cultivo, 
+                        satelite_seleccionado,
+                        st.session_state.get('mostrar_mapa_inta', False)
+                    )
+                    if mapa_p:
+                        st.image(mapa_p, use_container_width=True)
+                with tab_k:
+                    mapa_k = crear_mapa_npk_con_esri(
+                        gdf_analizado, 
+                        "POTASIO", 
+                        cultivo, 
+                        satelite_seleccionado,
+                        st.session_state.get('mostrar_mapa_inta', False)
+                    )
+                    if mapa_k:
+                        st.image(mapa_k, use_container_width=True)
+
+            elif analisis_tipo == "RECOMENDACIONES NPK":
+                # Mapa de recomendaciones
+                mapa_recomendaciones = crear_mapa_npk_con_esri(
+                    gdf_analizado, 
+                    nutriente, 
+                    cultivo, 
+                    satelite_seleccionado,
+                    st.session_state.get('mostrar_mapa_inta', False)
+                )
+                if mapa_recomendaciones:
+                    st.image(mapa_recomendaciones, use_container_width=True)
+                    st.download_button(
+                        "📥 Descargar Mapa de Recomendaciones",
+                        mapa_recomendaciones,
+                        f"mapa_recomendaciones_{nutriente}_{cultivo}_{datetime.now().strftime('%Y%m%d')}.png",
+                        "image/png"
+                    )
+
+            # === MAPAS DE CALOR DE POTENCIAL DE COSECHA ===
+            if 'rendimiento_actual' in gdf_analizado.columns:
+                st.markdown('<div class="map-container">', unsafe_allow_html=True)
+                st.markdown('<div class="map-title">🔥 MAPAS DE CALOR - POTENCIAL DE COSECHA</div>', unsafe_allow_html=True)
+
+                # Crear pestañas para diferentes visualizaciones
+                tab1, tab2, tab3 = st.tabs(["🌾 Rendimiento Actual", "🚀 Rendimiento Proyectado", "📊 Comparativa"])
+                with tab1:
+                    st.markdown('<div class="map-stats">', unsafe_allow_html=True)
+                    col_r1, col_r2, col_r3, col_r4 = st.columns(4)
+                    with col_r1:
+                        rend_actual = gdf_analizado['rendimiento_actual'].mean()
+                        st.markdown(f'<div class="stats-card"><div class="stats-label">Promedio</div><div class="stats-value">{rend_actual:.1f} t/ha</div></div>', unsafe_allow_html=True)
+                    with col_r2:
+                        st.markdown(f'<div class="stats-card"><div class="stats-label">Mínimo</div><div class="stats-value">{gdf_analizado["rendimiento_actual"].min():.1f} t/ha</div></div>', unsafe_allow_html=True)
+                    with col_r3:
+                        st.markdown(f'<div class="stats-card"><div class="stats-label">Máximo</div><div class="stats-value">{gdf_analizado["rendimiento_actual"].max():.1f} t/ha</div></div>', unsafe_allow_html=True)
+                    with col_r4:
+                        st.markdown(f'<div class="stats-card"><div class="stats-label">Variación</div><div class="stats-value">{gdf_analizado["rendimiento_actual"].std():.1f} t/ha</div></div>', unsafe_allow_html=True)
+                    st.markdown('</div>', unsafe_allow_html=True)
+
+                    st.write("**Potencial de Cosecha con Fertilidad Actual**")
+                    mapa_calor_actual = crear_mapa_calor_rendimiento_actual(gdf_analizado, cultivo)
+                    if mapa_calor_actual:
+                        st.image(mapa_calor_actual, use_container_width=True)
+                        st.download_button(
+                            "📥 Descargar Mapa de Calor Actual",
+                            mapa_calor_actual,
+                            f"mapa_calor_actual_{cultivo}_{datetime.now().strftime('%Y%m%d')}.png",
+                            "image/png",
+                            key="download_actual_heatmap"
                         )
-                    elif analisis_tipo == "ANÁLISIS DE CURVAS DE NIVEL":
-                        resultados = ejecutar_analisis(
-                            gdf, None, analisis_tipo, n_divisiones,
-                            cultivo, None, None, None, None,
-                            intervalo_curvas, resolucion_dem,
-                            usar_inta=st.session_state.get('usar_inta', True),
-                            mostrar_capa_inta=st.session_state.get('mostrar_mapa_inta', False)
-                        )
-                    else:  # ANÁLISIS DE TEXTURA
-                        resultados = ejecutar_analisis(
-                            gdf, None, analisis_tipo, n_divisiones,
-                            cultivo, None, None, None, None,
-                            usar_inta=st.session_state.get('usar_inta', True),
-                            mostrar_capa_inta=st.session_state.get('mostrar_mapa_inta', False)
-                        )
 
-                    # GUARDAR RESULTADOS EN SESSION STATE
-                    if resultados and resultados['exitoso']:
-                        st.session_state['resultados_guardados'] = {
-                            'gdf_analizado': resultados['gdf_analizado'],
-                            'analisis_tipo': analisis_tipo,
-                            'cultivo': cultivo,
-                            'area_total': resultados['area_total'],
-                            'nutriente': nutriente,
-                            'satelite_seleccionado': satelite_seleccionado,
-                            'indice_seleccionado': indice_seleccionado,
-                            'mapa_buffer': resultados.get('mapa_buffer'),
-                            'X': None,
-                            'Y': None,
-                            'Z': None,
-                            'pendiente_grid': None,
-                            'gdf_original': gdf if analisis_tipo == "ANÁLISIS DE CURVAS DE NIVEL" else None,
-                            'df_power': resultados.get('df_power'),
-                            'usar_inta': st.session_state.get('usar_inta', True),
-                            'mostrar_mapa_inta': st.session_state.get('mostrar_mapa_inta', False)
-                        }
+                with tab2:
+                    if 'rendimiento_proyectado' in gdf_analizado.columns:
+                        st.markdown('<div class="map-stats">', unsafe_allow_html=True)
+                        col_p1, col_p2, col_p3, col_p4 = st.columns(4)
+                        with col_p1:
+                            rend_proy = gdf_analizado['rendimiento_proyectado'].mean()
+                            st.markdown(f'<div class="stats-card"><div class="stats-label">Promedio</div><div class="stats-value">{rend_proy:.1f} t/ha</div></div>', unsafe_allow_html=True)
+                        with col_p2:
+                            incremento = gdf_analizado['incremento_rendimiento'].mean()
+                            st.markdown(f'<div class="stats-card"><div class="stats-label">Incremento</div><div class="stats-value">+{incremento:.1f} t/ha</div></div>', unsafe_allow_html=True)
+                        with col_p3:
+                            porcentaje = (incremento / rend_actual * 100) if rend_actual > 0 else 0
+                            st.markdown(f'<div class="stats-card"><div class="stats-label">% Aumento</div><div class="stats-value">+{porcentaje:.1f}%</div></div>', unsafe_allow_html=True)
+                        with col_p4:
+                            st.markdown(f'<div class="stats-card"><div class="stats-label">Potencial Total</div><div class="stats-value">{(rend_proy * resultados["area_total"]):.0f} t</div></div>', unsafe_allow_html=True)
+                        st.markdown('</div>', unsafe_allow_html=True)
 
-                        if analisis_tipo == "ANÁLISIS DE TEXTURA":
-                            mostrar_resultados_textura(resultados['gdf_analizado'], cultivo, resultados['area_total'], st.session_state.get('mostrar_mapa_inta', False))
-                        elif analisis_tipo == "ANÁLISIS DE CURVAS DE NIVEL":
-                            X, Y, Z, _ = generar_dem_sintetico(gdf, resolucion_dem)
-                            pendiente_grid = calcular_pendiente_simple(X, Y, Z, resolucion_dem)
-                            curvas, elevaciones = generar_curvas_nivel_simple(X, Y, Z, intervalo_curvas, gdf)
-                            st.session_state['resultados_guardados'].update({
-                                'X': X, 'Y': Y, 'Z': Z, 'pendiente_grid': pendiente_grid
-                            })
-                            mostrar_resultados_curvas_nivel(X, Y, Z, pendiente_grid, curvas, elevaciones, gdf, cultivo, resultados['area_total'])
-                        else:
-                            # Mostrar resultados GEE con metodologías científicas
-                            gdf_analizado = resultados['gdf_analizado']
-                            
-                            # Mostrar información del INTA
-                            if 'region_inta' in gdf_analizado.columns:
-                                region_inta = gdf_analizado['region_inta'].iloc[0]
-                                fuente_mo = gdf_analizado['fuente_materia_organica'].iloc[0]
-                                st.info(f"🌱 **Origen de materia orgánica:** {fuente_mo} | Región: {region_inta}")
-                            
-                            # Resto de la visualización...
-                            # (El código continúa igual, pero ahora muestra la info del INTA)
+                        st.write("**Potencial de Cosecha con Recomendaciones NPK**")
+                        mapa_calor_proyectado = crear_mapa_calor_rendimiento_proyectado(gdf_analizado, cultivo)
+                        if mapa_calor_proyectado:
+                            st.image(mapa_calor_proyectado, use_container_width=True)
+                            st.download_button(
+                                "📥 Descargar Mapa de Calor Proyectado",
+                                mapa_calor_proyectado,
+                                f"mapa_calor_proyectado_{cultivo}_{datetime.now().strftime('%Y%m%d')}.png",
+                                "image/png",
+                                key="download_proyectado_heatmap"
+                            )
+                    else:
+                        st.info("ℹ️ El análisis de rendimiento proyectado solo está disponible en modo 'RECOMENDACIONES NPK'")
 
-        except Exception as e:
-            st.error(f"❌ Error procesando archivo: {str(e)}")
-            import traceback
-            st.error(f"Detalle: {traceback.format_exc()}")
-else:
-    st.info("📁 Sube un archivo de tu parcela para comenzar el análisis")
+                with tab3:
+                    if 'rendimiento_proyectado' in gdf_analizado.columns:
+                        st.write("**Comparativa Side-by-Side**")
+                        mapa_comparativo = crear_mapa_comparativo_calor(gdf_analizado, cultivo)
+                        if mapa_comparativo:
+                            st.image(mapa_comparativo, use_container_width=True)
+                            st.download_button(
+                                "📥 Descargar Mapa Comparativo",
+                                mapa_comparativo,
+                                f"mapa_comparativo_{cultivo}_{datetime.now().strftime('%Y%m%d')}.png",
+                                "image/png",
+                                key="download_comparativo_heatmap"
+                            )
+                    else:
+                        st.info("ℹ️ La comparativa solo está disponible en modo 'RECOMENDACIONES NPK'")
+                st.markdown('</div>', unsafe_allow_html=True)
 
+                # Gráfico de distribución de rendimientos
+                fig, ax = plt.subplots(figsize=(10, 5))
+                fig.patch.set_facecolor('#0f172a')
+                ax.set_facecolor('#0f172a')
+
+                # Histograma comparativo
+                ax.hist(gdf_analizado['rendimiento_actual'], bins=15, alpha=0.6, label='Actual',
+                        color='#3b82f6', edgecolor='white')
+                if 'rendimiento_proyectado' in gdf_analizado.columns:
+                    ax.hist(gdf_analizado['rendimiento_proyectado'], bins=15, alpha=0.6, label='Proyectado',
+                            color='#10b981', edgecolor='white')
+
+                ax.set_xlabel('Rendimiento (ton/ha)', color='white')
+                ax.set_ylabel('Número de Zonas', color='white')
+                ax.set_title('Distribución de Potencial de Cosecha', fontsize=14, color='white')
+                ax.tick_params(colors='white')
+                ax.legend(facecolor=(30/255, 41/255, 59/255, 0.9), edgecolor='white', labelcolor='white')
+                ax.grid(True, alpha=0.2, color='#475569')
+                st.pyplot(fig)
+
+            # === TABLA DE RESULTADOS ===
+            st.subheader("🔬 ÍNDICES SATELITALES Y NPK POR ZONA")
+            columnas_indices = ['id_zona', 'npk_integrado', 'nitrogeno_actual', 'fosforo_actual', 'potasio_actual']
+            if analisis_tipo == "RECOMENDACIONES NPK":
+                columnas_indices = ['id_zona', 'valor_recomendado', 'nitrogeno_actual', 'fosforo_actual', 'potasio_actual']
+
+            # Añadir índices vegetativos
+            columnas_indices.extend(['materia_organica', 'ndvi', 'ndre', 'humedad_suelo', 'ndwi'])
+            columnas_indices = [col for col in columnas_indices if col in gdf_analizado.columns]
+
+            tabla_indices = gdf_analizado[columnas_indices].copy()
+            rename_dict = {
+                'id_zona': 'Zona',
+                'npk_integrado': 'NPK Integrado',
+                'nitrogeno_actual': 'N (kg/ha)',
+                'fosforo_actual': 'P (kg/ha)',
+                'potasio_actual': 'K (kg/ha)',
+                'valor_recomendado': 'Recomendación',
+                'materia_organica': 'MO (%)',
+                'ndvi': 'NDVI',
+                'ndre': 'NDRE',
+                'humedad_suelo': 'Humedad',
+                'ndwi': 'NDWI'
+            }
+            tabla_indices = tabla_indices.rename(columns={k: v for k, v in rename_dict.items() if k in tabla_indices.columns})
+            st.dataframe(tabla_indices)
+
+            # === ANÁLISIS ECONÓMICO ===
+            if analisis_tipo == "RECOMENDACIONES NPK" and 'rendimiento_proyectado' in gdf_analizado.columns:
+                st.subheader("💰 ANÁLISIS ECONÓMICO")
+                resultados_economicos = realizar_analisis_economico(
+                    gdf_analizado, 
+                    cultivo, 
+                    st.session_state.get('variedad_params', {}), 
+                    resultados['area_total']
+                )
+                mostrar_analisis_economico(resultados_economicos)
 # ===== EXPORTACIÓN PERSISTENTE =====
 if 'resultados_guardados' in st.session_state:
     res = st.session_state['resultados_guardados']
