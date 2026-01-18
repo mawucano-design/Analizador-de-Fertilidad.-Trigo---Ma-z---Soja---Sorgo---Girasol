@@ -5174,7 +5174,10 @@ if 'uploaded_file' in locals() and uploaded_file:
                 with col6:
                     st.metric("💨 Viento a 2m", f"{df_power['viento_2m'].mean():.2f} m/s")
                 with col7:
+            if 'ndwi' in gdf_analizado.columns:
                     st.metric("💧 NDWI Promedio", f"{gdf_analizado['ndwi'].mean():.3f}")
+            else:
+                    st.metric("💧 NDWI Promedio", "N/D")
 
             # === MAPAS DE NPK ===
             st.subheader("🗺️ MAPAS DE NPK CON ESRI SATELLITE")
