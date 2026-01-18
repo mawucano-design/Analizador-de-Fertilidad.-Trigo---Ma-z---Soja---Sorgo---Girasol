@@ -4641,6 +4641,161 @@ with st.sidebar:
 st.session_state['usar_inta'] = usar_inta
 st.session_state['mostrar_mapa_inta'] = mostrar_mapa_inta
 
+# ===== FUNCIONES DE VISUALIZACIÓN DE RESULTADOS =====
+def mostrar_resultados_fertilidad(gdf_analizado, cultivo, area_total, satelite, mostrar_capa_inta=False):
+    """Muestra resultados del análisis de fertilidad actual"""
+    
+    st.subheader(f"🌱 ANÁLISIS DE FERTILIDAD ACTUAL - {cultivo}")
+    
+    # Estadísticas principales
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        if 'npk_integrado' in gdf_analizado.columns:
+            npk_prom = gdf_analizado['npk_integrado'].mean()
+            st.metric("📊 Índice NPK Integrado", f"{npk_prom:.3f}")
+    with col2:
+        if 'nitrogeno_actual' in gdf_analizado.columns:
+            n_prom = gdf_analizado['nitrogeno_actual'].mean()
+            st.metric("🧪 Nitrógeno", f"{n_prom:.1f} kg/ha")
+    with col3:
+        if 'fosforo_actual' in gdf_analizado.columns:
+            p_prom = gdf_analizado['fosforo_actual'].mean()
+            st.metric("🔬 Fósforo", f"{p_prom:.1f} kg/ha")
+    with col4:
+        if 'potasio_actual' in gdf_analizado.columns:
+            k_prom = gdf_analizado['potasio_actual'].mean()
+            st.metric("⚡ Potasio", f"{k_prom:.1f} kg/ha")
+    
+    # Agregar métricas de NDVI y NDWI si existen
+    if 'ndvi' in gdf_analizado.columns or 'ndwi' in gdf_analizado.columns:
+        col5, col6 = st.columns(2)
+        with col5:
+            if 'ndvi' in gdf_analizado.columns:
+                st.metric("🌿 NDVI Promedio", f"{gdf_analizado['ndvi'].mean():.3f}")
+        with col6:
+            if 'ndwi' in gdf_analizado.columns:
+                st.metric("💧 NDWI Promedio", f"{gdf_analizado['ndwi'].mean():.3f}")
+    
+    # Mapa de fertilidad integrada
+    st.subheader("🗺️ MAPA DE FERTILIDAD INTEGRADA (NPK)")
+    mapa_fertilidad = crear_mapa_fertilidad_integrada(
+        gdf_analizado, cultivo, satelite, mostrar_capa_inta
+    )
+    
+    if mapa_fertilidad:
+        st.image(mapa_fertilidad, use_container_width=True)
+        
+        # Botón para descargar
+        mapa_bytes = mapa_fertilidad.getvalue()
+        st.download_button(
+            label="📥 Descargar Mapa de Fertilidad",
+            data=mapa_bytes,
+            file_name=f"fertilidad_{cultivo}_{datetime.now().strftime('%Y%m%d_%H%M')}.png",
+            mime="image/png"
+        )
+    
+    # Tabla de resultados
+    st.subheader("📋 RESULTADOS POR ZONA")
+    columnas_mostrar = ['id_zona', 'area_ha', 'npk_integrado', 
+                       'nitrogeno_actual', 'fosforo_actual', 'potasio_actual']
+    # Agregar NDVI y NDWI si están disponibles
+    if 'ndvi' in gdf_analizado.columns:
+        columnas_mostrar.append('ndvi')
+    if 'ndwi' in gdf_analizado.columns:
+        columnas_mostrar.append('ndwi')
+        
+    columnas_mostrar = [col for col in columnas_mostrar if col in gdf_analizado.columns]
+    
+    if columnas_mostrar:
+        df_mostrar = gdf_analizado[columnas_mostrar].copy()
+        # Renombrar columnas para mostrar
+        nombres_columnas = {
+            'id_zona': 'Zona',
+            'area_ha': 'Área (ha)',
+            'npk_integrado': 'Índice NPK',
+            'nitrogeno_actual': 'Nitrógeno (kg/ha)',
+            'fosforo_actual': 'Fósforo (kg/ha)',
+            'potasio_actual': 'Potasio (kg/ha)',
+            'ndvi': 'NDVI',
+            'ndwi': 'NDWI'
+        }
+        df_mostrar.rename(columns=nombres_columnas, inplace=True)
+        st.dataframe(df_mostrar)
+        
+        # Descargar CSV
+        csv = df_mostrar.to_csv(index=False)
+        st.download_button(
+            label="📥 Descargar CSV",
+            data=csv,
+            file_name=f"fertilidad_{cultivo}_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+            mime="text/csv"
+        )
+
+def mostrar_resultados_recomendaciones(gdf_analizado, cultivo, nutriente, area_total, satelite, mostrar_capa_inta=False):
+    """Muestra resultados de recomendaciones NPK"""
+    
+    st.subheader(f"💡 RECOMENDACIONES DE {nutriente} - {cultivo}")
+    
+    # Estadísticas
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        if 'valor_recomendado' in gdf_analizado.columns:
+            rec_prom = gdf_analizado['valor_recomendado'].mean()
+            st.metric("🧴 Recomendación Promedio", f"{rec_prom:.1f} kg/ha")
+    with col2:
+        col_nutriente = f"{nutriente.lower()}_actual"
+        if col_nutriente in gdf_analizado.columns:
+            actual_prom = gdf_analizado[col_nutriente].mean()
+            st.metric("📊 Nivel Actual", f"{actual_prom:.1f} kg/ha")
+    with col3:
+        if 'area_ha' in gdf_analizado.columns and 'valor_recomendado' in gdf_analizado.columns:
+            total_kg = (gdf_analizado['valor_recomendado'] * gdf_analizado['area_ha']).sum()
+            st.metric("⚖️ Total Requerido", f"{total_kg:.0f} kg")
+    
+    # Mapa de recomendaciones
+    st.subheader(f"🗺️ MAPA DE RECOMENDACIONES - {nutriente}")
+    mapa_recomendaciones = crear_mapa_npk_con_esri(
+        gdf_analizado, nutriente, cultivo, satelite, mostrar_capa_inta
+    )
+    
+    if mapa_recomendaciones:
+        st.image(mapa_recomendaciones, use_container_width=True)
+        
+        # Botón para descargar
+        mapa_bytes = mapa_recomendaciones.getvalue()
+        st.download_button(
+            label=f"📥 Descargar Mapa de {nutriente}",
+            data=mapa_bytes,
+            file_name=f"recomendacion_{nutriente}_{cultivo}_{datetime.now().strftime('%Y%m%d_%H%M')}.png",
+            mime="image/png"
+        )
+    
+    # Tabla de resultados
+    st.subheader("📋 RECOMENDACIONES POR ZONA")
+    columnas_mostrar = ['id_zona', 'area_ha', f'{nutriente.lower()}_actual', 'valor_recomendado']
+    columnas_mostrar = [col for col in columnas_mostrar if col in gdf_analizado.columns]
+    
+    if columnas_mostrar:
+        df_mostrar = gdf_analizado[columnas_mostrar].copy()
+        # Renombrar columnas
+        nombres_columnas = {
+            'id_zona': 'Zona',
+            'area_ha': 'Área (ha)',
+            f'{nutriente.lower()}_actual': 'Nivel Actual (kg/ha)',
+            'valor_recomendado': 'Recomendación (kg/ha)'
+        }
+        df_mostrar.rename(columns=nombres_columnas, inplace=True)
+        st.dataframe(df_mostrar)
+        
+        # Descargar CSV
+        csv = df_mostrar.to_csv(index=False)
+        st.download_button(
+            label="📥 Descargar CSV",
+            data=csv,
+            file_name=f"recomendaciones_{nutriente}_{cultivo}_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+            mime="text/csv"
+        )
+
 # ===== INTERFAZ PRINCIPAL =====
 if 'uploaded_file' in locals() and uploaded_file:
     with st.spinner("Cargando parcela..."):
